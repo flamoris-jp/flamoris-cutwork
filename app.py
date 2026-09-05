@@ -63,6 +63,7 @@ class CutoutSpikeApp:
         self.undo_stack: list[np.ndarray] = []
         self.layers_created = False
         self.base_hole_filled = False
+        self.base_fill_kind = "telea"
         self.base_visible = tk.BooleanVar(value=True)
         self.cutout_visible = tk.BooleanVar(value=True)
 
@@ -105,6 +106,7 @@ class CutoutSpikeApp:
         ttk.Button(refine, text="Smooth", command=self.smooth).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Create Layers", command=self.create_layers).pack(side=tk.LEFT, padx=(12, 3))
         ttk.Button(refine, text="Fill Base Hole", command=self.fill_base_hole).pack(side=tk.LEFT, padx=3)
+        ttk.Button(refine, text="Fill Skin", command=self.fill_skin).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Save Mask", command=self.save_mask).pack(side=tk.RIGHT, padx=3)
         ttk.Button(refine, text="Export Cutout", command=self.export_cutout).pack(side=tk.RIGHT, padx=3)
 
@@ -407,8 +409,31 @@ class CutoutSpikeApp:
             self.status.set("Create Layers after making a mask first.")
             return
         self.base_hole_filled = True
+        self.base_fill_kind = "telea"
         self.status.set("Filled Base hole with OpenCV Telea inpainting. Cutout remains unchanged.")
         self.refresh_preview()
+
+    def fill_skin(self) -> None:
+        if not self.layers_created or self._binary_mask() is None:
+            self.status.set("Create Layers after making a mask first.")
+            return
+        self.base_hole_filled = True
+        self.base_fill_kind = "skin"
+        self.status.set("Filled Base hole with a dark-pixel-rejecting skin sample. Cutout remains unchanged.")
+        self.refresh_preview()
+
+    @staticmethod
+    def _skin_fill_bgr(image_bgr: np.ndarray, binary: np.ndarray) -> np.ndarray:
+        ring = cv2.bitwise_and(cv2.dilate(binary, np.ones((9, 9), np.uint8)), cv2.bitwise_not(binary))
+        hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+        value = hsv[:, :, 2]
+        candidates = image_bgr[(ring > 0) & (value > 65) & (value < 235)]
+        if len(candidates) < 12:
+            candidates = image_bgr[ring > 0]
+        color = np.median(candidates, axis=0).astype(np.uint8) if len(candidates) else np.array([150, 170, 190], dtype=np.uint8)
+        filled = image_bgr.copy()
+        filled[binary > 0] = color
+        return filled
 
     @staticmethod
     def _checkerboard(height: int, width: int) -> np.ndarray:
@@ -425,7 +450,8 @@ class CutoutSpikeApp:
         preview = self._checkerboard(*binary.shape)
         if self.base_visible.get():
             if self.base_hole_filled:
-                base_rgb = cv2.cvtColor(cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA), cv2.COLOR_BGR2RGB)
+                filled = cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA) if self.base_fill_kind == "telea" else self._skin_fill_bgr(self.image_bgr, binary)
+                base_rgb = cv2.cvtColor(filled, cv2.COLOR_BGR2RGB)
                 base_alpha = np.full(binary.shape, 255, dtype=np.uint8)
             else:
                 base_rgb = self.image_rgb
