@@ -30,6 +30,7 @@ For an approximately eight-second moving-picture clip, small boundary errors tha
 - can create an experimental **Base** layer (source minus mask) and **Cutout** layer (masked source) for blink-oriented close-up tests
 - previews either layer independently over a checkerboard; optional **Fill Base Hole** uses OpenCV `INPAINT_TELEA` from the original source and current mask
 - **Fill Skin** samples the mask-adjacent ring, rejects dark pixels, and median-fills the hole to avoid Telea hair/eyebrow/eyelash smearing
+- **Fill Skin Gradient** keeps that dark-pixel rejection but interpolates directional ring medians with a small feather, because flat Skin Fill was too uniform and patch-like
 
 This is deliberately not FLAMORIS production architecture and is not a general image editor.
 
