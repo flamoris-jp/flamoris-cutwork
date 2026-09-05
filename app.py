@@ -66,6 +66,11 @@ class CutoutSpikeApp:
         self.base_fill_kind = "telea"
         self.base_visible = tk.BooleanVar(value=True)
         self.cutout_visible = tk.BooleanVar(value=True)
+        self.patch_visible = tk.BooleanVar(value=True)
+        self.patch_rect: tuple[int, int, int, int] | None = None
+        self.patch_center: tuple[int, int] | None = None
+        self.patch_drag: tuple[int, int] | None = None
+        self.patch_scale = tk.IntVar(value=100)
 
         self._build_ui()
         self._bind_events()
@@ -81,6 +86,8 @@ class CutoutSpikeApp:
             ("Polygon Lasso", "lasso"),
             ("FG Brush", "fg"),
             ("BG Brush", "bg"),
+            ("Patch Source", "patch-source"),
+            ("Move Patch", "patch-move"),
         ):
             ttk.Radiobutton(
                 toolbar,
@@ -108,6 +115,8 @@ class CutoutSpikeApp:
         ttk.Button(refine, text="Fill Base Hole", command=self.fill_base_hole).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Fill Skin", command=self.fill_skin).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Fill Skin Gradient", command=self.fill_skin_gradient).pack(side=tk.LEFT, padx=3)
+        ttk.Scale(refine, from_=50, to=250, variable=self.patch_scale, orient=tk.HORIZONTAL, length=90, command=lambda _v: self.refresh_preview()).pack(side=tk.LEFT, padx=(12, 2))
+        ttk.Label(refine, text="Patch scale").pack(side=tk.LEFT)
         ttk.Button(refine, text="Save Mask", command=self.save_mask).pack(side=tk.RIGHT, padx=3)
         ttk.Button(refine, text="Export Cutout", command=self.export_cutout).pack(side=tk.RIGHT, padx=3)
 
@@ -120,6 +129,7 @@ class CutoutSpikeApp:
         layers.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
         ttk.Checkbutton(layers, text="Base", variable=self.base_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
         ttk.Checkbutton(layers, text="Cutout", variable=self.cutout_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
+        ttk.Checkbutton(layers, text="Patch", variable=self.patch_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
 
         statusbar = ttk.Label(self.root, textvariable=self.status, anchor=tk.W, padding=(8, 5))
         statusbar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -188,6 +198,15 @@ class CutoutSpikeApp:
                 self.canvas.delete(self.drag_rect_id)
             self.drag_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline="white", width=2)
             return
+        if self.mode.get() == "patch-source":
+            self.drag_start_canvas = (event.x, event.y)
+            self.drag_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline="#72d6a8", width=2)
+            return
+        if self.mode.get() == "patch-move":
+            point = self._canvas_to_image(event.x, event.y)
+            if point is not None and self.patch_rect is not None:
+                self.patch_drag = point
+            return
         if self.mode.get() == "lasso":
             point = self._canvas_to_image(event.x, event.y)
             if point is not None:
@@ -211,6 +230,18 @@ class CutoutSpikeApp:
             if self.drag_start_canvas is not None and self.drag_rect_id is not None:
                 self.canvas.coords(self.drag_rect_id, *self.drag_start_canvas, event.x, event.y)
             return
+        if self.mode.get() == "patch-source":
+            if self.drag_start_canvas is not None and self.drag_rect_id is not None:
+                self.canvas.coords(self.drag_rect_id, *self.drag_start_canvas, event.x, event.y)
+            return
+        if self.mode.get() == "patch-move" and self.patch_drag is not None and self.patch_center is not None:
+            point = self._canvas_to_image(event.x, event.y)
+            if point is not None:
+                dx, dy = point[0] - self.patch_drag[0], point[1] - self.patch_drag[1]
+                self.patch_center = (self.patch_center[0] + dx, self.patch_center[1] + dy)
+                self.patch_drag = point
+                self.refresh_preview()
+            return
         point = self._canvas_to_image(event.x, event.y)
         if point is not None:
             self._paint_hint(point)
@@ -219,6 +250,22 @@ class CutoutSpikeApp:
     def on_pointer_up(self, event: tk.Event) -> None:
         if self.image_bgr is None or self.gc_mask is None:
             return
+        if self.mode.get() == "patch-source" and self.drag_start_canvas is not None:
+            start, end = self._canvas_to_image(*self.drag_start_canvas), self._canvas_to_image(event.x, event.y)
+            self.drag_start_canvas = None
+            if self.drag_rect_id is not None:
+                self.canvas.delete(self.drag_rect_id); self.drag_rect_id = None
+            if start is not None and end is not None:
+                x0, x1 = sorted((start[0], end[0])); y0, y1 = sorted((start[1], end[1]))
+                if x1 - x0 >= 4 and y1 - y0 >= 4:
+                    self.patch_rect = (x0, y0, x1, y1)
+                    binary = self._binary_mask()
+                    if binary is not None and np.any(binary):
+                        ys, xs = np.where(binary > 0); self.patch_center = ((xs.min()+xs.max())//2, (ys.min()+ys.max())//2)
+                    self.status.set("Patch sampled from immutable original. Use Move Patch and Patch scale to place it.")
+                    self.refresh_preview()
+            return
+        self.patch_drag = None
         if self.mode.get() != "box" or self.drag_start_canvas is None:
             return
         start = self._canvas_to_image(*self.drag_start_canvas)
@@ -472,6 +519,27 @@ class CutoutSpikeApp:
         result = (image_bgr * (1 - feather) + result * feather).astype(np.uint8)
         return result
 
+    def _patch_layer(self, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray] | None:
+        if self.image_rgb is None or self.patch_rect is None or self.patch_center is None:
+            return None
+        x0, y0, x1, y1 = self.patch_rect
+        source = self.image_rgb[y0:y1, x0:x1]
+        scale = self.patch_scale.get() / 100.0
+        width, height = max(1, round(source.shape[1] * scale)), max(1, round(source.shape[0] * scale))
+        source = cv2.resize(source, (width, height), interpolation=cv2.INTER_LINEAR)
+        color = np.zeros((*shape, 3), dtype=np.uint8)
+        alpha = np.zeros(shape, dtype=np.uint8)
+        left, top = self.patch_center[0] - width // 2, self.patch_center[1] - height // 2
+        right, bottom = left + width, top + height
+        dx0, dy0, dx1, dy1 = max(0, left), max(0, top), min(shape[1], right), min(shape[0], bottom)
+        if dx0 >= dx1 or dy0 >= dy1:
+            return color, alpha
+        sx0, sy0 = dx0 - left, dy0 - top
+        color[dy0:dy1, dx0:dx1] = source[sy0:sy0+dy1-dy0, sx0:sx0+dx1-dx0]
+        alpha[dy0:dy1, dx0:dx1] = 255
+        alpha = cv2.GaussianBlur(alpha, (0, 0), 1.2)
+        return color, alpha
+
     @staticmethod
     def _checkerboard(height: int, width: int) -> np.ndarray:
         squares = (np.indices((height, width)).sum(axis=0) // 16) % 2
@@ -494,6 +562,10 @@ class CutoutSpikeApp:
                 base_rgb = self.image_rgb
                 base_alpha = cv2.bitwise_not(binary)
             preview = self._over(preview, base_rgb, base_alpha)
+        if self.patch_visible.get():
+            patch = self._patch_layer(binary.shape)
+            if patch is not None:
+                preview = self._over(preview, *patch)
         if self.cutout_visible.get():
             preview = self._over(preview, self.image_rgb, binary)
         return preview
