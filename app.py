@@ -61,6 +61,10 @@ class CutoutSpikeApp:
         self.drag_rect_id: int | None = None
         self.lasso_points: list[tuple[int, int]] = []
         self.undo_stack: list[np.ndarray] = []
+        self.layers_created = False
+        self.base_hole_filled = False
+        self.base_visible = tk.BooleanVar(value=True)
+        self.cutout_visible = tk.BooleanVar(value=True)
 
         self._build_ui()
         self._bind_events()
@@ -99,6 +103,8 @@ class CutoutSpikeApp:
         ttk.Button(refine, text="Expand", command=lambda: self.morph("dilate")).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Shrink", command=lambda: self.morph("erode")).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Smooth", command=self.smooth).pack(side=tk.LEFT, padx=3)
+        ttk.Button(refine, text="Create Layers", command=self.create_layers).pack(side=tk.LEFT, padx=(12, 3))
+        ttk.Button(refine, text="Fill Base Hole", command=self.fill_base_hole).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Save Mask", command=self.save_mask).pack(side=tk.RIGHT, padx=3)
         ttk.Button(refine, text="Export Cutout", command=self.export_cutout).pack(side=tk.RIGHT, padx=3)
 
@@ -106,6 +112,11 @@ class CutoutSpikeApp:
         body.pack(fill=tk.BOTH, expand=True)
         self.canvas = tk.Canvas(body, background="#202020", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        layers = ttk.LabelFrame(self.root, text="Experiment Layers", padding=(8, 4))
+        layers.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
+        ttk.Checkbutton(layers, text="Base", variable=self.base_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
+        ttk.Checkbutton(layers, text="Cutout", variable=self.cutout_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
 
         statusbar = ttk.Label(self.root, textvariable=self.status, anchor=tk.W, padding=(8, 5))
         statusbar.pack(side=tk.BOTTOM, fill=tk.X)
@@ -147,6 +158,8 @@ class CutoutSpikeApp:
         self.image_bgr = image
         self.image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         self.gc_mask = np.full(image.shape[:2], GC_BG, dtype=np.uint8)
+        self.layers_created = False
+        self.base_hole_filled = False
         self.undo_stack.clear()
         self._clear_lasso_preview()
         self.root.title(f"FLAMORIS Classical Cutout Spike - {Path(path).name}")
@@ -158,6 +171,7 @@ class CutoutSpikeApp:
             return
         self._push_undo()
         self.gc_mask = np.full(self.image_bgr.shape[:2], GC_BG, dtype=np.uint8)
+        self.base_hole_filled = False
         self._clear_lasso_preview()
         self.status.set("Mask reset. Draw a new Box or Polygon Lasso around the target.")
         self.refresh_preview()
@@ -228,6 +242,7 @@ class CutoutSpikeApp:
         height = min(height, image_h - top - 1)
         self._push_undo()
         self.gc_mask[:] = GC_BG
+        self.base_hole_filled = False
         started = time.perf_counter()
         bg_model = np.zeros((1, 65), np.float64)
         fg_model = np.zeros((1, 65), np.float64)
@@ -249,6 +264,7 @@ class CutoutSpikeApp:
 
         self._push_undo()
         self.gc_mask = lasso_grabcut_mask(self.gc_mask.shape, self.lasso_points)
+        self.base_hole_filled = False
         started = time.perf_counter()
         bg_model = np.zeros((1, 65), np.float64)
         fg_model = np.zeros((1, 65), np.float64)
@@ -273,6 +289,7 @@ class CutoutSpikeApp:
         radius = max(1, int(self.brush_size.get() / max(self.scale, 0.001) / 2))
         value = GC_FG if self.mode.get() == "fg" else GC_BG
         cv2.circle(self.gc_mask, (x, y), radius, int(value), thickness=-1)
+        self.base_hole_filled = False
 
     def refine_grabcut(self) -> None:
         if self.image_bgr is None or self.gc_mask is None:
@@ -281,6 +298,7 @@ class CutoutSpikeApp:
             self.status.set("No foreground candidate yet. Draw a Box or Polygon Lasso first.")
             return
         self._push_undo()
+        self.base_hole_filled = False
         started = time.perf_counter()
         bg_model = np.zeros((1, 65), np.float64)
         fg_model = np.zeros((1, 65), np.float64)
@@ -294,6 +312,7 @@ class CutoutSpikeApp:
         if binary is None:
             return
         self._push_undo()
+        self.base_hole_filled = False
         padded = cv2.copyMakeBorder(binary, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
         flood = padded.copy()
         flood_mask = np.zeros((flood.shape[0] + 2, flood.shape[1] + 2), np.uint8)
@@ -308,6 +327,7 @@ class CutoutSpikeApp:
         if binary is None:
             return
         self._push_undo()
+        self.base_hole_filled = False
         count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
         if count <= 1:
             return
@@ -325,6 +345,7 @@ class CutoutSpikeApp:
         if binary is None:
             return
         self._push_undo()
+        self.base_hole_filled = False
         kernel = np.ones((3, 3), np.uint8)
         if operation == "dilate":
             result, label = cv2.dilate(binary, kernel, iterations=1), "Expanded mask by ~1 px."
@@ -339,6 +360,7 @@ class CutoutSpikeApp:
         if binary is None:
             return
         self._push_undo()
+        self.base_hole_filled = False
         blurred = cv2.GaussianBlur(binary, (5, 5), 0)
         _, result = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY)
         self._set_from_binary(result)
@@ -368,6 +390,51 @@ class CutoutSpikeApp:
         fg = (self.gc_mask == GC_FG) | (self.gc_mask == GC_PR_FG)
         return fg.astype(np.uint8) * 255
 
+    def create_layers(self) -> None:
+        binary = self._binary_mask()
+        if binary is None or not np.any(binary):
+            self.status.set("Create a foreground mask before creating layers.")
+            return
+        self.layers_created = True
+        self.base_hole_filled = False
+        self.base_visible.set(True)
+        self.cutout_visible.set(True)
+        self.status.set("Created Base + Cutout experiment layers from the original image and current mask.")
+        self.refresh_preview()
+
+    def fill_base_hole(self) -> None:
+        if not self.layers_created or self._binary_mask() is None:
+            self.status.set("Create Layers after making a mask first.")
+            return
+        self.base_hole_filled = True
+        self.status.set("Filled Base hole with OpenCV Telea inpainting. Cutout remains unchanged.")
+        self.refresh_preview()
+
+    @staticmethod
+    def _checkerboard(height: int, width: int) -> np.ndarray:
+        squares = (np.indices((height, width)).sum(axis=0) // 16) % 2
+        return np.where(squares[..., None] == 0, (72, 72, 72), (112, 112, 112)).astype(np.uint8)
+
+    @staticmethod
+    def _over(background: np.ndarray, foreground: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+        weight = (alpha.astype(np.float32) / 255.0)[..., None]
+        return (foreground * weight + background * (1.0 - weight)).astype(np.uint8)
+
+    def _layer_preview(self, binary: np.ndarray) -> np.ndarray:
+        assert self.image_rgb is not None and self.image_bgr is not None
+        preview = self._checkerboard(*binary.shape)
+        if self.base_visible.get():
+            if self.base_hole_filled:
+                base_rgb = cv2.cvtColor(cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA), cv2.COLOR_BGR2RGB)
+                base_alpha = np.full(binary.shape, 255, dtype=np.uint8)
+            else:
+                base_rgb = self.image_rgb
+                base_alpha = cv2.bitwise_not(binary)
+            preview = self._over(preview, base_rgb, base_alpha)
+        if self.cutout_visible.get():
+            preview = self._over(preview, self.image_rgb, binary)
+        return preview
+
     def refresh_preview(self) -> None:
         if self.image_rgb is None:
             self.canvas.delete("all")
@@ -379,10 +446,11 @@ class CutoutSpikeApp:
         self.preview_size = (display_w, display_h)
         self.preview_origin = ((canvas_w - display_w) // 2, (canvas_h - display_h) // 2)
         base = self.image_rgb.copy()
-        if self.gc_mask is not None and np.any(self.gc_mask != GC_BG):
-            binary = self._binary_mask()
-            if binary is not None:
-                base[binary == 0] = (base[binary == 0] * 0.25).astype(np.uint8)
+        binary = self._binary_mask()
+        if self.layers_created and binary is not None:
+            base = self._layer_preview(binary)
+        elif binary is not None and np.any(binary):
+            base[binary == 0] = (base[binary == 0] * 0.25).astype(np.uint8)
         preview = Image.fromarray(base).resize((display_w, display_h), Image.Resampling.LANCZOS)
         self.preview_photo = ImageTk.PhotoImage(preview)
         self.canvas.delete("image")
