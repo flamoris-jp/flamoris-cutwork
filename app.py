@@ -553,6 +553,10 @@ class CutoutSpikeApp:
     def _layer_preview(self, binary: np.ndarray) -> np.ndarray:
         assert self.image_rgb is not None and self.image_bgr is not None
         preview = self._checkerboard(*binary.shape)
+        if self.patch_visible.get():
+            patch = self._patch_layer(binary.shape)
+            if patch is not None:
+                preview = self._over(preview, *patch)
         if self.base_visible.get():
             if self.base_hole_filled:
                 filled = cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA) if self.base_fill_kind == "telea" else self._skin_fill_bgr(self.image_bgr, binary) if self.base_fill_kind == "skin" else self._gradient_skin_fill_bgr(self.image_bgr, binary)
@@ -562,10 +566,6 @@ class CutoutSpikeApp:
                 base_rgb = self.image_rgb
                 base_alpha = cv2.bitwise_not(binary)
             preview = self._over(preview, base_rgb, base_alpha)
-        if self.patch_visible.get():
-            patch = self._patch_layer(binary.shape)
-            if patch is not None:
-                preview = self._over(preview, *patch)
         if self.cutout_visible.get():
             preview = self._over(preview, self.image_rgb, binary)
         return preview
