@@ -1,39 +1,91 @@
-# Classical Cutout Spike
+# Manual Part Editor Spike
 
 Issue: #53
 
-A disposable standalone experiment for testing whether a fully local, non-ML, human-in-the-loop cutout workflow is good enough before Phase 5 is designed.
+A disposable, standalone, non-ML experiment for quickly decomposing a human illustration into the few parts needed by a short moving-picture clip. This is a Phase 5 feasibility tool, not FLAMORIS production layer architecture and not a general image editor.
 
 ## Intended use
 
-This spike is for **human figure / body-part cutout for short moving-picture clips**. Typical targets are a whole person, face/head, eye area for blinking, arm, hand, leg, or chest/shoulder area for breathing motion.
+The primary use is **human figure / body-part decomposition for approximately eight-second moving-picture clips**:
 
-It is deliberately not trying to separate every static item in an illustration. Backgrounds, chairs, guitars, props, and other objects that will not move do not need semantic isolation here.
+- eye / eyelid material for blinking
+- face, head, or selected hair sections
+- arms, hands, and legs
+- chest, shoulders, or upper body for breathing motion
+- selected skirt or clothing sections
+- manually sampled hidden-area patches
+
+Static chairs, instruments, props, and backgrounds do not need semantic separation unless the intended motion exposes them.
 
 ## Quality target
 
-The target is not pixel-perfect segmentation. Evaluate this experiment by:
+Evaluate this spike by:
 
 > **perceptual sufficiency × editing speed**
 
-For an approximately eight-second moving-picture clip, small boundary errors that do not show at normal playback, individual hair strands, and artifacts visible only at extreme zoom are acceptable. Spend brush cleanup time only where an artifact is visible in the intended clip.
+Pixel-perfect segmentation, single-hair accuracy, and defects visible only at extreme zoom are not the goal. Do not make the author solve a problem that a viewer cannot see at normal playback.
 
-## What it does
+## Current workflow
 
-- opens ordinary PNG/JPEG/WebP/BMP images with no transparency requirement
-- initializes GrabCut from a user-drawn **Box** or a rough **Polygon Lasso**
-- lets the user paint definite foreground/background hints
-- recomputes GrabCut from those hints
-- provides small deterministic cleanup operations: fill holes, remove islands, expand, shrink, smooth
-- exports either the binary mask or a transparent PNG cutout
-- keeps the original decoded image immutable while only the mask changes
-- can create an experimental **Base** layer (source minus mask) and **Cutout** layer (masked source) for blink-oriented close-up tests
-- previews either layer independently over a checkerboard; optional **Fill Base Hole** uses OpenCV `INPAINT_TELEA` from the original source and current mask
-- **Fill Skin** samples the mask-adjacent ring, rejects dark pixels, and median-fills the hole to avoid Telea hair/eyebrow/eyelash smearing
-- **Fill Skin Gradient** keeps that dark-pixel rejection but interpolates directional ring medians with a small feather, because flat Skin Fill was too uniform and patch-like
-- **Patch Source** lets the user sample a rectangle from the immutable original, then place and scale that feathered Patch layer between Base and Cutout. It is a controllable alternative to generic inpainting for blink-oriented hidden-area coverage.
+1. **Open Image**. The decoded RGB source is copied once and remains immutable.
+2. Choose **Part Polygon**, click exact vertices, then press **Enter** or double-click. **Esc** cancels.
+3. Choose or type a semantic name, then press **Create Part Layer**.
+4. Repeat the polygon/create step for every part that will move.
+5. Select **Patch Source**, polygon-select a clean cheek/forehead/nearby region, and finalize it. The patch is sampled from the immutable original.
+6. Use **Move Layer** plus the right-panel Scale and Rotation controls to cover a Base hole.
+7. If a visible seam remains, apply a small **Blur Brush** or gentle **Smudge Brush** to the active derived layer.
+8. Toggle, rename, select, delete, or reorder layers in the right panel.
+9. Export a flattened RGBA PNG and/or one transparent PNG per layer. Save the active mask when useful.
 
-This is deliberately not FLAMORIS production architecture and is not a general image editor.
+Part Polygon is the final binary selection: inside is foreground, outside is background. It never runs GrabCut. Patch Source also uses a polygon, but creates a transformable sample layer instead of a part mask.
+
+## Layer model
+
+The panel is shown top-to-bottom. New content defaults to this visual stack:
+
+1. Part layers (top)
+2. Base
+3. Patch layers (bottom)
+
+The corresponding drawing order is **Patch → Base → Part**. Patch therefore appears through a hole removed from Base and stays behind the moving part.
+
+Every result is derived from:
+
+- immutable original source
+- exact binary part masks or original-source patch polygons
+- patch transform (translate, 10–1000% scale, -180–180° rotation)
+- optional per-layer local Blur/Smudge edit operations
+
+Base holes are the union of all part masks. A Patch is affine-warped directly into the output canvas, so 1000% scale does not allocate a 10× intermediate bitmap. Patch alpha receives a small edge feather.
+
+Semantic name presets live in [`config/part-names.json`](config/part-names.json). The combo remains editable, so project-specific names do not require code changes.
+
+## Viewport and layer controls
+
+- Mouse wheel: cursor-centered zoom
+- **Fit** / **100%**: standard view resets
+- **Pan** drag or middle-button drag: move viewport
+- Layer row checkmark: visibility
+- Up / Down: reorder active layer
+- Semantic name combo: preset or free-text rename
+- Masks / Show active mask overlay: inspect active mask
+- Patch Scale: 10–1000%
+- Patch Rotation: -180–180°
+- **Undo Local Edit**: removes the last Blur/Smudge operation from the active layer
+
+Selection, movement, and brush coordinates are converted back to original image space after zoom and pan.
+
+## Earlier experiment findings
+
+- GrabCut was fast on a full figure against a simple, contrasting background, but did not understand semantic identity when a person touched a chair, guitar, hair, shadow, or similar-color background.
+- Exact Polygon selection was more predictable for eye and body-part work than repeatedly steering GrabCut. Box, GrabCut, FG/BG Brush, and Refine were removed from this narrower editor spike.
+- OpenCV Telea inpainting pulled dark hair, eyebrows, eyelashes, and shadow streaks into blink-oriented eye holes.
+- Flat Skin Fill avoided dark smearing but looked like a uniform skin-colored patch.
+- Gradient Skin Fill preserved broad shading but still looked synthetic and could not recreate useful local texture.
+- Manual Patch Fill was the most controllable classical alternative: the author chooses plausible original pixels and places them behind the hole.
+- Patch transform plus small local Blur/Smudge edits is a pragmatic blink-substrate workflow; it is not hidden-face reconstruction.
+
+The removed fill methods are documented here as rejected experiment branches. They are intentionally not kept as runtime buttons or state.
 
 ## Run on Windows
 
@@ -45,53 +97,34 @@ pip install -r requirements.txt
 python app.py
 ```
 
-## Basic experiment flow
-
-1. Open an ordinary source image.
-2. Choose **Box** and drag a loose rectangle, or choose **Polygon Lasso** and click a loose polygon around the moving person/body part.
-   - Press **Enter** or double-click to finish a Polygon Lasso.
-   - Press **Esc** to cancel it.
-3. Inspect the dimmed-background preview after automatic GrabCut.
-4. Use **FG Brush** / **BG Brush** only where visible artifacts matter.
-5. Press **Refine GrabCut**.
-6. Optionally try Fill Holes / Remove Islands / Expand / Shrink / Smooth.
-7. Press **Create Layers** to inspect Base / Cutout independently.
-8. For a blink test, hide Cutout; optionally use **Fill Base Hole** to see whether the hole reads as plausible surrounding skin.
-   Compare it with **Fill Skin**: Skin Fill intentionally is a flat plausible substrate, not hidden-face reconstruction.
-9. Export the cutout or mask for comparison.
-
-The Polygon Lasso is not a precision tracing tool. Leave a little margin around the target; its exterior becomes definite background and its interior is a foreground candidate for GrabCut.
-
-## Recommended test sequence
-
-1. Full human figure with simple background.
-2. Human figure against complex or similar-color background.
-3. Face, eye, arm, hand, and leg regions.
-4. Compare **Box** against **Polygon Lasso** for the same target.
-5. Use FG/BG Brush only where visible artifacts matter.
-
-## Build an experimental EXE
-
-Packaging is optional for the first spike, but the current prototype can be bundled for local testing:
+## Lightweight checks
 
 ```powershell
-pip install -r requirements-build.txt
-pyinstaller --noconfirm --clean --windowed --name FlamorisCutoutSpike app.py
+python -m py_compile app.py model.py image_ops.py layer_panel.py test_image_ops.py
+python -m unittest -v test_image_ops.py
 ```
 
-The executable will be under `dist/FlamorisCutoutSpike/` or `dist/` depending on the local PyInstaller version/configuration. This packaging path is experimental and not a production distribution decision.
+## Recommended real-image sequence
 
-## Important limitations
+1. Create separate left/right eye or eyelid layers from a face close-up.
+2. Toggle each part to confirm Base holes exactly match the polygons.
+3. Polygon-sample cheek or forehead skin into one or more Patch layers.
+4. Confirm the default **Patch → Base → Part** drawing order, then test manual reordering.
+5. Move, scale, and rotate a patch until it covers the eye hole with Cutout hidden.
+6. Test a small Blur/Smudge pass only where the seam is visible at normal playback.
+7. Zoom and pan during selection and confirm exported masks still land on the intended original pixels.
+8. Export individual PNGs and assemble a short blink or breathing motion outside this spike.
 
-- GrabCut is not semantic object recognition. Similar-color or touching objects, such as a person, chair, and guitar, can still become one foreground region.
-- Hair, fur, translucency, and anti-aliased edges are not true alpha matting in this spike.
-- The cleanup buttons currently convert the active mask to probable foreground/background labels, so they are coarse refinement tools rather than a production matte model.
-- No background generation, GPT Image, SAM-family model, Project persistence, or FLAMORIS Scene integration is included.
+## Known limitations
+
+- Polygon edges are binary; this is not alpha matting for hair or translucent material.
+- Smudge is deliberately simple translation-based pixel pushing, not a paint engine.
+- Many accumulated local edit operations can make redraw slower on large source images.
+- Patches use scale, rotation, and translation only; there is no perspective warp.
+- State is not persisted as a FLAMORIS Project and there is no undo/redo architecture beyond the last local edit.
+- PSD export is not included. Individual transparent PNGs avoid adding a new PSD dependency/license decision to this disposable spike.
+- No AI/ML, face landmarks, body recognition, hidden-part generation, animation, Scene mutation, or production integration is included.
 
 ## Decision gate
 
-After real artwork testing, record one recommendation in Issue #53:
-
-- **A**: classical pipeline is sufficient
-- **B**: classical refinement is useful but semantic initial selection is needed
-- **C**: classical selection is not worth productizing
+After testing real artwork, record whether exact manual parts plus transformed source patches are fast and plausible enough for normal-playback blink/breathing clips, and which operations deserve a Phase 5 product design.
