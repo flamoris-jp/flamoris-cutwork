@@ -107,6 +107,7 @@ class CutoutSpikeApp:
         ttk.Button(refine, text="Create Layers", command=self.create_layers).pack(side=tk.LEFT, padx=(12, 3))
         ttk.Button(refine, text="Fill Base Hole", command=self.fill_base_hole).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Fill Skin", command=self.fill_skin).pack(side=tk.LEFT, padx=3)
+        ttk.Button(refine, text="Fill Skin Gradient", command=self.fill_skin_gradient).pack(side=tk.LEFT, padx=3)
         ttk.Button(refine, text="Save Mask", command=self.save_mask).pack(side=tk.RIGHT, padx=3)
         ttk.Button(refine, text="Export Cutout", command=self.export_cutout).pack(side=tk.RIGHT, padx=3)
 
@@ -422,6 +423,15 @@ class CutoutSpikeApp:
         self.status.set("Filled Base hole with a dark-pixel-rejecting skin sample. Cutout remains unchanged.")
         self.refresh_preview()
 
+    def fill_skin_gradient(self) -> None:
+        if not self.layers_created or self._binary_mask() is None:
+            self.status.set("Create Layers after making a mask first.")
+            return
+        self.base_hole_filled = True
+        self.base_fill_kind = "gradient"
+        self.status.set("Filled Base with directional skin gradient; Cutout remains unchanged.")
+        self.refresh_preview()
+
     @staticmethod
     def _skin_fill_bgr(image_bgr: np.ndarray, binary: np.ndarray) -> np.ndarray:
         ring = cv2.bitwise_and(cv2.dilate(binary, np.ones((9, 9), np.uint8)), cv2.bitwise_not(binary))
@@ -434,6 +444,33 @@ class CutoutSpikeApp:
         filled = image_bgr.copy()
         filled[binary > 0] = color
         return filled
+
+    @staticmethod
+    def _gradient_skin_fill_bgr(image_bgr: np.ndarray, binary: np.ndarray) -> np.ndarray:
+        ring = cv2.bitwise_and(cv2.dilate(binary, np.ones((11, 11), np.uint8)), cv2.bitwise_not(binary))
+        hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
+        valid = (ring > 0) & (hsv[:, :, 2] > 65) & (hsv[:, :, 2] < 235)
+        ys, xs = np.where(binary > 0)
+        if not len(xs):
+            return image_bgr.copy()
+        cx, cy = (xs.min() + xs.max()) / 2, (ys.min() + ys.max()) / 2
+        def sample(selector: np.ndarray) -> np.ndarray:
+            values = image_bgr[valid & selector]
+            return np.median(values, axis=0) if len(values) else np.median(image_bgr[valid], axis=0)
+        yy, xx = np.indices(binary.shape)
+        left, right = sample(xx < cx), sample(xx >= cx)
+        top, bottom = sample(yy < cy), sample(yy >= cy)
+        x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+        tx = np.clip((xx - x0) / max(1, x1 - x0), 0, 1)[..., None]
+        ty = np.clip((yy - y0) / max(1, y1 - y0), 0, 1)[..., None]
+        horizontal = left * (1 - tx) + right * tx
+        vertical = top * (1 - ty) + bottom * ty
+        gradient = ((horizontal + vertical) * 0.5).astype(np.uint8)
+        feather = cv2.GaussianBlur(binary, (0, 0), 1.5).astype(np.float32)[..., None] / 255.0
+        result = image_bgr.copy()
+        result[binary > 0] = gradient[binary > 0]
+        result = (image_bgr * (1 - feather) + result * feather).astype(np.uint8)
+        return result
 
     @staticmethod
     def _checkerboard(height: int, width: int) -> np.ndarray:
@@ -450,7 +487,7 @@ class CutoutSpikeApp:
         preview = self._checkerboard(*binary.shape)
         if self.base_visible.get():
             if self.base_hole_filled:
-                filled = cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA) if self.base_fill_kind == "telea" else self._skin_fill_bgr(self.image_bgr, binary)
+                filled = cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA) if self.base_fill_kind == "telea" else self._skin_fill_bgr(self.image_bgr, binary) if self.base_fill_kind == "skin" else self._gradient_skin_fill_bgr(self.image_bgr, binary)
                 base_rgb = cv2.cvtColor(filled, cv2.COLOR_BGR2RGB)
                 base_alpha = np.full(binary.shape, 255, dtype=np.uint8)
             else:
