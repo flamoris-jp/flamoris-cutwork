@@ -10,7 +10,16 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from image_ops import active_mask, composite_visible, composite_visible_rgba, polygon_mask, render_layer
+from image_ops import (
+    active_mask,
+    alpha_over,
+    apply_local_edit,
+    checkerboard,
+    composite_visible_rgba,
+    paint_binary_mask,
+    polygon_mask,
+    render_layer,
+)
 from layer_panel import LayerPanel
 from model import EditorState
 
@@ -38,6 +47,12 @@ class CutoutSpikeApp:
         self.drag_image_point: tuple[int, int] | None = None
         self.drag_canvas_point: tuple[int, int] | None = None
         self.last_brush_point: tuple[int, int] | None = None
+        self.mask_undo_stack: list[tuple[str, np.ndarray]] = []
+        self._layer_cache: dict[str, np.ndarray] = {}
+        self._composite_cache_rgb: np.ndarray | None = None
+        self._checker_cache_rgb: np.ndarray | None = None
+        self._refresh_job: str | None = None
+        self._transform_job: str | None = None
         self._build_ui()
         self._bind_events()
 
@@ -55,6 +70,8 @@ class CutoutSpikeApp:
         ttk.Button(toolbar, text="Open Image", command=self.open_image).pack(side=tk.LEFT, padx=(0, 8))
         for label, value in (
             ("Part Polygon", "part-polygon"),
+            ("Mask Add", "mask-add"),
+            ("Mask Erase", "mask-erase"),
             ("Patch Source", "patch-polygon"),
             ("Move Layer", "move"),
             ("Blur Brush", "blur"),
@@ -72,6 +89,7 @@ class CutoutSpikeApp:
         ttk.Label(actions, text="New part:").pack(side=tk.LEFT)
         ttk.Combobox(actions, textvariable=self.new_part_name, values=self.part_names, width=16).pack(side=tk.LEFT, padx=(4, 4))
         ttk.Button(actions, text="Create Part Layer", command=self.create_part_layer).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Button(actions, text="Undo Mask Stroke", command=self.undo_mask_stroke).pack(side=tk.LEFT, padx=3)
         ttk.Button(actions, text="Undo Local Edit", command=self.undo_local_edit).pack(side=tk.LEFT, padx=3)
         ttk.Button(actions, text="Fit", command=self.fit_view).pack(side=tk.LEFT, padx=(12, 3))
         ttk.Button(actions, text="100%", command=self.actual_size).pack(side=tk.LEFT, padx=3)
@@ -83,7 +101,7 @@ class CutoutSpikeApp:
         ttk.Label(
             self.root,
             text=("Part Polygon = exact manual mask (Enter/double-click finalize, Esc cancel).  "
-                  "Patch Source = polygon sampled only from immutable original."),
+                  "Mask Add/Erase = direct manual correction.  Patch Source = immutable-original polygon sample."),
             padding=(10, 0, 8, 6),
             foreground="#555555",
         ).pack(side=tk.TOP, fill=tk.X)
@@ -128,6 +146,8 @@ class CutoutSpikeApp:
             self.cancel_polygon(silent=True)
         messages = {
             "part-polygon": "Click an exact part polygon. Enter/double-click finalizes; Esc cancels. No GrabCut is run.",
+            "mask-add": "Paint foreground directly into the pending selection or active Part mask.",
+            "mask-erase": "Erase foreground directly from the pending selection or active Part mask.",
             "patch-polygon": "Click a polygon around clean source pixels. The sample always comes from immutable original.",
             "move": "Drag the active Patch layer. Scale and rotate it in the right panel.",
             "blur": "Paint a light blur onto the active derived layer only.",
@@ -148,6 +168,9 @@ class CutoutSpikeApp:
         self.source_path = Path(path)
         self.state.reset(original)
         self.polygon_points.clear()
+        self.mask_undo_stack.clear()
+        self._checker_cache_rgb = None
+        self._invalidate_all()
         self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
         self.root.title(f"FLAMORIS Manual Part Editor Spike - {self.source_path.name}")
         self.status.set(f"Loaded {original.shape[1]}×{original.shape[0]}. Part Polygon is exact; Patch Source samples the original.")
@@ -172,6 +195,17 @@ class CutoutSpikeApp:
             return
         if mode == "move":
             self.drag_image_point = point
+        elif mode in ("mask-add", "mask-erase"):
+            target = self._editable_mask()
+            if target is None:
+                self.status.set("Finalize a Part Polygon or select an existing Part layer before mask painting.")
+                return
+            target_key = "pending" if self.state.pending_part_mask is target else self.state.active_layer_id or ""
+            self.mask_undo_stack.append((target_key, target.copy()))
+            if len(self.mask_undo_stack) > 20:
+                self.mask_undo_stack.pop(0)
+            self.last_brush_point = point
+            self._paint_mask_stroke(point, point)
         elif mode == "blur":
             self._add_blur(point)
         elif mode == "smudge":
@@ -197,7 +231,11 @@ class CutoutSpikeApp:
             active.transform.center_x += dx
             active.transform.center_y += dy
             self.drag_image_point = point
-            self.refresh_preview()
+            self._invalidate_layer(active.id)
+            self._schedule_refresh()
+        elif mode in ("mask-add", "mask-erase") and self.last_brush_point is not None:
+            self._paint_mask_stroke(self.last_brush_point, point)
+            self.last_brush_point = point
         elif mode == "blur":
             if self.last_brush_point is None or self._distance(self.last_brush_point, point) >= max(1, self.brush_size.get() // 4):
                 self._add_blur(point)
@@ -226,11 +264,13 @@ class CutoutSpikeApp:
             return "break"
         if self.mode.get() == "part-polygon":
             self.state.pending_part_mask = mask
+            self.mask_undo_stack = [item for item in self.mask_undo_stack if item[0] != "pending"]
             self.status.set("Exact polygon mask ready. Choose/edit the semantic name, then press Create Part Layer.")
         else:
             center = self._preferred_patch_center(mask)
             name = self.state.next_name("patch")
             self.state.add_patch(name, self.polygon_points, center)
+            self._invalidate_all()
             self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
             self.status.set("Patch created from immutable original below Base. Move it or use scale/rotation in the right panel.")
         self.polygon_points = []
@@ -259,6 +299,47 @@ class CutoutSpikeApp:
         ys, xs = np.where(target > 0)
         return float(np.median(xs)), float(np.median(ys))
 
+    def _editable_mask(self) -> np.ndarray | None:
+        if self.state.pending_part_mask is not None:
+            return self.state.pending_part_mask
+        active = self.state.active_layer
+        if active is not None and active.kind == "part":
+            return active.mask
+        return None
+
+    def _paint_mask_stroke(self, start: tuple[int, int], end: tuple[int, int]) -> None:
+        target = self._editable_mask()
+        if target is None:
+            return
+        paint_binary_mask(
+            target,
+            start,
+            end,
+            max(1, self.brush_size.get() // 2),
+            add=self.mode.get() == "mask-add",
+        )
+        if target is not self.state.pending_part_mask:
+            self._invalidate_all()
+        self.status.set("Mask foreground added manually." if self.mode.get() == "mask-add" else "Mask foreground erased manually.")
+        self._schedule_refresh()
+
+    def undo_mask_stroke(self) -> None:
+        if not self.mask_undo_stack:
+            self.status.set("No mask stroke to undo.")
+            return
+        target_key, snapshot = self.mask_undo_stack.pop()
+        if target_key == "pending":
+            self.state.pending_part_mask = snapshot
+        else:
+            layer = next((item for item in self.state.layers if item.id == target_key and item.kind == "part"), None)
+            if layer is None:
+                self.status.set("The mask layer for that undo no longer exists.")
+                return
+            layer.mask = snapshot
+        self._invalidate_all()
+        self.status.set("Undid the last manual mask stroke.")
+        self.refresh_preview()
+
     def create_part_layer(self) -> None:
         if self.state.pending_part_mask is None or not np.any(self.state.pending_part_mask):
             self.status.set("Finalize a Part Polygon first.")
@@ -266,6 +347,8 @@ class CutoutSpikeApp:
         requested = self.new_part_name.get().strip() or "part"
         name = self.state.next_name(requested)
         self.state.add_part(name, self.state.pending_part_mask)
+        self.mask_undo_stack = [item for item in self.mask_undo_stack if item[0] != "pending"]
+        self._invalidate_all()
         self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
         self.status.set(f"Created exact manual part layer: {name}. Original source remains unchanged.")
         self.refresh_preview()
@@ -282,6 +365,7 @@ class CutoutSpikeApp:
         layer = next((item for item in self.state.layers if item.id == layer_id), None)
         if layer is not None:
             layer.visible = not layer.visible
+            self._composite_cache_rgb = None
             self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
             self.refresh_preview()
 
@@ -300,12 +384,14 @@ class CutoutSpikeApp:
         if not self.state.delete_active():
             self.status.set("Base is required and cannot be deleted.")
             return
+        self._invalidate_all()
         self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
         self.status.set(f"Deleted layer: {name}.")
         self.refresh_preview()
 
     def move_active_layer(self, direction: int) -> None:
         if self.state.move_active(direction):
+            self._composite_cache_rgb = None
             self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
             self.status.set("Layer order updated (panel is top-to-bottom).")
             self.refresh_preview()
@@ -316,25 +402,42 @@ class CutoutSpikeApp:
             return
         active.transform.scale = float(np.clip(scale, 0.1, 10.0))
         active.transform.rotation_degrees = float(np.clip(rotation, -180.0, 180.0))
+        self._invalidate_layer(active.id)
         self.status.set(f"Patch transform: {active.transform.scale * 100:.0f}% / {active.transform.rotation_degrees:.0f}°.")
+        if self._transform_job is not None:
+            self.root.after_cancel(self._transform_job)
+        self._transform_job = self.root.after(45, self._finish_transform_refresh)
+
+    def _finish_transform_refresh(self) -> None:
+        self._transform_job = None
         self.refresh_preview()
 
     def _add_blur(self, point: tuple[int, int]) -> None:
         active = self.state.active_layer
         if active is None:
             return
-        active.local_edits.append({"kind": "blur", "x": point[0], "y": point[1], "radius": self.brush_size.get() / 2, "strength": self.brush_strength.get()})
+        edit = {"kind": "blur", "x": point[0], "y": point[1], "radius": self.brush_size.get() / 2, "strength": self.brush_strength.get()}
+        cached = self._layer_cache.get(active.id)
+        active.local_edits.append(edit)
+        if cached is not None:
+            self._layer_cache[active.id] = apply_local_edit(cached, edit, copy=False)
+        self._composite_cache_rgb = None
         self.last_brush_point = point
         self.status.set(f"Blur applied to derived layer {active.name}; original is unchanged.")
-        self.refresh_preview()
+        self._schedule_refresh()
 
     def _add_smudge(self, start: tuple[int, int], end: tuple[int, int]) -> None:
         active = self.state.active_layer
         if active is None:
             return
-        active.local_edits.append({"kind": "smudge", "from_x": start[0], "from_y": start[1], "to_x": end[0], "to_y": end[1], "radius": self.brush_size.get() / 2, "strength": self.brush_strength.get()})
+        edit = {"kind": "smudge", "from_x": start[0], "from_y": start[1], "to_x": end[0], "to_y": end[1], "radius": self.brush_size.get() / 2, "strength": self.brush_strength.get()}
+        cached = self._layer_cache.get(active.id)
+        active.local_edits.append(edit)
+        if cached is not None:
+            self._layer_cache[active.id] = apply_local_edit(cached, edit, copy=False)
+        self._composite_cache_rgb = None
         self.status.set(f"Smudge applied to derived layer {active.name}; original is unchanged.")
-        self.refresh_preview()
+        self._schedule_refresh()
 
     def undo_local_edit(self) -> None:
         active = self.state.active_layer
@@ -342,7 +445,47 @@ class CutoutSpikeApp:
             self.status.set("Active layer has no local edit to undo.")
             return
         active.local_edits.pop()
+        self._invalidate_layer(active.id)
         self.status.set(f"Undid the last local edit on {active.name}.")
+        self.refresh_preview()
+
+    def _invalidate_all(self) -> None:
+        self._layer_cache.clear()
+        self._composite_cache_rgb = None
+
+    def _invalidate_layer(self, layer_id: str) -> None:
+        self._layer_cache.pop(layer_id, None)
+        self._composite_cache_rgb = None
+
+    def _render_cached(self, layer) -> np.ndarray:
+        original = self.state.original_rgb
+        assert original is not None
+        rendered = self._layer_cache.get(layer.id)
+        if rendered is None:
+            rendered = render_layer(original, self.state.layers, layer)
+            self._layer_cache[layer.id] = rendered
+        return rendered
+
+    def _composite_preview(self) -> np.ndarray:
+        original = self.state.original_rgb
+        assert original is not None
+        if self._composite_cache_rgb is None:
+            if self._checker_cache_rgb is None:
+                self._checker_cache_rgb = checkerboard(*original.shape[:2])
+            result = self._checker_cache_rgb.copy()
+            for layer in reversed(self.state.layers):
+                if layer.visible:
+                    result = alpha_over(result, self._render_cached(layer))
+            self._composite_cache_rgb = result
+        return self._composite_cache_rgb
+
+    def _schedule_refresh(self, delay_ms: int = 16) -> None:
+        if self._refresh_job is not None:
+            return
+        self._refresh_job = self.root.after(delay_ms, self._run_scheduled_refresh)
+
+    def _run_scheduled_refresh(self) -> None:
+        self._refresh_job = None
         self.refresh_preview()
 
     def fit_view(self) -> None:
@@ -419,13 +562,14 @@ class CutoutSpikeApp:
             self.state.viewport.offset_y = (canvas_h - image_h * zoom) / 2
             self.state.viewport.fit_pending = False
         canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
-        preview = composite_visible(original, self.state.layers)
+        preview = self._composite_preview().copy()
         if self.state.pending_part_mask is not None:
             selected = self.state.pending_part_mask > 0
             preview[selected] = (preview[selected] * 0.72 + np.array([70, 220, 130]) * 0.28).astype(np.uint8)
         active = self.state.active_layer
         if self.layer_panel.mask_overlay.get() and active is not None:
-            mask = active_mask(original, self.state.layers, active) > 0
+            mask_alpha = active_mask(original, self.state.layers, active) if active.kind == "base" else self._render_cached(active)[:, :, 3]
+            mask = mask_alpha > 0
             preview[mask] = (preview[mask] * 0.72 + np.array([235, 70, 170]) * 0.28).astype(np.uint8)
         viewport = self.state.viewport
         inverse = (1.0 / viewport.zoom, 0.0, -viewport.offset_x / viewport.zoom, 0.0, 1.0 / viewport.zoom, -viewport.offset_y / viewport.zoom)
