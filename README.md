@@ -31,6 +31,7 @@ For an approximately eight-second moving-picture clip, small boundary errors tha
 - previews either layer independently over a checkerboard; optional **Fill Base Hole** uses OpenCV `INPAINT_TELEA` from the original source and current mask
 - **Fill Skin** samples the mask-adjacent ring, rejects dark pixels, and median-fills the hole to avoid Telea hair/eyebrow/eyelash smearing
 - **Fill Skin Gradient** keeps that dark-pixel rejection but interpolates directional ring medians with a small feather, because flat Skin Fill was too uniform and patch-like
+- **Patch Source** lets the user sample a rectangle from the immutable original, then place and scale that feathered Patch layer between Base and Cutout. It is a controllable alternative to generic inpainting for blink-oriented hidden-area coverage.
 
 This is deliberately not FLAMORIS production architecture and is not a general image editor.
 
