@@ -42,6 +42,16 @@ class ImageOpsTests(unittest.TestCase):
         composite = composite_visible_rgba(state.original_rgb, state.layers)
         self.assertGreater(int(composite[19, 29, 3]), 0)
 
+    def test_visible_part_reconstructs_original_over_patch(self) -> None:
+        state = EditorState()
+        state.reset(self.original)
+        mask = polygon_mask((40, 60), [(22, 12), (37, 12), (37, 27), (22, 27)])
+        state.add_part("eye_left", mask)
+        state.add_patch("patch_eye_left", [(1, 1), (12, 1), (12, 10), (1, 10)], (29, 19))
+        composite = composite_visible_rgba(state.original_rgb, state.layers)
+        self.assertTrue(np.array_equal(composite[:, :, :3], self.original))
+        self.assertTrue(np.all(composite[:, :, 3] == 255))
+
     def test_patch_supports_1000_percent_rotation_without_mutation(self) -> None:
         state = EditorState()
         state.reset(self.original)
