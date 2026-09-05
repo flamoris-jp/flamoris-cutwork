@@ -411,8 +411,13 @@ class CutoutSpikeApp:
             self.canvas.delete("all")
             return
         if self.state.viewport.fit_pending and self.canvas.winfo_width() > 2:
-            self.fit_view()
-            return
+            canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+            image_h, image_w = original.shape[:2]
+            zoom = max(0.02, min(canvas_w / image_w, canvas_h / image_h))
+            self.state.viewport.zoom = zoom
+            self.state.viewport.offset_x = (canvas_w - image_w * zoom) / 2
+            self.state.viewport.offset_y = (canvas_h - image_h * zoom) / 2
+            self.state.viewport.fit_pending = False
         canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
         preview = composite_visible(original, self.state.layers)
         if self.state.pending_part_mask is not None:
