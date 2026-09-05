@@ -27,6 +27,8 @@ For an approximately eight-second moving-picture clip, small boundary errors tha
 - provides small deterministic cleanup operations: fill holes, remove islands, expand, shrink, smooth
 - exports either the binary mask or a transparent PNG cutout
 - keeps the original decoded image immutable while only the mask changes
+- can create an experimental **Base** layer (source minus mask) and **Cutout** layer (masked source) for blink-oriented close-up tests
+- previews either layer independently over a checkerboard; optional **Fill Base Hole** uses OpenCV `INPAINT_TELEA` from the original source and current mask
 
 This is deliberately not FLAMORIS production architecture and is not a general image editor.
 
@@ -50,7 +52,9 @@ python app.py
 4. Use **FG Brush** / **BG Brush** only where visible artifacts matter.
 5. Press **Refine GrabCut**.
 6. Optionally try Fill Holes / Remove Islands / Expand / Shrink / Smooth.
-7. Export the cutout or mask for comparison.
+7. Press **Create Layers** to inspect Base / Cutout independently.
+8. For a blink test, hide Cutout; optionally use **Fill Base Hole** to see whether the hole reads as plausible surrounding skin.
+9. Export the cutout or mask for comparison.
 
 The Polygon Lasso is not a precision tracing tool. Leave a little margin around the target; its exterior becomes definite background and its interior is a foreground candidate for GrabCut.
 
