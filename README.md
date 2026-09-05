@@ -29,13 +29,14 @@ Pixel-perfect segmentation, single-hair accuracy, and defects visible only at ex
 
 1. **Open Image**. The decoded RGB source is copied once and remains immutable.
 2. Choose **Part Polygon**, click exact vertices, then press **Enter** or double-click. **Esc** cancels.
-3. Choose or type a semantic name, then press **Create Part Layer**.
-4. Repeat the polygon/create step for every part that will move.
-5. Select **Patch Source**, polygon-select a clean cheek/forehead/nearby region, and finalize it. The patch is sampled from the immutable original.
-6. Use **Move Layer** plus the right-panel Scale and Rotation controls to cover a Base hole.
-7. If a visible seam remains, apply a small **Blur Brush** or gentle **Smudge Brush** to the active derived layer.
-8. Toggle, rename, select, delete, or reorder layers in the right panel.
-9. Export a flattened RGBA PNG and/or one transparent PNG per layer. Save the active mask when useful.
+3. If needed, use **Mask Add** / **Mask Erase** to correct the pending binary selection directly. These brushes do not invoke GrabCut.
+4. Choose or type a semantic name, then press **Create Part Layer**.
+5. Repeat the polygon/create step for every part that will move.
+6. Select **Patch Source**, polygon-select a clean cheek/forehead/nearby region, and finalize it. The patch is sampled from the immutable original.
+7. Use **Move Layer** plus the right-panel Scale and Rotation controls to cover a Base hole.
+8. If a visible seam remains, apply a small **Blur Brush** or gentle **Smudge Brush** to the active derived layer.
+9. Toggle, rename, select, delete, or reorder layers in the right panel.
+10. Export a flattened RGBA PNG and/or one transparent PNG per layer. Save the active mask when useful.
 
 Part Polygon is the final binary selection: inside is foreground, outside is background. It never runs GrabCut. Patch Source also uses a polygon, but creates a transformable sample layer instead of a part mask.
 
@@ -72,8 +73,12 @@ Semantic name presets live in [`config/part-names.json`](config/part-names.json)
 - Patch Scale: 10–1000%
 - Patch Rotation: -180–180°
 - **Undo Local Edit**: removes the last Blur/Smudge operation from the active layer
+- **Mask Add / Mask Erase**: manually corrects the pending polygon or active Part mask
+- **Undo Mask Stroke**: restores the mask from before the last brush stroke
 
 Selection, movement, and brush coordinates are converted back to original image space after zoom and pan.
+
+Interactive redraw caches unchanged layer rasters and the current composite. Blur and Smudge operate on a small brush-local ROI instead of filtering or translating the full source image on every pointer event; slider redraw is briefly coalesced.
 
 ## Earlier experiment findings
 
