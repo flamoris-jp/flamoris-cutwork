@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 
 from app import CutoutSpikeApp
-from image_ops import active_mask, composite_visible_rgba, polygon_mask, render_layer
+from image_ops import active_mask, apply_local_edit, composite_visible_rgba, paint_binary_mask, polygon_mask, render_layer
 from model import EditorState
 
 
@@ -20,6 +20,20 @@ class ImageOpsTests(unittest.TestCase):
         self.assertEqual(int(mask[25, 30]), 255)
         self.assertEqual(int(mask[9, 10]), 0)
         self.assertEqual(set(np.unique(mask)), {0, 255})
+
+    def test_manual_brush_adds_and_erases_exact_binary_mask(self) -> None:
+        mask = polygon_mask((40, 60), [(10, 10), (20, 10), (20, 20), (10, 20)])
+        paint_binary_mask(mask, (25, 15), (30, 15), radius=3, add=True)
+        self.assertEqual(int(mask[15, 30]), 255)
+        paint_binary_mask(mask, (15, 15), (18, 15), radius=2, add=False)
+        self.assertEqual(int(mask[15, 18]), 0)
+        self.assertEqual(set(np.unique(mask)), {0, 255})
+
+    def test_local_blur_changes_only_small_roi(self) -> None:
+        rgba = np.dstack((self.original, np.full(self.original.shape[:2], 255, dtype=np.uint8)))
+        edited = apply_local_edit(rgba, {"kind": "blur", "x": 20, "y": 20, "radius": 4, "strength": 0.8})
+        self.assertTrue(np.array_equal(edited[:5, :5], rgba[:5, :5]))
+        self.assertTrue(np.array_equal(edited[-5:, -5:], rgba[-5:, -5:]))
 
     def test_parts_are_recreated_from_immutable_original(self) -> None:
         state = EditorState()
