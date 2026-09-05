@@ -149,8 +149,8 @@ class CutoutSpikeApp:
         if self.image_bgr is None:
             return
         messages = {
-            "box": "Drag a loose box around the moving person or body part.",
-            "lasso": "Click a loose polygon around the target. Enter or double-click finishes; Esc cancels.",
+            "box": "Drag a loose box around the target. Box runs automatic GrabCut.",
+            "lasso": "Click an exact manual polygon. Enter/double-click makes the polygon the mask; Esc cancels.",
             "fg": "Paint only areas that must remain foreground, then Refine GrabCut.",
             "bg": "Paint only visible unwanted areas as background, then Refine GrabCut.",
         }
@@ -313,15 +313,11 @@ class CutoutSpikeApp:
             return "break"
 
         self._push_undo()
-        self.gc_mask = lasso_grabcut_mask(self.gc_mask.shape, self.lasso_points)
+        polygon_mask = lasso_grabcut_mask(self.gc_mask.shape, self.lasso_points)
+        self.gc_mask = np.where(polygon_mask == GC_PR_FG, GC_FG, GC_BG).astype(np.uint8)
         self.base_hole_filled = False
-        started = time.perf_counter()
-        bg_model = np.zeros((1, 65), np.float64)
-        fg_model = np.zeros((1, 65), np.float64)
-        cv2.grabCut(self.image_bgr, self.gc_mask, None, bg_model, fg_model, 5, cv2.GC_INIT_WITH_MASK)
-        elapsed_ms = (time.perf_counter() - started) * 1000
         self._clear_lasso_preview()
-        self.status.set(f"Polygon GrabCut complete: {elapsed_ms:.0f} ms. Paint FG/BG hints only where artifacts matter, then Refine GrabCut.")
+        self.status.set("Polygon selection complete: exact manual mask. Paint FG/BG or press Refine GrabCut only if wanted.")
         self.refresh_preview()
         return "break"
 
