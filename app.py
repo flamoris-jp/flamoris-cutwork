@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import time
+import json
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -9,637 +10,492 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-
-GC_BG = cv2.GC_BGD
-GC_FG = cv2.GC_FGD
-GC_PR_BG = cv2.GC_PR_BGD
-GC_PR_FG = cv2.GC_PR_FGD
+from image_ops import active_mask, composite_visible, composite_visible_rgba, polygon_mask, render_layer
+from layer_panel import LayerPanel
+from model import EditorState
 
 
-def lasso_grabcut_mask(shape: tuple[int, int], points: list[tuple[int, int]]) -> np.ndarray:
-    """Create GrabCut labels for a rough polygon selection.
-
-    The polygon is only a foreground candidate.  Everything outside it is
-    definite background, which is deliberately a broad, quick selection model
-    rather than a contour-tracing tool.
-    """
-    height, width = shape
-    candidate = np.zeros((height, width), dtype=np.uint8)
-    contour = np.asarray(points, dtype=np.int32).reshape((-1, 1, 2))
-    cv2.fillPoly(candidate, [contour], 255)
-
-    # Keep a definite-background sample even when the user loosely encloses the
-    # whole displayed image. A one-pixel border is an acceptable trade-off for
-    # this rough cutout experiment and lets GrabCut initialize predictably.
-    candidate[0, :] = 0
-    candidate[-1, :] = 0
-    candidate[:, 0] = 0
-    candidate[:, -1] = 0
-
-    return np.where(candidate > 0, GC_PR_FG, GC_BG).astype(np.uint8)
+APP_DIR = Path(__file__).resolve().parent
+PART_NAMES_PATH = APP_DIR / "config" / "part-names.json"
 
 
 class CutoutSpikeApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("FLAMORIS Classical Cutout Spike")
-        self.root.geometry("1280x840")
-
-        self.image_bgr: np.ndarray | None = None
-        self.image_rgb: np.ndarray | None = None
-        self.gc_mask: np.ndarray | None = None
-        self.preview_photo: ImageTk.PhotoImage | None = None
-        self.preview_size = (1, 1)
-        self.preview_origin = (0, 0)
-        self.scale = 1.0
-
-        self.mode = tk.StringVar(value="box")
-        self.brush_size = tk.IntVar(value=18)
+        self.root.title("FLAMORIS Manual Part Editor Spike")
+        self.root.geometry("1440x900")
+        self.root.minsize(980, 640)
+        self.state = EditorState()
+        self.source_path: Path | None = None
+        self.part_names = self._load_part_names()
+        self.mode = tk.StringVar(value="part-polygon")
+        self.new_part_name = tk.StringVar(value=self.part_names[0] if self.part_names else "part")
+        self.brush_size = tk.IntVar(value=28)
+        self.brush_strength = tk.DoubleVar(value=0.35)
         self.status = tk.StringVar(value="Open an image to begin.")
-
-        self.drag_start_canvas: tuple[int, int] | None = None
-        self.drag_rect_id: int | None = None
-        self.lasso_points: list[tuple[int, int]] = []
-        self.undo_stack: list[np.ndarray] = []
-        self.layers_created = False
-        self.base_hole_filled = False
-        self.base_fill_kind = "telea"
-        self.base_visible = tk.BooleanVar(value=True)
-        self.cutout_visible = tk.BooleanVar(value=True)
-        self.patch_visible = tk.BooleanVar(value=True)
-        self.patch_rect: tuple[int, int, int, int] | None = None
-        self.patch_center: tuple[int, int] | None = None
-        self.patch_drag: tuple[int, int] | None = None
-        self.patch_scale = tk.IntVar(value=100)
-
+        self.polygon_points: list[tuple[int, int]] = []
+        self.preview_photo: ImageTk.PhotoImage | None = None
+        self.drag_image_point: tuple[int, int] | None = None
+        self.drag_canvas_point: tuple[int, int] | None = None
+        self.last_brush_point: tuple[int, int] | None = None
         self._build_ui()
         self._bind_events()
 
+    @staticmethod
+    def _load_part_names() -> list[str]:
+        try:
+            values = json.loads(PART_NAMES_PATH.read_text(encoding="utf-8"))
+            return [str(value) for value in values if str(value).strip()]
+        except (OSError, json.JSONDecodeError):
+            return ["eye_left", "eye_right", "face", "hair", "arm", "hand", "leg", "patch"]
+
     def _build_ui(self) -> None:
-        toolbar = ttk.Frame(self.root, padding=8)
+        toolbar = ttk.Frame(self.root, padding=(8, 7))
         toolbar.pack(side=tk.TOP, fill=tk.X)
-
         ttk.Button(toolbar, text="Open Image", command=self.open_image).pack(side=tk.LEFT, padx=(0, 8))
-
         for label, value in (
-            ("Box", "box"),
-            ("Polygon Lasso", "lasso"),
-            ("FG Brush", "fg"),
-            ("BG Brush", "bg"),
-            ("Patch Source", "patch-source"),
-            ("Move Patch", "patch-move"),
+            ("Part Polygon", "part-polygon"),
+            ("Patch Source", "patch-polygon"),
+            ("Move Layer", "move"),
+            ("Blur Brush", "blur"),
+            ("Smudge Brush", "smudge"),
+            ("Pan", "pan"),
         ):
-            ttk.Radiobutton(
-                toolbar,
-                text=label,
-                value=value,
-                variable=self.mode,
-                command=self.on_mode_changed,
-            ).pack(side=tk.LEFT, padx=3)
+            ttk.Radiobutton(toolbar, text=label, value=value, variable=self.mode, command=self.on_mode_changed).pack(side=tk.LEFT, padx=3)
+        ttk.Label(toolbar, text="Size").pack(side=tk.LEFT, padx=(12, 3))
+        ttk.Scale(toolbar, from_=2, to=200, variable=self.brush_size, orient=tk.HORIZONTAL, length=90).pack(side=tk.LEFT)
+        ttk.Label(toolbar, text="Strength").pack(side=tk.LEFT, padx=(8, 3))
+        ttk.Scale(toolbar, from_=0.05, to=1.0, variable=self.brush_strength, orient=tk.HORIZONTAL, length=80).pack(side=tk.LEFT)
 
-        ttk.Label(toolbar, text="Brush").pack(side=tk.LEFT, padx=(12, 4))
-        ttk.Scale(toolbar, from_=2, to=80, variable=self.brush_size, orient=tk.HORIZONTAL, length=120).pack(side=tk.LEFT)
+        actions = ttk.Frame(self.root, padding=(8, 0, 8, 7))
+        actions.pack(side=tk.TOP, fill=tk.X)
+        ttk.Label(actions, text="New part:").pack(side=tk.LEFT)
+        ttk.Combobox(actions, textvariable=self.new_part_name, values=self.part_names, width=16).pack(side=tk.LEFT, padx=(4, 4))
+        ttk.Button(actions, text="Create Part Layer", command=self.create_part_layer).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Button(actions, text="Undo Local Edit", command=self.undo_local_edit).pack(side=tk.LEFT, padx=3)
+        ttk.Button(actions, text="Fit", command=self.fit_view).pack(side=tk.LEFT, padx=(12, 3))
+        ttk.Button(actions, text="100%", command=self.actual_size).pack(side=tk.LEFT, padx=3)
+        ttk.Button(actions, text="Zoom −", command=lambda: self.zoom_center(1 / 1.25)).pack(side=tk.LEFT, padx=(8, 3))
+        ttk.Button(actions, text="Zoom +", command=lambda: self.zoom_center(1.25)).pack(side=tk.LEFT, padx=3)
+        ttk.Button(actions, text="Export Composite PNG", command=self.export_composite).pack(side=tk.RIGHT, padx=3)
+        ttk.Button(actions, text="Export Layer PNGs", command=self.export_layers).pack(side=tk.RIGHT, padx=3)
 
-        ttk.Button(toolbar, text="Refine GrabCut", command=self.refine_grabcut).pack(side=tk.LEFT, padx=(12, 3))
-        ttk.Button(toolbar, text="Undo", command=self.undo).pack(side=tk.LEFT, padx=3)
-        ttk.Button(toolbar, text="Reset", command=self.reset_mask).pack(side=tk.LEFT, padx=3)
-
-        refine = ttk.Frame(self.root, padding=(8, 0, 8, 8))
-        refine.pack(side=tk.TOP, fill=tk.X)
-        ttk.Button(refine, text="Fill Holes", command=self.fill_holes).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Remove Islands", command=self.remove_islands).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Expand", command=lambda: self.morph("dilate")).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Shrink", command=lambda: self.morph("erode")).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Smooth", command=self.smooth).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Create Layers", command=self.create_layers).pack(side=tk.LEFT, padx=(12, 3))
-        ttk.Button(refine, text="Fill Base Hole", command=self.fill_base_hole).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Fill Skin", command=self.fill_skin).pack(side=tk.LEFT, padx=3)
-        ttk.Button(refine, text="Fill Skin Gradient", command=self.fill_skin_gradient).pack(side=tk.LEFT, padx=3)
-        ttk.Scale(refine, from_=50, to=250, variable=self.patch_scale, orient=tk.HORIZONTAL, length=90, command=lambda _v: self.refresh_preview()).pack(side=tk.LEFT, padx=(12, 2))
-        ttk.Label(refine, text="Patch scale").pack(side=tk.LEFT)
-        ttk.Button(refine, text="Save Mask", command=self.save_mask).pack(side=tk.RIGHT, padx=3)
-        ttk.Button(refine, text="Export Cutout", command=self.export_cutout).pack(side=tk.RIGHT, padx=3)
+        ttk.Label(
+            self.root,
+            text=("Part Polygon = exact manual mask (Enter/double-click finalize, Esc cancel).  "
+                  "Patch Source = polygon sampled only from immutable original."),
+            padding=(10, 0, 8, 6),
+            foreground="#555555",
+        ).pack(side=tk.TOP, fill=tk.X)
 
         body = ttk.Frame(self.root)
         body.pack(fill=tk.BOTH, expand=True)
         self.canvas = tk.Canvas(body, background="#202020", highlightthickness=0)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        layers = ttk.LabelFrame(self.root, text="Experiment Layers", padding=(8, 4))
-        layers.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
-        ttk.Checkbutton(layers, text="Base", variable=self.base_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
-        ttk.Checkbutton(layers, text="Cutout", variable=self.cutout_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
-        ttk.Checkbutton(layers, text="Patch", variable=self.patch_visible, command=self.refresh_preview).pack(side=tk.LEFT, padx=3)
-
-        statusbar = ttk.Label(self.root, textvariable=self.status, anchor=tk.W, padding=(8, 5))
-        statusbar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.layer_panel = LayerPanel(
+            body,
+            self.part_names,
+            on_select=self.select_layer,
+            on_toggle=self.toggle_layer,
+            on_rename=self.rename_active_layer,
+            on_delete=self.delete_active_layer,
+            on_move=self.move_active_layer,
+            on_transform=self.transform_active_layer,
+            on_mask_toggle=self.refresh_preview,
+            on_save_mask=self.save_active_mask,
+        )
+        self.layer_panel.pack(side=tk.RIGHT, fill=tk.Y)
+        self.layer_panel.pack_propagate(False)
+        ttk.Label(self.root, textvariable=self.status, anchor=tk.W, padding=(8, 5)).pack(side=tk.BOTTOM, fill=tk.X)
 
     def _bind_events(self) -> None:
         self.canvas.bind("<Configure>", lambda _event: self.refresh_preview())
         self.canvas.bind("<ButtonPress-1>", self.on_pointer_down)
         self.canvas.bind("<B1-Motion>", self.on_pointer_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_pointer_up)
-        self.canvas.bind("<Double-Button-1>", self.finalize_lasso)
-        self.root.bind("<Return>", self.finalize_lasso)
-        self.root.bind("<Escape>", self.cancel_lasso)
+        self.canvas.bind("<Double-Button-1>", self.finalize_polygon)
+        self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.canvas.bind("<Button-4>", lambda event: self._zoom_at(event.x, event.y, 1.15))
+        self.canvas.bind("<Button-5>", lambda event: self._zoom_at(event.x, event.y, 1 / 1.15))
+        self.canvas.bind("<ButtonPress-2>", self.start_middle_pan)
+        self.canvas.bind("<B2-Motion>", self.middle_pan)
+        self.canvas.bind("<ButtonRelease-2>", self.end_middle_pan)
+        self.root.bind("<Return>", self.finalize_polygon)
+        self.root.bind("<Escape>", self.cancel_polygon)
 
     def on_mode_changed(self) -> None:
-        if self.mode.get() != "lasso":
-            self._clear_lasso_preview()
-        if self.image_bgr is None:
-            return
+        if self.mode.get() not in ("part-polygon", "patch-polygon"):
+            self.cancel_polygon(silent=True)
         messages = {
-            "box": "Drag a loose box around the target. Box runs automatic GrabCut.",
-            "lasso": "Click an exact manual polygon. Enter/double-click makes the polygon the mask; Esc cancels.",
-            "fg": "Paint only areas that must remain foreground, then Refine GrabCut.",
-            "bg": "Paint only visible unwanted areas as background, then Refine GrabCut.",
+            "part-polygon": "Click an exact part polygon. Enter/double-click finalizes; Esc cancels. No GrabCut is run.",
+            "patch-polygon": "Click a polygon around clean source pixels. The sample always comes from immutable original.",
+            "move": "Drag the active Patch layer. Scale and rotate it in the right panel.",
+            "blur": "Paint a light blur onto the active derived layer only.",
+            "smudge": "Drag gently to push pixels on the active derived layer only.",
+            "pan": "Drag the viewport. Mouse wheel zooms around the cursor.",
         }
         self.status.set(messages[self.mode.get()])
 
     def open_image(self) -> None:
-        path = filedialog.askopenfilename(
-            title="Open image",
-            filetypes=[("Images", "*.png *.jpg *.jpeg *.webp *.bmp"), ("All files", "*.*")],
-        )
+        path = filedialog.askopenfilename(title="Open image", filetypes=[("Images", "*.png *.jpg *.jpeg *.webp *.bmp"), ("All files", "*.*")])
         if not path:
             return
-        image = cv2.imread(path, cv2.IMREAD_COLOR)
-        if image is None:
-            messagebox.showerror("Open failed", f"Could not decode image:\n{path}")
+        try:
+            original = np.asarray(Image.open(path).convert("RGB")).copy()
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Open failed", f"Could not decode image:\n{path}\n\n{exc}")
             return
-
-        self.image_bgr = image
-        self.image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        self.gc_mask = np.full(image.shape[:2], GC_BG, dtype=np.uint8)
-        self.layers_created = False
-        self.base_hole_filled = False
-        self.undo_stack.clear()
-        self._clear_lasso_preview()
-        self.root.title(f"FLAMORIS Classical Cutout Spike - {Path(path).name}")
-        self.status.set(f"Loaded {image.shape[1]}x{image.shape[0]}. Draw a Box or Polygon Lasso around the target.")
-        self.refresh_preview()
-
-    def reset_mask(self) -> None:
-        if self.image_bgr is None:
-            return
-        self._push_undo()
-        self.gc_mask = np.full(self.image_bgr.shape[:2], GC_BG, dtype=np.uint8)
-        self.base_hole_filled = False
-        self._clear_lasso_preview()
-        self.status.set("Mask reset. Draw a new Box or Polygon Lasso around the target.")
+        self.source_path = Path(path)
+        self.state.reset(original)
+        self.polygon_points.clear()
+        self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+        self.root.title(f"FLAMORIS Manual Part Editor Spike - {self.source_path.name}")
+        self.status.set(f"Loaded {original.shape[1]}×{original.shape[0]}. Part Polygon is exact; Patch Source samples the original.")
         self.refresh_preview()
 
     def on_pointer_down(self, event: tk.Event) -> None:
-        if self.image_bgr is None or self.gc_mask is None:
+        if self.state.original_rgb is None:
             return
-        if self.mode.get() == "box":
-            self.drag_start_canvas = (event.x, event.y)
-            if self.drag_rect_id is not None:
-                self.canvas.delete(self.drag_rect_id)
-            self.drag_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline="white", width=2)
-            return
-        if self.mode.get() == "patch-source":
-            self.drag_start_canvas = (event.x, event.y)
-            self.drag_rect_id = self.canvas.create_rectangle(event.x, event.y, event.x, event.y, outline="#72d6a8", width=2)
-            return
-        if self.mode.get() == "patch-move":
+        mode = self.mode.get()
+        if mode in ("part-polygon", "patch-polygon"):
             point = self._canvas_to_image(event.x, event.y)
-            if point is not None and self.patch_rect is not None:
-                self.patch_drag = point
+            if point is not None and (not self.polygon_points or point != self.polygon_points[-1]):
+                self.polygon_points.append(point)
+                self.status.set(f"Polygon: {len(self.polygon_points)} points. Enter/double-click finalizes; Esc cancels.")
+                self.refresh_preview()
             return
-        if self.mode.get() == "lasso":
-            point = self._canvas_to_image(event.x, event.y)
-            if point is not None:
-                if not self.lasso_points or point != self.lasso_points[-1]:
-                    self.lasso_points.append(point)
-                    self._draw_lasso_preview()
-                    self.status.set(f"Lasso: {len(self.lasso_points)} points. Enter/double-click finishes; Esc cancels.")
+        if mode == "pan":
+            self.drag_canvas_point = (event.x, event.y)
             return
-
         point = self._canvas_to_image(event.x, event.y)
         if point is None:
             return
-        self._push_undo()
-        self._paint_hint(point)
-        self.refresh_preview()
+        if mode == "move":
+            self.drag_image_point = point
+        elif mode == "blur":
+            self._add_blur(point)
+        elif mode == "smudge":
+            self.last_brush_point = point
 
     def on_pointer_drag(self, event: tk.Event) -> None:
-        if self.image_bgr is None or self.gc_mask is None or self.mode.get() == "lasso":
+        if self.state.original_rgb is None:
             return
-        if self.mode.get() == "box":
-            if self.drag_start_canvas is not None and self.drag_rect_id is not None:
-                self.canvas.coords(self.drag_rect_id, *self.drag_start_canvas, event.x, event.y)
-            return
-        if self.mode.get() == "patch-source":
-            if self.drag_start_canvas is not None and self.drag_rect_id is not None:
-                self.canvas.coords(self.drag_rect_id, *self.drag_start_canvas, event.x, event.y)
-            return
-        if self.mode.get() == "patch-move" and self.patch_drag is not None and self.patch_center is not None:
-            point = self._canvas_to_image(event.x, event.y)
-            if point is not None:
-                dx, dy = point[0] - self.patch_drag[0], point[1] - self.patch_drag[1]
-                self.patch_center = (self.patch_center[0] + dx, self.patch_center[1] + dy)
-                self.patch_drag = point
-                self.refresh_preview()
+        mode = self.mode.get()
+        if mode == "pan" and self.drag_canvas_point is not None:
+            dx, dy = event.x - self.drag_canvas_point[0], event.y - self.drag_canvas_point[1]
+            self.state.viewport.offset_x += dx
+            self.state.viewport.offset_y += dy
+            self.drag_canvas_point = (event.x, event.y)
+            self.refresh_preview()
             return
         point = self._canvas_to_image(event.x, event.y)
-        if point is not None:
-            self._paint_hint(point)
+        if point is None:
+            return
+        active = self.state.active_layer
+        if mode == "move" and self.drag_image_point is not None and active is not None and active.kind == "patch":
+            dx, dy = point[0] - self.drag_image_point[0], point[1] - self.drag_image_point[1]
+            active.transform.center_x += dx
+            active.transform.center_y += dy
+            self.drag_image_point = point
             self.refresh_preview()
+        elif mode == "blur":
+            if self.last_brush_point is None or self._distance(self.last_brush_point, point) >= max(1, self.brush_size.get() // 4):
+                self._add_blur(point)
+        elif mode == "smudge" and self.last_brush_point is not None and self._distance(self.last_brush_point, point) >= 1:
+            self._add_smudge(self.last_brush_point, point)
+            self.last_brush_point = point
 
-    def on_pointer_up(self, event: tk.Event) -> None:
-        if self.image_bgr is None or self.gc_mask is None:
-            return
-        if self.mode.get() == "patch-source" and self.drag_start_canvas is not None:
-            start, end = self._canvas_to_image(*self.drag_start_canvas), self._canvas_to_image(event.x, event.y)
-            self.drag_start_canvas = None
-            if self.drag_rect_id is not None:
-                self.canvas.delete(self.drag_rect_id); self.drag_rect_id = None
-            if start is not None and end is not None:
-                x0, x1 = sorted((start[0], end[0])); y0, y1 = sorted((start[1], end[1]))
-                if x1 - x0 >= 4 and y1 - y0 >= 4:
-                    self.patch_rect = (x0, y0, x1, y1)
-                    binary = self._binary_mask()
-                    if binary is not None and np.any(binary):
-                        ys, xs = np.where(binary > 0); self.patch_center = ((xs.min()+xs.max())//2, (ys.min()+ys.max())//2)
-                    self.status.set("Patch sampled from immutable original. Use Move Patch and Patch scale to place it.")
-                    self.refresh_preview()
-            return
-        self.patch_drag = None
-        if self.mode.get() != "box" or self.drag_start_canvas is None:
-            return
-        start = self._canvas_to_image(*self.drag_start_canvas)
-        end = self._canvas_to_image(event.x, event.y)
-        self.drag_start_canvas = None
-        if self.drag_rect_id is not None:
-            self.canvas.delete(self.drag_rect_id)
-            self.drag_rect_id = None
-        if start is None or end is None:
-            return
+    def on_pointer_up(self, _event: tk.Event) -> None:
+        self.drag_image_point = None
+        self.drag_canvas_point = None
+        self.last_brush_point = None
 
-        x0, y0 = start
-        x1, y1 = end
-        left, right = sorted((x0, x1))
-        top, bottom = sorted((y0, y1))
-        width, height = right - left, bottom - top
-        if width < 4 or height < 4:
-            self.status.set("Box too small. Draw a larger rectangle around the target.")
-            return
-        image_h, image_w = self.gc_mask.shape
-        left = max(0, min(left, image_w - 2))
-        top = max(0, min(top, image_h - 2))
-        width = min(width, image_w - left - 1)
-        height = min(height, image_h - top - 1)
-        self._push_undo()
-        self.gc_mask[:] = GC_BG
-        self.base_hole_filled = False
-        started = time.perf_counter()
-        bg_model = np.zeros((1, 65), np.float64)
-        fg_model = np.zeros((1, 65), np.float64)
-        cv2.grabCut(self.image_bgr, self.gc_mask, (left, top, width, height), bg_model, fg_model, 5, cv2.GC_INIT_WITH_RECT)
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        self.status.set(f"Box GrabCut complete: {elapsed_ms:.0f} ms. Paint FG/BG hints only where artifacts matter, then Refine GrabCut.")
-        self.refresh_preview()
+    @staticmethod
+    def _distance(first: tuple[int, int], second: tuple[int, int]) -> float:
+        return float(np.hypot(second[0] - first[0], second[1] - first[1]))
 
-    def finalize_lasso(self, _event: tk.Event | None = None) -> str | None:
-        if self.image_bgr is None or self.gc_mask is None or self.mode.get() != "lasso":
+    def finalize_polygon(self, _event: tk.Event | None = None) -> str | None:
+        if self.state.original_rgb is None or self.mode.get() not in ("part-polygon", "patch-polygon"):
             return None
-        if len(self.lasso_points) < 3:
-            self.status.set("Lasso needs at least three points. Keep clicking or press Esc to cancel.")
+        if len(self.polygon_points) < 3:
+            self.status.set("Polygon needs at least three points. Continue clicking or press Esc.")
             return "break"
-        contour = np.asarray(self.lasso_points, dtype=np.float32)
-        if cv2.contourArea(contour) < 16:
-            self.status.set("Lasso too small. Draw a larger loose polygon around the target.")
+        mask = polygon_mask(self.state.original_rgb.shape[:2], self.polygon_points)
+        if int(np.count_nonzero(mask)) < 16:
+            self.status.set("Polygon is too small. Draw a larger selection.")
             return "break"
-
-        self._push_undo()
-        polygon_mask = lasso_grabcut_mask(self.gc_mask.shape, self.lasso_points)
-        self.gc_mask = np.where(polygon_mask == GC_PR_FG, GC_FG, GC_BG).astype(np.uint8)
-        self.base_hole_filled = False
-        self._clear_lasso_preview()
-        self.status.set("Polygon selection complete: exact manual mask. Paint FG/BG or press Refine GrabCut only if wanted.")
+        if self.mode.get() == "part-polygon":
+            self.state.pending_part_mask = mask
+            self.status.set("Exact polygon mask ready. Choose/edit the semantic name, then press Create Part Layer.")
+        else:
+            center = self._preferred_patch_center(mask)
+            name = self.state.next_name("patch")
+            self.state.add_patch(name, self.polygon_points, center)
+            self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+            self.status.set("Patch created from immutable original below Base. Move it or use scale/rotation in the right panel.")
+        self.polygon_points = []
         self.refresh_preview()
         return "break"
 
-    def cancel_lasso(self, _event: tk.Event | None = None) -> str | None:
-        if self.mode.get() == "lasso" and self.lasso_points:
-            self._clear_lasso_preview()
-            self.status.set("Polygon Lasso cancelled. Click to start a new loose selection.")
+    def cancel_polygon(self, _event: tk.Event | None = None, *, silent: bool = False) -> str | None:
+        if self.polygon_points:
+            self.polygon_points.clear()
+            if not silent:
+                self.status.set("Polygon cancelled.")
+            self.refresh_preview()
             return "break"
         return None
 
-    def _paint_hint(self, point: tuple[int, int]) -> None:
-        if self.gc_mask is None:
-            return
-        x, y = point
-        radius = max(1, int(self.brush_size.get() / max(self.scale, 0.001) / 2))
-        value = GC_FG if self.mode.get() == "fg" else GC_BG
-        cv2.circle(self.gc_mask, (x, y), radius, int(value), thickness=-1)
-        self.base_hole_filled = False
+    def _preferred_patch_center(self, source_mask: np.ndarray) -> tuple[float, float]:
+        active = self.state.active_layer
+        candidate = active.mask if active is not None and active.kind == "part" else None
+        if candidate is None or not np.any(candidate):
+            parts = [layer.mask for layer in self.state.layers if layer.kind == "part" and layer.mask is not None]
+            if parts:
+                candidate = np.zeros_like(parts[0])
+                for item in parts:
+                    candidate = cv2.bitwise_or(candidate, item)
+        target = candidate if candidate is not None and np.any(candidate) else source_mask
+        ys, xs = np.where(target > 0)
+        return float(np.median(xs)), float(np.median(ys))
 
-    def refine_grabcut(self) -> None:
-        if self.image_bgr is None or self.gc_mask is None:
+    def create_part_layer(self) -> None:
+        if self.state.pending_part_mask is None or not np.any(self.state.pending_part_mask):
+            self.status.set("Finalize a Part Polygon first.")
             return
-        if not np.any((self.gc_mask == GC_FG) | (self.gc_mask == GC_PR_FG)):
-            self.status.set("No foreground candidate yet. Draw a Box or Polygon Lasso first.")
-            return
-        self._push_undo()
-        self.base_hole_filled = False
-        started = time.perf_counter()
-        bg_model = np.zeros((1, 65), np.float64)
-        fg_model = np.zeros((1, 65), np.float64)
-        cv2.grabCut(self.image_bgr, self.gc_mask, None, bg_model, fg_model, 3, cv2.GC_INIT_WITH_MASK)
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        self.status.set(f"GrabCut refined: {elapsed_ms:.0f} ms.")
+        requested = self.new_part_name.get().strip() or "part"
+        name = self.state.next_name(requested)
+        self.state.add_part(name, self.state.pending_part_mask)
+        self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+        self.status.set(f"Created exact manual part layer: {name}. Original source remains unchanged.")
         self.refresh_preview()
 
-    def fill_holes(self) -> None:
-        binary = self._binary_mask()
-        if binary is None:
-            return
-        self._push_undo()
-        self.base_hole_filled = False
-        padded = cv2.copyMakeBorder(binary, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
-        flood = padded.copy()
-        flood_mask = np.zeros((flood.shape[0] + 2, flood.shape[1] + 2), np.uint8)
-        cv2.floodFill(flood, flood_mask, (0, 0), 255)
-        holes = cv2.bitwise_not(flood)[1:-1, 1:-1]
-        self._set_from_binary(cv2.bitwise_or(binary, holes))
-        self.status.set("Filled enclosed holes.")
+    def select_layer(self, layer_id: str) -> None:
+        self.state.select(layer_id)
+        self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+        active = self.state.active_layer
+        if active is not None:
+            self.status.set(f"Active layer: {active.name} ({active.kind}).")
         self.refresh_preview()
 
-    def remove_islands(self) -> None:
-        binary = self._binary_mask()
-        if binary is None:
+    def toggle_layer(self, layer_id: str) -> None:
+        layer = next((item for item in self.state.layers if item.id == layer_id), None)
+        if layer is not None:
+            layer.visible = not layer.visible
+            self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+            self.refresh_preview()
+
+    def rename_active_layer(self, name: str) -> None:
+        active = self.state.active_layer
+        if active is not None and name:
+            active.name = name
+            self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+            self.status.set(f"Renamed active layer to {name}.")
+
+    def delete_active_layer(self) -> None:
+        active = self.state.active_layer
+        if active is None:
             return
-        self._push_undo()
-        self.base_hole_filled = False
-        count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
-        if count <= 1:
+        name = active.name
+        if not self.state.delete_active():
+            self.status.set("Base is required and cannot be deleted.")
             return
-        min_area = max(16, int(binary.size * 0.0002))
-        cleaned = np.zeros_like(binary)
-        for label in range(1, count):
-            if int(stats[label, cv2.CC_STAT_AREA]) >= min_area:
-                cleaned[labels == label] = 255
-        self._set_from_binary(cleaned)
-        self.status.set(f"Removed foreground islands smaller than {min_area} px.")
+        self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+        self.status.set(f"Deleted layer: {name}.")
         self.refresh_preview()
 
-    def morph(self, operation: str) -> None:
-        binary = self._binary_mask()
-        if binary is None:
+    def move_active_layer(self, direction: int) -> None:
+        if self.state.move_active(direction):
+            self.layer_panel.refresh(self.state.layers, self.state.active_layer_id)
+            self.status.set("Layer order updated (panel is top-to-bottom).")
+            self.refresh_preview()
+
+    def transform_active_layer(self, scale: float, rotation: float) -> None:
+        active = self.state.active_layer
+        if active is None or active.kind != "patch":
             return
-        self._push_undo()
-        self.base_hole_filled = False
-        kernel = np.ones((3, 3), np.uint8)
-        if operation == "dilate":
-            result, label = cv2.dilate(binary, kernel, iterations=1), "Expanded mask by ~1 px."
-        else:
-            result, label = cv2.erode(binary, kernel, iterations=1), "Shrank mask by ~1 px."
-        self._set_from_binary(result)
-        self.status.set(label)
+        active.transform.scale = float(np.clip(scale, 0.1, 10.0))
+        active.transform.rotation_degrees = float(np.clip(rotation, -180.0, 180.0))
+        self.status.set(f"Patch transform: {active.transform.scale * 100:.0f}% / {active.transform.rotation_degrees:.0f}°.")
         self.refresh_preview()
 
-    def smooth(self) -> None:
-        binary = self._binary_mask()
-        if binary is None:
+    def _add_blur(self, point: tuple[int, int]) -> None:
+        active = self.state.active_layer
+        if active is None:
             return
-        self._push_undo()
-        self.base_hole_filled = False
-        blurred = cv2.GaussianBlur(binary, (5, 5), 0)
-        _, result = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY)
-        self._set_from_binary(result)
-        self.status.set("Smoothed mask edge lightly.")
+        active.local_edits.append({"kind": "blur", "x": point[0], "y": point[1], "radius": self.brush_size.get() / 2, "strength": self.brush_strength.get()})
+        self.last_brush_point = point
+        self.status.set(f"Blur applied to derived layer {active.name}; original is unchanged.")
         self.refresh_preview()
 
-    def undo(self) -> None:
-        if not self.undo_stack:
-            self.status.set("Nothing to undo.")
+    def _add_smudge(self, start: tuple[int, int], end: tuple[int, int]) -> None:
+        active = self.state.active_layer
+        if active is None:
             return
-        self.gc_mask = self.undo_stack.pop()
-        self.status.set("Undid mask change.")
+        active.local_edits.append({"kind": "smudge", "from_x": start[0], "from_y": start[1], "to_x": end[0], "to_y": end[1], "radius": self.brush_size.get() / 2, "strength": self.brush_strength.get()})
+        self.status.set(f"Smudge applied to derived layer {active.name}; original is unchanged.")
         self.refresh_preview()
 
-    def _push_undo(self) -> None:
-        if self.gc_mask is not None:
-            self.undo_stack.append(self.gc_mask.copy())
-            if len(self.undo_stack) > 30:
-                self.undo_stack.pop(0)
-
-    def _set_from_binary(self, binary: np.ndarray) -> None:
-        self.gc_mask = np.where(binary > 0, GC_PR_FG, GC_PR_BG).astype(np.uint8)
-
-    def _binary_mask(self) -> np.ndarray | None:
-        if self.gc_mask is None:
-            return None
-        fg = (self.gc_mask == GC_FG) | (self.gc_mask == GC_PR_FG)
-        return fg.astype(np.uint8) * 255
-
-    def create_layers(self) -> None:
-        binary = self._binary_mask()
-        if binary is None or not np.any(binary):
-            self.status.set("Create a foreground mask before creating layers.")
+    def undo_local_edit(self) -> None:
+        active = self.state.active_layer
+        if active is None or not active.local_edits:
+            self.status.set("Active layer has no local edit to undo.")
             return
-        self.layers_created = True
-        self.base_hole_filled = False
-        self.base_visible.set(True)
-        self.cutout_visible.set(True)
-        self.status.set("Created Base + Cutout experiment layers from the original image and current mask.")
+        active.local_edits.pop()
+        self.status.set(f"Undid the last local edit on {active.name}.")
         self.refresh_preview()
 
-    def fill_base_hole(self) -> None:
-        if not self.layers_created or self._binary_mask() is None:
-            self.status.set("Create Layers after making a mask first.")
-            return
-        self.base_hole_filled = True
-        self.base_fill_kind = "telea"
-        self.status.set("Filled Base hole with OpenCV Telea inpainting. Cutout remains unchanged.")
-        self.refresh_preview()
-
-    def fill_skin(self) -> None:
-        if not self.layers_created or self._binary_mask() is None:
-            self.status.set("Create Layers after making a mask first.")
-            return
-        self.base_hole_filled = True
-        self.base_fill_kind = "skin"
-        self.status.set("Filled Base hole with a dark-pixel-rejecting skin sample. Cutout remains unchanged.")
-        self.refresh_preview()
-
-    def fill_skin_gradient(self) -> None:
-        if not self.layers_created or self._binary_mask() is None:
-            self.status.set("Create Layers after making a mask first.")
-            return
-        self.base_hole_filled = True
-        self.base_fill_kind = "gradient"
-        self.status.set("Filled Base with directional skin gradient; Cutout remains unchanged.")
-        self.refresh_preview()
-
-    @staticmethod
-    def _skin_fill_bgr(image_bgr: np.ndarray, binary: np.ndarray) -> np.ndarray:
-        ring = cv2.bitwise_and(cv2.dilate(binary, np.ones((9, 9), np.uint8)), cv2.bitwise_not(binary))
-        hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
-        value = hsv[:, :, 2]
-        candidates = image_bgr[(ring > 0) & (value > 65) & (value < 235)]
-        if len(candidates) < 12:
-            candidates = image_bgr[ring > 0]
-        color = np.median(candidates, axis=0).astype(np.uint8) if len(candidates) else np.array([150, 170, 190], dtype=np.uint8)
-        filled = image_bgr.copy()
-        filled[binary > 0] = color
-        return filled
-
-    @staticmethod
-    def _gradient_skin_fill_bgr(image_bgr: np.ndarray, binary: np.ndarray) -> np.ndarray:
-        ring = cv2.bitwise_and(cv2.dilate(binary, np.ones((11, 11), np.uint8)), cv2.bitwise_not(binary))
-        hsv = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2HSV)
-        valid = (ring > 0) & (hsv[:, :, 2] > 65) & (hsv[:, :, 2] < 235)
-        ys, xs = np.where(binary > 0)
-        if not len(xs):
-            return image_bgr.copy()
-        cx, cy = (xs.min() + xs.max()) / 2, (ys.min() + ys.max()) / 2
-        def sample(selector: np.ndarray) -> np.ndarray:
-            values = image_bgr[valid & selector]
-            return np.median(values, axis=0) if len(values) else np.median(image_bgr[valid], axis=0)
-        yy, xx = np.indices(binary.shape)
-        left, right = sample(xx < cx), sample(xx >= cx)
-        top, bottom = sample(yy < cy), sample(yy >= cy)
-        x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
-        tx = np.clip((xx - x0) / max(1, x1 - x0), 0, 1)[..., None]
-        ty = np.clip((yy - y0) / max(1, y1 - y0), 0, 1)[..., None]
-        horizontal = left * (1 - tx) + right * tx
-        vertical = top * (1 - ty) + bottom * ty
-        gradient = ((horizontal + vertical) * 0.5).astype(np.uint8)
-        feather = cv2.GaussianBlur(binary, (0, 0), 1.5).astype(np.float32)[..., None] / 255.0
-        result = image_bgr.copy()
-        result[binary > 0] = gradient[binary > 0]
-        result = (image_bgr * (1 - feather) + result * feather).astype(np.uint8)
-        return result
-
-    def _patch_layer(self, shape: tuple[int, int]) -> tuple[np.ndarray, np.ndarray] | None:
-        if self.image_rgb is None or self.patch_rect is None or self.patch_center is None:
-            return None
-        x0, y0, x1, y1 = self.patch_rect
-        source = self.image_rgb[y0:y1, x0:x1]
-        scale = self.patch_scale.get() / 100.0
-        width, height = max(1, round(source.shape[1] * scale)), max(1, round(source.shape[0] * scale))
-        source = cv2.resize(source, (width, height), interpolation=cv2.INTER_LINEAR)
-        color = np.zeros((*shape, 3), dtype=np.uint8)
-        alpha = np.zeros(shape, dtype=np.uint8)
-        left, top = self.patch_center[0] - width // 2, self.patch_center[1] - height // 2
-        right, bottom = left + width, top + height
-        dx0, dy0, dx1, dy1 = max(0, left), max(0, top), min(shape[1], right), min(shape[0], bottom)
-        if dx0 >= dx1 or dy0 >= dy1:
-            return color, alpha
-        sx0, sy0 = dx0 - left, dy0 - top
-        color[dy0:dy1, dx0:dx1] = source[sy0:sy0+dy1-dy0, sx0:sx0+dx1-dx0]
-        alpha[dy0:dy1, dx0:dx1] = 255
-        alpha = cv2.GaussianBlur(alpha, (0, 0), 1.2)
-        return color, alpha
-
-    @staticmethod
-    def _checkerboard(height: int, width: int) -> np.ndarray:
-        squares = (np.indices((height, width)).sum(axis=0) // 16) % 2
-        return np.where(squares[..., None] == 0, (72, 72, 72), (112, 112, 112)).astype(np.uint8)
-
-    @staticmethod
-    def _over(background: np.ndarray, foreground: np.ndarray, alpha: np.ndarray) -> np.ndarray:
-        weight = (alpha.astype(np.float32) / 255.0)[..., None]
-        return (foreground * weight + background * (1.0 - weight)).astype(np.uint8)
-
-    def _layer_preview(self, binary: np.ndarray) -> np.ndarray:
-        assert self.image_rgb is not None and self.image_bgr is not None
-        preview = self._checkerboard(*binary.shape)
-        if self.patch_visible.get():
-            patch = self._patch_layer(binary.shape)
-            if patch is not None:
-                preview = self._over(preview, *patch)
-        if self.base_visible.get():
-            if self.base_hole_filled:
-                filled = cv2.inpaint(self.image_bgr, binary, 3, cv2.INPAINT_TELEA) if self.base_fill_kind == "telea" else self._skin_fill_bgr(self.image_bgr, binary) if self.base_fill_kind == "skin" else self._gradient_skin_fill_bgr(self.image_bgr, binary)
-                base_rgb = cv2.cvtColor(filled, cv2.COLOR_BGR2RGB)
-                base_alpha = np.full(binary.shape, 255, dtype=np.uint8)
-            else:
-                base_rgb = self.image_rgb
-                base_alpha = cv2.bitwise_not(binary)
-            preview = self._over(preview, base_rgb, base_alpha)
-        if self.cutout_visible.get():
-            preview = self._over(preview, self.image_rgb, binary)
-        return preview
-
-    def refresh_preview(self) -> None:
-        if self.image_rgb is None:
-            self.canvas.delete("all")
+    def fit_view(self) -> None:
+        if self.state.original_rgb is None:
             return
         canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
-        image_h, image_w = self.image_rgb.shape[:2]
-        self.scale = max(min(min(canvas_w / image_w, canvas_h / image_h), 1.0), 0.01)
-        display_w, display_h = max(1, int(round(image_w * self.scale))), max(1, int(round(image_h * self.scale)))
-        self.preview_size = (display_w, display_h)
-        self.preview_origin = ((canvas_w - display_w) // 2, (canvas_h - display_h) // 2)
-        base = self.image_rgb.copy()
-        binary = self._binary_mask()
-        if self.layers_created and binary is not None:
-            base = self._layer_preview(binary)
-        elif binary is not None and np.any(binary):
-            base[binary == 0] = (base[binary == 0] * 0.25).astype(np.uint8)
-        preview = Image.fromarray(base).resize((display_w, display_h), Image.Resampling.LANCZOS)
-        self.preview_photo = ImageTk.PhotoImage(preview)
-        self.canvas.delete("image")
-        self.canvas.delete("selection")
-        self.canvas.create_image(*self.preview_origin, anchor=tk.NW, image=self.preview_photo, tags="image")
-        self.canvas.tag_lower("image")
-        self._draw_lasso_preview()
+        image_h, image_w = self.state.original_rgb.shape[:2]
+        zoom = max(0.02, min(canvas_w / image_w, canvas_h / image_h))
+        self.state.viewport.zoom = zoom
+        self.state.viewport.offset_x = (canvas_w - image_w * zoom) / 2
+        self.state.viewport.offset_y = (canvas_h - image_h * zoom) / 2
+        self.state.viewport.fit_pending = False
+        self.status.set(f"Fit view: {zoom * 100:.0f}%.")
+        self.refresh_preview()
 
-    def _draw_lasso_preview(self) -> None:
-        self.canvas.delete("selection")
-        if not self.lasso_points:
+    def actual_size(self) -> None:
+        if self.state.original_rgb is None:
             return
-        canvas_points = [self._image_to_canvas(point) for point in self.lasso_points]
-        if len(canvas_points) > 1:
-            preview_points = canvas_points + [canvas_points[0]] if len(canvas_points) > 2 else canvas_points
-            flattened = [coordinate for point in preview_points for coordinate in point]
-            self.canvas.create_line(*flattened, fill="#f4c16a", width=2, dash=(5, 3), tags="selection")
-        for x, y in canvas_points:
+        canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+        image_h, image_w = self.state.original_rgb.shape[:2]
+        self.state.viewport.zoom = 1.0
+        self.state.viewport.offset_x = (canvas_w - image_w) / 2
+        self.state.viewport.offset_y = (canvas_h - image_h) / 2
+        self.state.viewport.fit_pending = False
+        self.status.set("View: 100%.")
+        self.refresh_preview()
+
+    def on_mouse_wheel(self, event: tk.Event) -> None:
+        self._zoom_at(event.x, event.y, 1.15 if event.delta > 0 else 1 / 1.15)
+
+    def zoom_center(self, factor: float) -> None:
+        self._zoom_at(max(1, self.canvas.winfo_width()) // 2, max(1, self.canvas.winfo_height()) // 2, factor)
+
+    def _zoom_at(self, canvas_x: int, canvas_y: int, factor: float) -> None:
+        if self.state.original_rgb is None:
+            return
+        viewport = self.state.viewport
+        old_zoom = viewport.zoom
+        new_zoom = float(np.clip(old_zoom * factor, 0.02, 16.0))
+        image_x = (canvas_x - viewport.offset_x) / old_zoom
+        image_y = (canvas_y - viewport.offset_y) / old_zoom
+        viewport.zoom = new_zoom
+        viewport.offset_x = canvas_x - image_x * new_zoom
+        viewport.offset_y = canvas_y - image_y * new_zoom
+        viewport.fit_pending = False
+        self.status.set(f"View: {new_zoom * 100:.0f}%.")
+        self.refresh_preview()
+
+    def start_middle_pan(self, event: tk.Event) -> None:
+        self.drag_canvas_point = (event.x, event.y)
+
+    def middle_pan(self, event: tk.Event) -> None:
+        if self.drag_canvas_point is None:
+            return
+        self.state.viewport.offset_x += event.x - self.drag_canvas_point[0]
+        self.state.viewport.offset_y += event.y - self.drag_canvas_point[1]
+        self.drag_canvas_point = (event.x, event.y)
+        self.refresh_preview()
+
+    def end_middle_pan(self, _event: tk.Event) -> None:
+        self.drag_canvas_point = None
+
+    def refresh_preview(self) -> None:
+        original = self.state.original_rgb
+        if original is None:
+            self.canvas.delete("all")
+            return
+        if self.state.viewport.fit_pending and self.canvas.winfo_width() > 2:
+            self.fit_view()
+            return
+        canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+        preview = composite_visible(original, self.state.layers)
+        if self.state.pending_part_mask is not None:
+            selected = self.state.pending_part_mask > 0
+            preview[selected] = (preview[selected] * 0.72 + np.array([70, 220, 130]) * 0.28).astype(np.uint8)
+        active = self.state.active_layer
+        if self.layer_panel.mask_overlay.get() and active is not None:
+            mask = active_mask(original, self.state.layers, active) > 0
+            preview[mask] = (preview[mask] * 0.72 + np.array([235, 70, 170]) * 0.28).astype(np.uint8)
+        viewport = self.state.viewport
+        inverse = (1.0 / viewport.zoom, 0.0, -viewport.offset_x / viewport.zoom, 0.0, 1.0 / viewport.zoom, -viewport.offset_y / viewport.zoom)
+        displayed = Image.fromarray(preview).transform((canvas_w, canvas_h), Image.Transform.AFFINE, inverse, resample=Image.Resampling.BILINEAR, fillcolor=(32, 32, 32))
+        self.preview_photo = ImageTk.PhotoImage(displayed)
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.preview_photo, tags="image")
+        self._draw_polygon_preview()
+
+    def _draw_polygon_preview(self) -> None:
+        if not self.polygon_points:
+            return
+        points = [self._image_to_canvas(point) for point in self.polygon_points]
+        if len(points) > 1:
+            line_points = points + ([points[0]] if len(points) > 2 else [])
+            self.canvas.create_line(*[coordinate for point in line_points for coordinate in point], fill="#f4c16a", width=2, dash=(5, 3), tags="selection")
+        for x, y in points:
             self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, outline="#f4c16a", fill="#202020", tags="selection")
 
-    def _clear_lasso_preview(self) -> None:
-        self.lasso_points.clear()
-        self.canvas.delete("selection")
-
     def _image_to_canvas(self, point: tuple[int, int]) -> tuple[int, int]:
-        return (int(round(self.preview_origin[0] + point[0] * self.scale)), int(round(self.preview_origin[1] + point[1] * self.scale)))
+        viewport = self.state.viewport
+        return int(round(viewport.offset_x + point[0] * viewport.zoom)), int(round(viewport.offset_y + point[1] * viewport.zoom))
 
     def _canvas_to_image(self, canvas_x: int, canvas_y: int) -> tuple[int, int] | None:
-        if self.image_rgb is None:
+        original = self.state.original_rgb
+        if original is None:
             return None
-        origin_x, origin_y = self.preview_origin
-        display_w, display_h = self.preview_size
-        if not (origin_x <= canvas_x < origin_x + display_w and origin_y <= canvas_y < origin_y + display_h):
-            return None
-        x, y = int((canvas_x - origin_x) / self.scale), int((canvas_y - origin_y) / self.scale)
-        height, width = self.image_rgb.shape[:2]
-        return max(0, min(x, width - 1)), max(0, min(y, height - 1))
+        viewport = self.state.viewport
+        x = int((canvas_x - viewport.offset_x) / viewport.zoom)
+        y = int((canvas_y - viewport.offset_y) / viewport.zoom)
+        height, width = original.shape[:2]
+        return (x, y) if 0 <= x < width and 0 <= y < height else None
 
-    def save_mask(self) -> None:
-        binary = self._binary_mask()
-        if binary is None:
+    def save_active_mask(self) -> None:
+        original, active = self.state.original_rgb, self.state.active_layer
+        if original is None or active is None:
             return
-        path = filedialog.asksaveasfilename(title="Save mask", defaultextension=".png", filetypes=[("PNG", "*.png")])
+        path = filedialog.asksaveasfilename(title="Save active mask", defaultextension=".png", filetypes=[("PNG", "*.png")])
         if path:
-            cv2.imwrite(path, binary)
-            self.status.set(f"Saved mask: {Path(path).name}")
+            Image.fromarray(active_mask(original, self.state.layers, active)).save(path)
+            self.status.set(f"Saved active mask: {Path(path).name}")
 
-    def export_cutout(self) -> None:
-        if self.image_rgb is None:
+    def export_composite(self) -> None:
+        original = self.state.original_rgb
+        if original is None:
             return
-        binary = self._binary_mask()
-        if binary is None or not np.any(binary):
-            self.status.set("No foreground mask to export.")
-            return
-        path = filedialog.asksaveasfilename(title="Export cutout", defaultextension=".png", filetypes=[("PNG", "*.png")])
+        path = filedialog.asksaveasfilename(title="Export flattened composite", defaultextension=".png", filetypes=[("PNG", "*.png")])
         if path:
-            Image.fromarray(np.dstack([self.image_rgb, binary]), mode="RGBA").save(path)
-            self.status.set(f"Exported cutout: {Path(path).name}")
+            Image.fromarray(composite_visible_rgba(original, self.state.layers), mode="RGBA").save(path)
+            self.status.set(f"Exported flattened RGBA composite: {Path(path).name}")
+
+    @staticmethod
+    def _safe_filename(name: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", name).strip("._")
+        return cleaned or "layer"
+
+    def export_layers(self) -> None:
+        original = self.state.original_rgb
+        if original is None:
+            return
+        directory = filedialog.askdirectory(title="Export transparent layer PNGs")
+        if not directory:
+            return
+        target = Path(directory)
+        used: set[str] = set()
+        for index, layer in enumerate(self.state.layers, start=1):
+            stem = self._safe_filename(layer.name)
+            filename = f"{index:02d}_{stem}.png"
+            suffix = 2
+            while filename in used:
+                filename = f"{index:02d}_{stem}_{suffix}.png"
+                suffix += 1
+            used.add(filename)
+            Image.fromarray(render_layer(original, self.state.layers, layer), mode="RGBA").save(target / filename)
+        self.status.set(f"Exported {len(self.state.layers)} transparent layer PNGs to {target.name}.")
 
 
 def main() -> None:
