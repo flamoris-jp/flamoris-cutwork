@@ -30,6 +30,8 @@ class LayerPanel(ttk.Frame):
         self.on_rename = on_rename
         self.on_transform = on_transform
         self._syncing = False
+        self._active_id: str | None = None
+        self._active_name = ""
 
         ttk.Label(self, text="Layers", font=("TkDefaultFont", 11, "bold")).pack(anchor=tk.W)
         self.tree = ttk.Treeview(self, columns=("visible", "name", "kind"), show="headings", height=13)
@@ -82,6 +84,7 @@ class LayerPanel(ttk.Frame):
     def refresh(self, layers: list[EditorLayer], active_id: str | None) -> None:
         self._syncing = True
         try:
+            self._active_id = active_id
             self.tree.delete(*self.tree.get_children())
             active: EditorLayer | None = None
             for layer in layers:
@@ -92,10 +95,12 @@ class LayerPanel(ttk.Frame):
                 self.tree.selection_set(active.id)
                 self.tree.focus(active.id)
                 self.name_var.set(active.name)
+                self._active_name = active.name
                 self.scale_var.set(active.transform.scale * 100.0)
                 self.rotation_var.set(active.transform.rotation_degrees)
             else:
                 self.name_var.set("")
+                self._active_name = ""
         finally:
             self._syncing = False
 
@@ -103,7 +108,7 @@ class LayerPanel(ttk.Frame):
         if self._syncing:
             return
         selection = self.tree.selection()
-        if selection:
+        if selection and selection[0] != self._active_id:
             self.on_select(selection[0])
 
     def _clicked(self, event: tk.Event) -> None:
@@ -116,8 +121,9 @@ class LayerPanel(ttk.Frame):
             return "break"
 
     def _rename(self, _event: tk.Event | None = None) -> None:
-        if not self._syncing and self.name_var.get().strip():
-            self.on_rename(self.name_var.get().strip())
+        name = self.name_var.get().strip()
+        if not self._syncing and name and name != self._active_name:
+            self.on_rename(name)
 
     def _transform(self, _value: str | None = None) -> None:
         if not self._syncing:
