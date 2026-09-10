@@ -6,7 +6,7 @@ This spike adds a deliberately human-guided selection mode to the existing class
 
 Do not ask AI or an automatic segmenter to decide semantic meaning.
 
-The user decides the meaning by clicking a seed pixel. The software only expands or contracts a connected region by local colour continuity while the user scrubs the mouse.
+The user decides the meaning by clicking a seed pixel. The software only expands or contracts a connected region by local colour continuity while the user turns the mouse wheel.
 
 The original source pixels are never regenerated.
 
@@ -23,11 +23,11 @@ python app_guriguri.py
 1. Open an image.
 2. Choose **Parts Guriguri**.
 3. Click inside the region you mean.
-4. Keep the left mouse button held.
-5. Scrub right to grow the connected region.
-6. Scrub left to shrink it.
-7. Release when the visual boundary looks right.
-8. Use **Create Part Layer** to commit the pending selection.
+4. Turn the mouse wheel up to grow the connected region.
+5. Turn the mouse wheel down to shrink it.
+6. Use `Ctrl+wheel` when you want normal viewport zoom while Guriguri is active.
+7. Use **Create Part Layer** to commit the pending selection.
+8. Click a new seed to restart Guriguri from another semantic location.
 9. Use the existing Mask Add / Mask Erase or Part Polygon tools when manual correction is faster.
 10. Press `Esc` during a Guriguri selection to restore the previous pending selection.
 
@@ -35,7 +35,7 @@ python app_guriguri.py
 
 `guriguri.py` converts the source image to Lab and uses OpenCV flood-fill in floating-range mode. A newly accepted pixel is compared with adjacent accepted pixels rather than only with the seed colour. This lets the selection walk through gentle shading while tending to stop at stronger colour boundaries.
 
-Horizontal mouse movement changes the flood-fill tolerance. There is no semantic model, GrabCut, generative redraw, or automatic claim that the resulting boundary is artistically correct.
+Mouse-wheel motion changes the flood-fill tolerance. There is no semantic model, GrabCut, generative redraw, or automatic claim that the resulting boundary is artistically correct.
 
 The experiment is successful if it reduces the number of polygon points the user needs to place while preserving Polygon as the exact fallback.
 
@@ -44,11 +44,12 @@ The experiment is successful if it reduces the number of polygon points the user
 Included:
 
 - click-to-seed connected selection
-- right/left scrub grow and shrink
+- mouse-wheel grow and shrink
+- `Ctrl+wheel` viewport zoom while Guriguri is active
 - pending-mask preview using the existing UI
 - deterministic local colour-continuity core
 - Escape cancellation
-- unit tests for region growth and scrub bounds
+- unit tests for region growth and wheel bounds
 
 Not included yet:
 
