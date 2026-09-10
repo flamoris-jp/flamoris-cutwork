@@ -1,61 +1,72 @@
 # Parts Guriguri experiment
 
-This spike explores a human-guided selector for the classical-cutout experiment. The human chooses only the starting location. The software expands or contracts a connected mask with the mouse wheel. Original artwork pixels are never regenerated.
+This spike explores human-guided selection for the classical-cutout experiment. Original artwork pixels are never regenerated.
 
-## Run
+The latest experiment reverses the previous idea: instead of asking the software to discover the correct outer boundary from one seed pixel, the human draws a **loose polygon fence first**, then the mouse wheel contracts that fence inward toward image boundaries.
+
+## Run the latest experiment
 
 From `experiments/classical-cutout`:
 
 ```bash
-python app_boundary_guriguri.py
+python app_polygon_guriguri.py
 ```
 
-The earlier colour-continuity prototype remains available as:
+Comparison prototypes remain available:
 
 ```bash
-python app_guriguri.py
+python app_boundary_guriguri.py   # seed -> boundary-priority outward growth
+python app_guriguri.py            # seed -> colour-continuity flood fill
 ```
 
-## Current interaction
+## Polygon Guriguri interaction
 
 1. Open an image.
-2. Choose **Boundary Guriguri**.
-3. Click anywhere inside the thing you want to explore. The click has no semantic label such as iris, sclera, hair, or skin.
-4. Wheel up to reveal more connected area.
-5. Wheel down to return inward.
-6. `Ctrl+wheel` keeps normal viewport zoom.
-7. Use **Create Part Layer** when the selection is useful.
-8. Use Mask Add / Mask Erase or Part Polygon when exact manual correction is faster.
-9. `Esc` restores the previous pending selection.
+2. Choose **Polygon Guriguri**.
+3. Draw a deliberately loose polygon around the intended part. Precision is not required; the polygon only defines the search fence.
+4. Press `Enter` or double-click to close the polygon.
+5. Wheel up to shrink the mask inward.
+6. Wheel down to restore toward the original loose polygon.
+7. `Ctrl+wheel` keeps normal viewport zoom.
+8. Stop when the magenta mask reaches a useful visual boundary.
+9. Use **Create Part Layer** to commit it.
+10. Use Mask Add / Mask Erase or exact Part Polygon when manual correction is faster.
 
-The pending Guriguri mask is shown in magenta for visibility.
+## Why the direction was reversed
 
-## Why Boundary Guriguri changed
+The colour-continuity prototype could escape through chains of locally similar pixels. The seed-based boundary prototype improved directionality but still had to answer a difficult question: from a point inside an eye, which strong internal boundaries belong to the same semantic part, and which boundary is the desired outside edge?
 
-The first colour-continuity version used floating-range flood fill. It could walk through a chain of locally similar colours and unexpectedly escape from skin into hair/background.
+Polygon Guriguri gives that semantic responsibility back to the human in a cheap form. The user says only **"the part is somewhere inside this rough fence"**. The software never needs to infer whether the click meant pupil, iris, sclera, eyelash, hair, or skin.
 
-The first boundary version replaced colour continuity with one global boundary threshold. It improved directionality, but showed a percolation cliff: one wheel notch could open a narrow weak corridor and suddenly connect a few hundred selected pixels to most of the image.
+## Outer-in algorithm
 
-The current version separates two questions:
+`polygon_guriguri.py` treats the finalized loose polygon as a hard upper bound. Pixels outside the polygon can never enter the result.
 
-- **Boundary evidence decides where growth prefers to go.**
-- **The wheel decides how much connected area is revealed.**
+Deletion begins on the polygon's inside edge and walks inward with a deterministic Dijkstra-style search:
 
-`boundary_guriguri.py` builds the same semantic-free visual boundary map, then performs an incremental Dijkstra-style priority flood. Strong line-art/colour boundaries are expensive, gentle interior shading is cheaper, and a small distance cost prevents unlimited free travel through a flat region. Each wheel step requests a gradually larger prefix of that stable connected expansion order, so a newly crossed corridor cannot select the rest of the image in one notch.
+- flat or gently shaded areas are cheap to peel away;
+- strong line-art and colour boundaries are expensive to cross;
+- every intermediate result is a nested subset of the original polygon;
+- wheel-down restores exactly the same previous masks;
+- the wheel controls **how much** is peeled, avoiding one-threshold percolation cliffs.
+
+The intended success case is not automatic perfect segmentation. It is reducing a careful 20-50 point final polygon to a rough 4-10 point fence plus a few wheel notches.
 
 ## Design principles
 
-- The user supplies meaning; the selector does not infer part names.
-- Clicking on different places inside an eye should still be usable.
-- Growth and shrink are reversible nested prefixes.
-- AI, GrabCut and generative redraw are not required.
-- Part Polygon remains the exact fallback and success is measured by reduced manual polygon work.
+- Human decides meaning.
+- Polygon provides the semantic/search scope.
+- Algorithm performs boundary fitting, not semantic segmentation.
+- Source pixels are immutable.
+- AI, GrabCut, and generative redraw are unnecessary for the core selection interaction.
+- Exact Polygon and Mask Add / Erase remain fallbacks.
+- Selection preview is magenta for visibility on skin, blonde hair, and green eyes.
 
 ## Not included yet
 
-- multi-seed add/subtract
-- user-placed hard barriers
+- multi-polygon union/subtract
+- user-placed hard keep/remove hints
 - selection-scoped feather / blend / blur
 - automatic front/back decisions
 - semantic segmentation
-- performance optimization for extremely large selections
+- performance optimization for very large loose polygons
