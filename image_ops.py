@@ -94,8 +94,6 @@ def _patch_rgba(original_rgb: np.ndarray, layer: EditorLayer) -> np.ndarray:
         ],
         dtype=np.float32,
     )
-    # Warp only the visible destination ROI. Even a 1000% patch never allocates
-    # a 10x source intermediate, which keeps this disposable tool predictable.
     corners = np.asarray(
         [[[0, 0], [crop_w - 1, 0], [crop_w - 1, crop_h - 1], [0, crop_h - 1]]],
         dtype=np.float32,
@@ -202,8 +200,14 @@ def render_layer(original_rgb: np.ndarray, layers: list[EditorLayer], layer: Edi
     elif layer.kind == "part":
         alpha = layer.mask if layer.mask is not None else np.zeros((height, width), dtype=np.uint8)
         rgba = _original_layer(original_rgb, alpha)
-    else:
+    elif layer.kind == "patch":
         rgba = _patch_rgba(original_rgb, layer)
+    else:
+        rgba = (
+            layer.paint_rgba.copy()
+            if layer.paint_rgba is not None
+            else np.zeros((height, width, 4), dtype=np.uint8)
+        )
     return apply_local_edits(rgba, layer.local_edits)
 
 
