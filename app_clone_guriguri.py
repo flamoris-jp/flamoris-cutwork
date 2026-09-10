@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import numpy as np
+from PIL import Image, ImageTk
 
 from app_polygon_guriguri import PolygonGuriguriApp
 from clone_brush import normalize_rect, paint_aligned_clone, rect_center
@@ -30,6 +31,7 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_source_cursor: tuple[int, int] | None = None
         self.clone_undo_stack: list[tuple[str, np.ndarray]] = []
         self.clone_hole_only = tk.BooleanVar(master=root, value=True)
+        self.show_original_preview = tk.BooleanVar(master=root, value=False)
         super().__init__(root)
         self.root.title("FLAMORIS Parts Guriguri + Clone Repair Spike")
 
@@ -52,12 +54,27 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             command=self.on_mode_changed,
         ).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Checkbutton(bar, text="Hole Only", variable=self.clone_hole_only).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Checkbutton(
+            bar,
+            text="Original Preview",
+            variable=self.show_original_preview,
+            command=self._toggle_original_preview,
+        ).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(bar, text="Undo Clone Stroke", command=self.undo_clone_stroke).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(
             bar,
             text="Drag a clean green source box, then paint. Source follows the stroke direction; original pixels are copied unchanged.",
             foreground="#555555",
         ).pack(side=tk.LEFT)
+
+    def _toggle_original_preview(self) -> None:
+        if self.show_original_preview.get():
+            self.status.set(
+                "Original Preview: showing immutable source artwork. Existing layers stay unchanged; selections still overlay the original."
+            )
+        else:
+            self.status.set("Original Preview off: showing the current layer composite again.")
+        self.refresh_preview()
 
     def on_mode_changed(self) -> None:
         mode = self.mode.get()
@@ -80,6 +97,7 @@ class CloneGuriguriApp(PolygonGuriguriApp):
 
     def open_image(self) -> None:
         self._reset_clone_state()
+        self.show_original_preview.set(False)
         super().open_image()
         if self.state.original_rgb is not None:
             self.root.title(
@@ -250,8 +268,54 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_source_cursor = None
         self.clone_undo_stack.clear()
 
+    def _refresh_original_preview(self) -> None:
+        original = self.state.original_rgb
+        if original is None:
+            self.canvas.delete("all")
+            return
+
+        if self.state.viewport.fit_pending and self.canvas.winfo_width() > 2:
+            canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+            image_h, image_w = original.shape[:2]
+            zoom = max(0.02, min(canvas_w / image_w, canvas_h / image_h))
+            self.state.viewport.zoom = zoom
+            self.state.viewport.offset_x = (canvas_w - image_w * zoom) / 2
+            self.state.viewport.offset_y = (canvas_h - image_h * zoom) / 2
+            self.state.viewport.fit_pending = False
+
+        canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+        preview = original.copy()
+        if self.state.pending_part_mask is not None:
+            selected = self.state.pending_part_mask > 0
+            magenta = np.array([235, 70, 170], dtype=np.float32)
+            preview[selected] = (preview[selected] * 0.68 + magenta * 0.32).astype(np.uint8)
+
+        viewport = self.state.viewport
+        inverse = (
+            1.0 / viewport.zoom,
+            0.0,
+            -viewport.offset_x / viewport.zoom,
+            0.0,
+            1.0 / viewport.zoom,
+            -viewport.offset_y / viewport.zoom,
+        )
+        displayed = Image.fromarray(preview).transform(
+            (canvas_w, canvas_h),
+            Image.Transform.AFFINE,
+            inverse,
+            resample=Image.Resampling.BILINEAR,
+            fillcolor=(32, 32, 32),
+        )
+        self.preview_photo = ImageTk.PhotoImage(displayed)
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.preview_photo, tags="image")
+        self._draw_polygon_preview()
+
     def refresh_preview(self) -> None:
-        super().refresh_preview()
+        if self.show_original_preview.get() and self.state.original_rgb is not None:
+            self._refresh_original_preview()
+        else:
+            super().refresh_preview()
         if self.state.original_rgb is None:
             return
 
