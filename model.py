@@ -7,7 +7,7 @@ from uuid import uuid4
 import numpy as np
 
 
-LayerKind = Literal["base", "part", "patch"]
+LayerKind = Literal["base", "part", "patch", "repair"]
 
 
 @dataclass
@@ -25,6 +25,7 @@ class EditorLayer:
     visible: bool = True
     mask: np.ndarray | None = None
     source_polygon: list[tuple[int, int]] | None = None
+    paint_rgba: np.ndarray | None = None
     transform: LayerTransform = field(default_factory=LayerTransform)
     local_edits: list[dict[str, Any]] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid4().hex)
@@ -83,8 +84,21 @@ class EditorState:
             source_polygon=list(source_polygon),
             transform=LayerTransform(center_x=center[0], center_y=center[1]),
         )
-        # Default drawing order is Patch -> Base -> Parts (bottom to top), so a
-        # patch is initially placed below Base and appears only through its hole.
+        # Default drawing order is Patch/Repair -> Base -> Parts, so derived
+        # underpaint appears only through holes cut out of Base.
+        self.layers.append(layer)
+        self.active_layer_id = layer.id
+        return layer
+
+    def add_repair(self, name: str) -> EditorLayer:
+        if self.original_rgb is None:
+            raise ValueError("cannot add a repair layer without an image")
+        height, width = self.original_rgb.shape[:2]
+        layer = EditorLayer(
+            name=name,
+            kind="repair",
+            paint_rgba=np.zeros((height, width, 4), dtype=np.uint8),
+        )
         self.layers.append(layer)
         self.active_layer_id = layer.id
         return layer
