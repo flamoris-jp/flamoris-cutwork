@@ -5,10 +5,10 @@ import unittest
 import numpy as np
 
 from boundary_guriguri import (
+    BoundaryPriorityGrower,
     build_boundary_map,
-    grow_boundary_mask,
     snap_seed_to_basin,
-    wheel_boundary_threshold,
+    target_pixels_for_step,
 )
 
 
@@ -25,26 +25,6 @@ class BoundaryGuriguriTests(unittest.TestCase):
         self.assertLessEqual(float(boundary.max()), 100.0)
         self.assertGreater(float(boundary[:, 29:32].mean()), float(boundary[:, 5:10].mean()))
 
-    def test_nested_thresholds_cross_concentric_barriers_in_order(self) -> None:
-        size = 61
-        yy, xx = np.indices((size, size))
-        cx = cy = size // 2
-        radius = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-
-        boundary = np.zeros((size, size), dtype=np.float32)
-        boundary[(radius >= 9.5) & (radius <= 10.5)] = 30.0
-        boundary[(radius >= 19.5) & (radius <= 20.5)] = 70.0
-
-        inner = grow_boundary_mask(boundary, (cx, cy), 20.0)
-        middle = grow_boundary_mask(boundary, (cx, cy), 40.0)
-        outer = grow_boundary_mask(boundary, (cx, cy), 80.0)
-
-        self.assertLess(int(np.count_nonzero(inner)), int(np.count_nonzero(middle)))
-        self.assertLess(int(np.count_nonzero(middle)), int(np.count_nonzero(outer)))
-        self.assertTrue(np.all(middle[inner > 0] == 255))
-        self.assertTrue(np.all(outer[middle > 0] == 255))
-        self.assertEqual(int(inner[cy, cx]), 255)
-
     def test_seed_snap_prefers_nearby_basin_without_large_jump(self) -> None:
         boundary = np.full((25, 25), 80.0, dtype=np.float32)
         boundary[12, 12] = 60.0
@@ -55,11 +35,38 @@ class BoundaryGuriguriTests(unittest.TestCase):
 
         self.assertEqual(snapped, (14, 12))
 
-    def test_wheel_adjustment_grows_shrinks_and_clamps(self) -> None:
-        self.assertGreater(wheel_boundary_threshold(20.0, +1), 20.0)
-        self.assertLess(wheel_boundary_threshold(20.0, -1), 20.0)
-        self.assertEqual(wheel_boundary_threshold(1.0, -1000), 0.0)
-        self.assertEqual(wheel_boundary_threshold(99.0, +1000), 100.0)
+    def test_target_pixels_grows_smoothly_and_clamps_to_image(self) -> None:
+        targets = [target_pixels_for_step(step, 100_000) for step in range(8)]
+        self.assertEqual(targets, sorted(targets))
+        self.assertTrue(all(b > a for a, b in zip(targets, targets[1:])))
+        self.assertLess(targets[1], targets[0] * 2)
+        self.assertEqual(target_pixels_for_step(999, 1234), 1234)
+
+    def test_priority_growth_prefixes_are_nested_and_exact_size(self) -> None:
+        boundary = np.zeros((40, 40), dtype=np.float32)
+        boundary[:, 20] = 90.0
+        grower = BoundaryPriorityGrower(boundary, (5, 20))
+
+        small = grower.mask_for_count(50)
+        medium = grower.mask_for_count(200)
+        shrunk = grower.mask_for_count(80)
+
+        self.assertEqual(int(np.count_nonzero(small)), 50)
+        self.assertEqual(int(np.count_nonzero(medium)), 200)
+        self.assertEqual(int(np.count_nonzero(shrunk)), 80)
+        self.assertTrue(np.all(medium[small > 0] == 255))
+        self.assertTrue(np.all(medium[shrunk > 0] == 255))
+
+    def test_strong_barrier_is_deferred_while_same_side_has_room(self) -> None:
+        boundary = np.zeros((30, 30), dtype=np.float32)
+        boundary[:, 15] = 100.0
+        grower = BoundaryPriorityGrower(boundary, (4, 15))
+
+        mask = grower.mask_for_count(200)
+
+        # The left half contains 450 pixels, so a 200-pixel request should not
+        # need to cross the strong vertical barrier.
+        self.assertEqual(int(np.count_nonzero(mask[:, 16:])), 0)
 
 
 if __name__ == "__main__":
