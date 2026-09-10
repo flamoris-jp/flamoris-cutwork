@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from guriguri import grow_selection_mask, scrub_tolerance
+from guriguri import grow_selection_mask, scrub_tolerance, wheel_tolerance
 
 
 class GuriguriTests(unittest.TestCase):
@@ -33,7 +33,17 @@ class GuriguriTests(unittest.TestCase):
         self.assertLessEqual(int(np.count_nonzero(small)), int(np.count_nonzero(large)))
         self.assertTrue(np.all(large[small > 0] == 255))
 
-    def test_scrub_right_grows_left_shrinks_and_clamps(self) -> None:
+    def test_wheel_up_grows_down_shrinks_and_clamps(self) -> None:
+        self.assertGreater(wheel_tolerance(6.0, +1), 6.0)
+        self.assertLess(wheel_tolerance(6.0, -1), 6.0)
+        self.assertEqual(wheel_tolerance(1.0, -1000), 0.0)
+        self.assertEqual(wheel_tolerance(60.0, +1000), 64.0)
+
+    def test_fractional_wheel_motion_is_supported(self) -> None:
+        self.assertGreater(wheel_tolerance(6.0, 0.5), 6.0)
+        self.assertLess(wheel_tolerance(6.0, -0.5), 6.0)
+
+    def test_legacy_scrub_adjustment_remains_bounded_for_comparison(self) -> None:
         self.assertGreater(scrub_tolerance(6.0, 20), 6.0)
         self.assertLess(scrub_tolerance(6.0, -20), 6.0)
         self.assertEqual(scrub_tolerance(1.0, -1000), 0.0)
