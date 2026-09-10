@@ -6,21 +6,22 @@ from tkinter import ttk
 import numpy as np
 
 from app import CutoutSpikeApp
-from guriguri import DEFAULT_TOLERANCE, grow_selection_mask, scrub_tolerance
+from guriguri import DEFAULT_TOLERANCE, grow_selection_mask, wheel_tolerance
 
 
 class PartsGuriguriApp(CutoutSpikeApp):
     """Classical-cutout spike with an interactive colour-continuity selector.
 
-    The human supplies meaning by clicking the intended region.  The tool only
-    grows or shrinks a connected colour-continuous mask while the mouse is
-    scrubbed horizontally.  Original pixels are never regenerated.
+    The human supplies meaning by clicking the intended region. The tool only
+    grows or shrinks a connected colour-continuous mask with the mouse wheel.
+    Original pixels are never regenerated.
     """
+
+    CTRL_MASK = 0x0004
 
     def __init__(self, root: tk.Tk) -> None:
         self.guriguri_seed: tuple[int, int] | None = None
         self.guriguri_tolerance = DEFAULT_TOLERANCE
-        self.guriguri_last_canvas_x: int | None = None
         self.guriguri_previous_pending: np.ndarray | None = None
         super().__init__(root)
         self.root.title("FLAMORIS Parts Guriguri Spike")
@@ -41,21 +42,25 @@ class PartsGuriguriApp(CutoutSpikeApp):
         ).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(
             bar,
-            text="Click a semantic seed, hold left mouse, scrub right to grow / left to shrink. Release when the boundary looks right.",
+            text="Click a semantic seed, then wheel up to grow / wheel down to shrink. Ctrl+wheel keeps normal zoom.",
             foreground="#555555",
         ).pack(side=tk.LEFT)
 
     def _bind_events(self) -> None:
         super()._bind_events()
         self.root.bind("<Escape>", self.cancel_guriguri_or_polygon)
+        # Replace the base Linux wheel aliases so Guriguri behaves the same on
+        # Windows/macOS-style MouseWheel events and X11 Button-4/5 events.
+        self.canvas.bind("<Button-4>", lambda event: self._on_button_wheel(event, +1))
+        self.canvas.bind("<Button-5>", lambda event: self._on_button_wheel(event, -1))
 
     def on_mode_changed(self) -> None:
         if self.mode.get() == "guriguri":
             self.cancel_polygon(silent=True)
             self._clear_guriguri_session(keep_pending=True)
             self.status.set(
-                "Parts Guriguri: click what you mean, then scrub right to grow / left to shrink. "
-                "Release and Create Part Layer when the boundary looks right."
+                "Parts Guriguri: click what you mean, then wheel up to grow / wheel down to shrink. "
+                "Ctrl+wheel zooms."
             )
             return
 
@@ -67,7 +72,7 @@ class PartsGuriguriApp(CutoutSpikeApp):
         super().open_image()
         if self.state.original_rgb is not None:
             self.status.set(
-                "Image loaded. Choose Parts Guriguri for click + scrub selection, or Part Polygon for exact manual fallback."
+                "Image loaded. Choose Parts Guriguri for click + wheel selection, or Part Polygon for exact manual fallback."
             )
 
     def on_pointer_down(self, event: tk.Event) -> None:
@@ -86,38 +91,56 @@ class PartsGuriguriApp(CutoutSpikeApp):
         )
         self.guriguri_seed = point
         self.guriguri_tolerance = DEFAULT_TOLERANCE
-        self.guriguri_last_canvas_x = event.x
         self._update_guriguri_mask(refresh_now=True)
 
     def on_pointer_drag(self, event: tk.Event) -> None:
         if self.mode.get() != "guriguri":
             super().on_pointer_drag(event)
-            return
-        if self.guriguri_seed is None or self.guriguri_last_canvas_x is None:
-            return
-
-        delta_x = event.x - self.guriguri_last_canvas_x
-        self.guriguri_last_canvas_x = event.x
-        if delta_x == 0:
-            return
-
-        new_tolerance = scrub_tolerance(self.guriguri_tolerance, delta_x)
-        if abs(new_tolerance - self.guriguri_tolerance) < 0.25:
-            return
-        self.guriguri_tolerance = new_tolerance
-        self._update_guriguri_mask(refresh_now=False)
+        # Guriguri deliberately ignores left-drag. The wheel is the control.
 
     def on_pointer_up(self, event: tk.Event) -> None:
         if self.mode.get() != "guriguri":
             super().on_pointer_up(event)
             return
-        self.guriguri_last_canvas_x = None
         if self.guriguri_seed is not None and self.state.pending_part_mask is not None:
             pixels = int(np.count_nonzero(self.state.pending_part_mask))
             self.status.set(
                 f"Guriguri ready: tolerance {self.guriguri_tolerance:.1f}, {pixels:,} px. "
-                "Create Part Layer, scrub again from a new seed, or press Esc to cancel."
+                "Wheel to adjust, click a new seed, or Create Part Layer."
             )
+
+    def on_mouse_wheel(self, event: tk.Event) -> None:
+        if self.mode.get() != "guriguri" or self._ctrl_pressed(event):
+            super().on_mouse_wheel(event)
+            return
+
+        delta = float(getattr(event, "delta", 0.0))
+        if delta == 0:
+            return
+        # Windows commonly reports ±120 per notch. High-resolution wheels and
+        # trackpads may report smaller values, so preserve fractional motion.
+        steps = delta / 120.0 if abs(delta) >= 120.0 else (1.0 if delta > 0 else -1.0)
+        self._adjust_guriguri(steps)
+
+    def _on_button_wheel(self, event: tk.Event, direction: int) -> None:
+        if self.mode.get() == "guriguri" and not self._ctrl_pressed(event):
+            self._adjust_guriguri(float(direction))
+            return
+        self._zoom_at(event.x, event.y, 1.15 if direction > 0 else 1 / 1.15)
+
+    def _ctrl_pressed(self, event: tk.Event) -> bool:
+        return bool(int(getattr(event, "state", 0)) & self.CTRL_MASK)
+
+    def _adjust_guriguri(self, wheel_steps: float) -> None:
+        if self.guriguri_seed is None:
+            self.status.set("Parts Guriguri: click the region first, then use the mouse wheel.")
+            return
+
+        new_tolerance = wheel_tolerance(self.guriguri_tolerance, wheel_steps)
+        if abs(new_tolerance - self.guriguri_tolerance) < 1e-6:
+            return
+        self.guriguri_tolerance = new_tolerance
+        self._update_guriguri_mask(refresh_now=False)
 
     def _update_guriguri_mask(self, *, refresh_now: bool) -> None:
         original = self.state.original_rgb
@@ -129,7 +152,7 @@ class PartsGuriguriApp(CutoutSpikeApp):
         pixels = int(np.count_nonzero(self.state.pending_part_mask))
         self.status.set(
             f"Guriguri: tolerance {self.guriguri_tolerance:.1f}, {pixels:,} px. "
-            "Right = grow, left = shrink."
+            "Wheel up = grow, wheel down = shrink. Ctrl+wheel = zoom."
         )
         if refresh_now:
             self.refresh_preview()
@@ -152,7 +175,6 @@ class PartsGuriguriApp(CutoutSpikeApp):
 
     def _clear_guriguri_session(self, *, keep_pending: bool) -> None:
         self.guriguri_seed = None
-        self.guriguri_last_canvas_x = None
         self.guriguri_tolerance = DEFAULT_TOLERANCE
         self.guriguri_previous_pending = None
         if not keep_pending:
