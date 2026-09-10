@@ -4,23 +4,24 @@ import tkinter as tk
 from tkinter import ttk
 
 import numpy as np
+from PIL import Image, ImageTk
 
 from app import CutoutSpikeApp
 from boundary_guriguri import (
+    BoundaryPriorityGrower,
     build_boundary_map,
-    grow_boundary_mask,
-    initial_boundary_threshold,
     snap_seed_to_basin,
-    wheel_boundary_threshold,
+    target_pixels_for_step,
 )
+from image_ops import active_mask
 
 
 class BoundaryGuriguriApp(CutoutSpikeApp):
-    """Classical-cutout spike with wheel-controlled boundary hierarchy selection.
+    """Classical-cutout spike with wheel-controlled boundary-priority growth.
 
-    The click only says "include something around here". The software does not
-    assign semantic meaning. Mouse-wheel motion changes how strong a visual
-    boundary the connected selection is allowed to cross.
+    A click only says "include something around here". Boundary evidence chooses
+    where expansion goes, while the mouse wheel controls how much connected area
+    is revealed. No semantic meaning is assigned to the click.
     """
 
     CTRL_MASK = 0x0004
@@ -29,7 +30,8 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
         self.boundary_map: np.ndarray | None = None
         self.guriguri_click: tuple[int, int] | None = None
         self.guriguri_seed: tuple[int, int] | None = None
-        self.guriguri_threshold = 0.0
+        self.guriguri_step = 0
+        self.guriguri_grower: BoundaryPriorityGrower | None = None
         self.guriguri_previous_pending: np.ndarray | None = None
         super().__init__(root)
         self.root.title("FLAMORIS Boundary Guriguri Spike")
@@ -48,8 +50,8 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
         ).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(
             bar,
-            text=("Click anywhere in the intended part; wheel up crosses stronger boundaries, "
-                  "wheel down returns inward. Ctrl+wheel keeps normal zoom."),
+            text=("Click anywhere in the intended part; wheel reveals more/less area, "
+                  "preferring weak boundaries first. Ctrl+wheel keeps normal zoom."),
             foreground="#555555",
         ).pack(side=tk.LEFT)
 
@@ -64,7 +66,7 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
             self.cancel_polygon(silent=True)
             self._clear_guriguri_session(keep_pending=True)
             self.status.set(
-                "Boundary Guriguri: click anywhere in the intended part, then wheel through nested boundary levels. "
+                "Boundary Guriguri: click anywhere in the intended part, then wheel to reveal more/less connected area. "
                 "Ctrl+wheel zooms."
             )
             return
@@ -77,12 +79,15 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
         self.boundary_map = None
         super().open_image()
         if self.state.original_rgb is not None:
+            self.root.title(
+                f"FLAMORIS Boundary Guriguri Spike - {self.source_path.name if self.source_path else 'image'}"
+            )
             self.status.set("Building visual boundary map...")
             self.root.update_idletasks()
             self.boundary_map = build_boundary_map(self.state.original_rgb)
             self.status.set(
-                "Image loaded. Boundary map ready. Click anywhere in an intended part and use the wheel, "
-                "or use Part Polygon for exact manual fallback."
+                "Image loaded. Boundary map ready. Click anywhere in an intended part and use the wheel. "
+                "Part Polygon remains the exact manual fallback."
             )
 
     def on_pointer_down(self, event: tk.Event) -> None:
@@ -101,7 +106,8 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
         )
         self.guriguri_click = point
         self.guriguri_seed = snap_seed_to_basin(self.boundary_map, point)
-        self.guriguri_threshold = initial_boundary_threshold(self.boundary_map, self.guriguri_seed)
+        self.guriguri_step = 0
+        self.guriguri_grower = BoundaryPriorityGrower(self.boundary_map, self.guriguri_seed)
         self._update_guriguri_mask(refresh_now=True)
 
     def on_pointer_drag(self, event: tk.Event) -> None:
@@ -116,7 +122,7 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
         if self.guriguri_seed is not None and self.state.pending_part_mask is not None:
             pixels = int(np.count_nonzero(self.state.pending_part_mask))
             self.status.set(
-                f"Boundary Guriguri ready: level {self.guriguri_threshold:.1f}, {pixels:,} px. "
+                f"Boundary Guriguri ready: step {self.guriguri_step}, {pixels:,} px. "
                 "Wheel to adjust, click somewhere else, or Create Part Layer."
             )
 
@@ -141,29 +147,30 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
         return bool(int(getattr(event, "state", 0)) & self.CTRL_MASK)
 
     def _adjust_guriguri(self, wheel_steps: float) -> None:
-        if self.guriguri_seed is None:
+        if self.guriguri_grower is None:
             self.status.set("Boundary Guriguri: click the intended part first, then use the mouse wheel.")
             return
 
-        new_threshold = wheel_boundary_threshold(self.guriguri_threshold, wheel_steps)
-        if abs(new_threshold - self.guriguri_threshold) < 1e-6:
+        direction = 1 if wheel_steps > 0 else -1
+        notch_count = max(1, int(round(abs(wheel_steps))))
+        new_step = max(0, self.guriguri_step + direction * notch_count)
+        if new_step == self.guriguri_step:
             return
-        self.guriguri_threshold = new_threshold
+        self.guriguri_step = new_step
         self._update_guriguri_mask(refresh_now=False)
 
     def _update_guriguri_mask(self, *, refresh_now: bool) -> None:
-        if self.boundary_map is None or self.guriguri_seed is None:
+        original = self.state.original_rgb
+        grower = self.guriguri_grower
+        if original is None or grower is None:
             return
 
-        self.state.pending_part_mask = grow_boundary_mask(
-            self.boundary_map,
-            self.guriguri_seed,
-            self.guriguri_threshold,
-        )
+        target = target_pixels_for_step(self.guriguri_step, original.shape[0] * original.shape[1])
+        self.state.pending_part_mask = grower.mask_for_count(target)
         pixels = int(np.count_nonzero(self.state.pending_part_mask))
         self.status.set(
-            f"Boundary Guriguri: level {self.guriguri_threshold:.1f}, {pixels:,} px. "
-            "Wheel up = cross stronger boundary, wheel down = return inward. Ctrl+wheel = zoom."
+            f"Boundary Guriguri: step {self.guriguri_step}, {pixels:,} px. "
+            "Wheel up = reveal more, wheel down = return inward. Ctrl+wheel = zoom."
         )
         if refresh_now:
             self.refresh_preview()
@@ -187,24 +194,77 @@ class BoundaryGuriguriApp(CutoutSpikeApp):
     def _clear_guriguri_session(self, *, keep_pending: bool) -> None:
         self.guriguri_click = None
         self.guriguri_seed = None
-        self.guriguri_threshold = 0.0
+        self.guriguri_step = 0
+        self.guriguri_grower = None
         self.guriguri_previous_pending = None
         if not keep_pending:
             self.state.pending_part_mask = None
 
     def refresh_preview(self) -> None:
-        super().refresh_preview()
-        if self.guriguri_click is None or self.state.original_rgb is None:
+        """Render pending selection in magenta for easier visual inspection."""
+        original = self.state.original_rgb
+        if original is None:
+            self.canvas.delete("all")
             return
 
+        if self.state.viewport.fit_pending and self.canvas.winfo_width() > 2:
+            canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+            image_h, image_w = original.shape[:2]
+            zoom = max(0.02, min(canvas_w / image_w, canvas_h / image_h))
+            self.state.viewport.zoom = zoom
+            self.state.viewport.offset_x = (canvas_w - image_w * zoom) / 2
+            self.state.viewport.offset_y = (canvas_h - image_h * zoom) / 2
+            self.state.viewport.fit_pending = False
+
+        canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+        preview = self._composite_preview().copy()
+        magenta = np.array([235, 70, 170], dtype=np.float32)
+
+        if self.state.pending_part_mask is not None:
+            selected = self.state.pending_part_mask > 0
+            preview[selected] = (preview[selected] * 0.68 + magenta * 0.32).astype(np.uint8)
+
+        active = self.state.active_layer
+        if self.layer_panel.mask_overlay.get() and active is not None:
+            mask_alpha = (
+                active_mask(original, self.state.layers, active)
+                if active.kind == "base"
+                else self._render_cached(active)[:, :, 3]
+            )
+            selected = mask_alpha > 0
+            preview[selected] = (preview[selected] * 0.72 + magenta * 0.28).astype(np.uint8)
+
+        viewport = self.state.viewport
+        inverse = (
+            1.0 / viewport.zoom,
+            0.0,
+            -viewport.offset_x / viewport.zoom,
+            0.0,
+            1.0 / viewport.zoom,
+            -viewport.offset_y / viewport.zoom,
+        )
+        displayed = Image.fromarray(preview).transform(
+            (canvas_w, canvas_h),
+            Image.Transform.AFFINE,
+            inverse,
+            resample=Image.Resampling.BILINEAR,
+            fillcolor=(32, 32, 32),
+        )
+        self.preview_photo = ImageTk.PhotoImage(displayed)
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.preview_photo, tags="image")
+        self._draw_polygon_preview()
+
+        if self.guriguri_click is None:
+            return
         click_x, click_y = self._image_to_canvas(self.guriguri_click)
         self.canvas.create_line(
             click_x - 8, click_y, click_x + 8, click_y,
-            fill="#7de2a8", width=1, tags="boundary-guriguri-click",
+            fill="#52d9a5", width=1, tags="boundary-guriguri-click",
         )
         self.canvas.create_line(
             click_x, click_y - 8, click_x, click_y + 8,
-            fill="#7de2a8", width=1, tags="boundary-guriguri-click",
+            fill="#52d9a5", width=1, tags="boundary-guriguri-click",
         )
 
         if self.guriguri_seed is None:
