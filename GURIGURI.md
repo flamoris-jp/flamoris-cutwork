@@ -1,20 +1,21 @@
 # Parts Guriguri experiment
 
-This spike explores human-guided selection for the classical-cutout experiment. Original artwork pixels are never regenerated.
+This spike explores human-guided selection and repair for the classical-cutout experiment. Original artwork pixels are never regenerated.
 
-The latest experiment reverses the previous idea: instead of asking the software to discover the correct outer boundary from one seed pixel, the human draws a **loose polygon fence first**, then the mouse wheel contracts that fence inward toward image boundaries.
+The current workflow is intentionally simple: use **Polygon Guriguri** to make a fast cutout, then use a constrained **Clone Repair Brush** to extend nearby original texture into the hole left behind.
 
 ## Run the latest experiment
 
 From `experiments/classical-cutout`:
 
 ```bash
-python app_polygon_guriguri.py
+python app_clone_guriguri.py
 ```
 
-Comparison prototypes remain available:
+Selection-only and comparison prototypes remain available:
 
 ```bash
+python app_polygon_guriguri.py    # loose polygon -> outside-in Guriguri
 python app_boundary_guriguri.py   # seed -> boundary-priority outward growth
 python app_guriguri.py            # seed -> colour-continuity flood fill
 ```
@@ -31,6 +32,22 @@ python app_guriguri.py            # seed -> colour-continuity flood fill
 8. Stop when the magenta mask reaches a useful visual boundary.
 9. Use **Create Part Layer** to commit it.
 10. Use Mask Add / Mask Erase or exact Part Polygon when manual correction is faster.
+
+## Clone Repair Brush interaction
+
+After creating a Part layer, the Base automatically has a hole under that Part. Hide the Part layer in the layer panel when you want to inspect the repair directly.
+
+1. Choose **Clone Source**.
+2. Drag a green rectangle over clean source texture in the immutable original image.
+3. Choose **Clone Paint**.
+4. Drag through the cutout hole in the direction you want the texture to continue.
+5. The source cursor moves by the same offset as the destination stroke, so a vertical hair stroke samples vertically and a horizontal skin stroke samples horizontally.
+6. **Hole Only** is enabled by default, preventing clone paint from changing pixels outside existing Part holes.
+7. A `repair` layer is created automatically below Base so the operation is non-destructive.
+8. Use **Undo Clone Stroke** to revert a whole clone stroke.
+9. Existing Blur Brush / Smudge Brush can be used on the repair layer for light cleanup.
+
+The green source rectangle is a hard sampling fence. If the aligned source cursor reaches outside that rectangle, those destination pixels are not painted. Choose another source patch rather than wrapping or inventing pixels.
 
 ## Why the direction was reversed
 
@@ -52,21 +69,36 @@ Deletion begins on the polygon's inside edge and walks inward with a determinist
 
 The intended success case is not automatic perfect segmentation. It is reducing a careful 20-50 point final polygon to a rough 4-10 point fence plus a few wheel notches.
 
+## Clone repair algorithm
+
+`clone_brush.py` performs an aligned clone operation using only immutable original pixels.
+
+For each destination pixel in the brush stroke:
+
+```text
+source = source_anchor + (destination - destination_anchor)
+```
+
+The source must remain inside the user-drawn green rectangle. The destination can optionally be restricted to the union of existing Part masks, which is the Base hole region. The brush writes into a separate RGBA repair layer below Base, preserving the source image and cutout layers.
+
 ## Design principles
 
-- Human decides meaning.
+- Human decides meaning and texture direction.
 - Polygon provides the semantic/search scope.
 - Algorithm performs boundary fitting, not semantic segmentation.
-- Source pixels are immutable.
-- AI, GrabCut, and generative redraw are unnecessary for the core selection interaction.
+- Clone repair copies source pixels instead of generating replacement art.
+- Repairs are non-destructive and live on their own layer.
+- AI, GrabCut, and generative redraw are unnecessary for the core interaction.
 - Exact Polygon and Mask Add / Erase remain fallbacks.
-- Selection preview is magenta for visibility on skin, blonde hair, and green eyes.
+- Selection preview is magenta; clone source guidance is green.
 
 ## Not included yet
 
 - multi-polygon union/subtract
 - user-placed hard keep/remove hints
-- selection-scoped feather / blend / blur
+- one-pixel mask Guriguri refinement
+- automatic source-patch suggestion
+- clone-source rotation/scale
 - automatic front/back decisions
 - semantic segmentation
 - performance optimization for very large loose polygons
