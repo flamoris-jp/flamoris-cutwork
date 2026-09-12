@@ -8,6 +8,11 @@ on:
       - "*.sln"
       - "global.json"
       - "Directory.Build.props"
+      - "eng/**"
+      - "packaging/**"
+      - "docs/phase8-windows-packaging.md"
+      - "LICENSE"
+      - "README.md"
       - ".github/workflows/production.yml"
   workflow_dispatch:
 
@@ -22,3 +27,16 @@ jobs:
       - run: dotnet restore Cutwork.sln
       - run: dotnet build Cutwork.sln --configuration Release --no-restore
       - run: dotnet test Cutwork.sln --configuration Release --no-build
+      - name: Publish and verify portable Windows package
+        shell: pwsh
+        run: ./eng/package-windows.ps1
+      - name: Upload portable Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: FLAMORIS-Cutwork-v0.1.0-win-x64
+          path: |
+            artifacts/FLAMORIS-Cutwork-v0.1.0-win-x64.zip
+            artifacts/FLAMORIS-Cutwork-v0.1.0-win-x64.inventory.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

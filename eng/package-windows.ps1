@@ -15,11 +15,25 @@ Set-StrictMode -Version Latest
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repositoryRoot "src\Cutwork.App\Cutwork.App.csproj"
+$publishProfilePath = Join-Path $repositoryRoot "src\Cutwork.App\Properties\PublishProfiles\win-x64.pubxml"
 $publishPath = Join-Path $repositoryRoot "artifacts\publish\win-x64"
 $packageName = "FLAMORIS-Cutwork-v$Version-win-x64"
 $packageRoot = Join-Path $repositoryRoot "artifacts\package\$packageName"
 $zipPath = Join-Path $repositoryRoot "artifacts\$packageName.zip"
 $inventoryPath = Join-Path $repositoryRoot "artifacts\$packageName.inventory.json"
+
+[xml]$projectXml = Get-Content -LiteralPath $projectPath -Raw
+[xml]$profileXml = Get-Content -LiteralPath $publishProfilePath -Raw
+$projectVersion = [string]$projectXml.Project.PropertyGroup.VersionPrefix
+$profileRuntime = [string]$profileXml.Project.PropertyGroup.RuntimeIdentifier
+$profileSelfContained = [string]$profileXml.Project.PropertyGroup.SelfContained
+$profileConfiguration = [string]$profileXml.Project.PropertyGroup.Configuration
+if ($projectVersion -cne $Version) {
+    throw "Package version $Version does not match project VersionPrefix $projectVersion."
+}
+if ($profileRuntime -cne $RuntimeIdentifier -or $profileSelfContained -cne "true" -or $profileConfiguration -cne $Configuration) {
+    throw "Publish profile must remain Release, win-x64, and self-contained."
+}
 
 function Remove-ExactPath {
     param([Parameter(Mandatory)][string]$Path)
@@ -138,4 +152,3 @@ finally {
 
 Write-Host "Portable package: $zipPath"
 Write-Host "Inventory: $inventoryPath"
-
