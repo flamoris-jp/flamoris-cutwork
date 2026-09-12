@@ -171,12 +171,14 @@ public sealed class FlimgArchiveCodec
             checked(dimensions.Width * 4), PngAssetCodec.DecodeBgra32(originalPng, dimensions));
 
         var restored = new List<LayerRestoreState>(manifest.Layers.Count);
+        var identities = new HashSet<Guid> { documentId };
         var referenced = new HashSet<string>(StringComparer.Ordinal) { ManifestPath, OriginalPath };
         foreach (var layer in manifest.Layers)
         {
             if (layer is null || layer.Bounds is null || layer.Name is null)
                 throw new FlimgException(FlimgError.MalformedManifest);
             var id = ParseId(layer.Id);
+            if (!identities.Add(id)) throw new FlimgException(FlimgError.InvalidIdentity);
             var bounds = ParseRect(layer.Bounds, dimensions);
             switch (layer.Kind)
             {
@@ -279,7 +281,7 @@ public sealed class FlimgArchiveCodec
         if (!entries.TryGetValue(path, out var entry)) throw new FlimgException(FlimgError.MissingAsset);
         var bytes = ReadEntry(entry, MaximumEntryBytes);
         if (!IsHash(expectedHash) || !CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(expectedHash), Convert.FromHexString(Hash(bytes))))
+                Convert.FromHexString(expectedHash!), Convert.FromHexString(Hash(bytes))))
             throw new FlimgException(FlimgError.ChecksumMismatch);
         return bytes;
     }
@@ -351,7 +353,8 @@ public sealed class FlimgArchiveCodec
 
     private static Guid ParseId(string value)
     {
-        if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty)
+        if (!Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty
+            || value != id.ToString("D").ToLowerInvariant())
             throw new FlimgException(FlimgError.InvalidIdentity);
         return id;
     }
@@ -388,7 +391,7 @@ public sealed class FlimgArchiveCodec
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(json.ToArray());
             Visit(document.RootElement);
         }
         catch (JsonException exception)

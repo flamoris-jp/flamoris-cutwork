@@ -34,7 +34,7 @@ public sealed class CutworkDocument
             || layers.Skip(baseIndex + 1).Any(layer => layer is not PatchLayerRestoreState
                 && layer is not RepairLayerRestoreState))
             throw new EditException(EditError.BandCrossing);
-        if (layers.Any(layer => layer.Id == Guid.Empty)
+        if (layers.Any(layer => layer.Id == Guid.Empty || layer.Id == id)
             || layers.Select(layer => layer.Id).Distinct().Count() != layers.Count)
             throw new EditException(EditError.InvalidLayer);
 
