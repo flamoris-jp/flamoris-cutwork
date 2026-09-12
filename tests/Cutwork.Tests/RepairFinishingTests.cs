@@ -60,6 +60,8 @@ public sealed class RepairFinishingTests
         first.Session.Execute(new AddLayer(unrelated));
         first.Session.Open(first.Session.Document);
         first.Session.SelectLayer(first.Repair.Id);
+        first.Tool.SetRadius(1);
+        second.Tool.SetRadius(1);
         var unrelatedBefore = unrelated.CopyPixels(unrelated.Bounds);
         var outsideBefore = first.Repair.PixelAt(0, 0).ToArray();
 
@@ -144,7 +146,7 @@ public sealed class RepairFinishingTests
         var (session, repair, tool) = Create(RepairFinishingKind.Blur);
         tool.SetRadius(1);
         var before = repair.CopyPixels(repair.Bounds);
-        Stroke(tool, new(3.5, 4.5), new(7.5, 4.5));
+        Stroke(tool, new(.5, 4.5), new(4.5, 4.5));
         var after = repair.CopyPixels(repair.Bounds);
 
         Assert.AreEqual(1, session.UndoCount);
@@ -210,8 +212,9 @@ public sealed class RepairFinishingTests
         tool.SetRadius(1);
         var before = repair.CopyPixels(repair.Bounds);
         session.MarkSaved();
-        tool.PointerDown(new(3.5, 4.5), 1, CanvasModifiers.None);
-        tool.PointerMove(new(7.5, 4.5), CanvasModifiers.None);
+        tool.PointerDown(new(.5, 4.5), 1, CanvasModifiers.None);
+        tool.PointerMove(new(4.5, 4.5), CanvasModifiers.None);
+        Assert.IsTrue(session.IsDirty);
         cancel(tool);
 
         Assert.AreEqual(RepairFinishingState.Idle, tool.State);
