@@ -53,7 +53,8 @@ public sealed class RepairFinishingKernel : IRepairFinishingKernel
         var destination = DabBounds(to, radius, documentSize).Intersect(target.Bounds);
         if (destination.IsEmpty) return default;
         var sourceBounds = ShiftedBounds(destination, -movementX, -movementY, documentSize);
-        var read = destination.Union(sourceBounds);
+        // Bilinear source sampling can touch the next pixel on each axis.
+        var read = Expand(destination.Union(sourceBounds), 1, documentSize);
         var source = target.CopyPixelsWithTransparentOutside(read);
         var after = target.CopyPixels(destination);
         var radiusSquared = radius * radius;
@@ -65,13 +66,14 @@ public sealed class RepairFinishingKernel : IRepairFinishingKernel
             var brushX = x + 0.5 - to.X;
             var brushY = y + 0.5 - to.Y;
             if (brushX * brushX + brushY * brushY > radiusSquared) continue;
-            var sourceX = (int)Math.Floor(x + 0.5 - movementX);
-            var sourceY = (int)Math.Floor(y + 0.5 - movementY);
+            // Convert the shifted source pixel-center position to pixel-grid coordinates.
+            var sourceX = x - movementX;
+            var sourceY = y - movementY;
             var destinationOffset = checked(((y - destination.Y) * destination.Width
                 + x - destination.X) * 4);
             for (var channel = 0; channel < 4; channel++)
             {
-                var sampled = Pixel(source, read, sourceX, sourceY, channel);
+                var sampled = BilinearPixel(source, read, sourceX, sourceY, channel);
                 var value = Blend(after[destinationOffset + channel], sampled, strength);
                 if (value == after[destinationOffset + channel]) continue;
                 after[destinationOffset + channel] = value;
@@ -81,9 +83,23 @@ public sealed class RepairFinishingKernel : IRepairFinishingKernel
         return new(destination, after, changed);
     }
 
-    private static byte Blend(byte current, byte target, double strength) =>
+    private static byte Blend(byte current, double target, double strength) =>
         (byte)Math.Clamp((int)Math.Round(current + (target - current) * strength,
             MidpointRounding.AwayFromZero), 0, 255);
+
+    private static double BilinearPixel(byte[] pixels, DocumentRect bounds,
+        double x, double y, int channel)
+    {
+        var left = (int)Math.Floor(x);
+        var top = (int)Math.Floor(y);
+        var fractionX = x - left;
+        var fractionY = y - top;
+        var topValue = Pixel(pixels, bounds, left, top, channel) * (1 - fractionX)
+            + Pixel(pixels, bounds, left + 1, top, channel) * fractionX;
+        var bottomValue = Pixel(pixels, bounds, left, top + 1, channel) * (1 - fractionX)
+            + Pixel(pixels, bounds, left + 1, top + 1, channel) * fractionX;
+        return topValue * (1 - fractionY) + bottomValue * fractionY;
+    }
 
     private static byte Pixel(byte[] pixels, DocumentRect bounds, int x, int y, int channel)
     {

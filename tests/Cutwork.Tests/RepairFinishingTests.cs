@@ -89,6 +89,9 @@ public sealed class RepairFinishingTests
         AssertPixel(forwardPatch, 2, 1, 20, 20, 20, 255);
         AssertPixel(reversePatch, 1, 1, 40, 40, 40, 255);
         CollectionAssert.AreNotEqual(forwardPatch.StraightBgra.ToArray(), reversePatch.StraightBgra.ToArray());
+
+        var subpixel = kernel.Smudge(forward, new(2, 1.5), new(2.5, 1.5), .75, 1, new(6, 3));
+        AssertPixel(subpixel, 2, 1, 30, 30, 30, 255);
     }
 
     [TestMethod]

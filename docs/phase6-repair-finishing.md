@@ -14,7 +14,7 @@ Radius is measured in document pixels and is limited to 0.5–512. Strength is l
 
 Blur applies a deterministic 3×3 box sample inside a hard circular footprint. The write region is the circle's conservative rectangle intersected with the selected Repair bounds. The kernel reads one additional pixel of halo and blends each straight BGRA channel toward the box result by the selected strength. Pixels outside the write ROI remain byte-exact.
 
-Smudge transports pixels in the sampled stroke direction. For each emitted point, the source coordinate is the destination pixel minus that sample's movement vector. The kernel snapshots only the union of the destination footprint and shifted source bounds before it writes, then blends toward that source by strength. Samples are applied sequentially in `StrokeSampler` order, making a fixed document-space path independent of sparse versus dense pointer delivery. This is a small directional repair operation, not wet-paint simulation.
+Smudge transports pixels in the sampled stroke direction. For each emitted point, the source coordinate is the destination pixel minus that sample's movement vector. Pixel-center bilinear sampling preserves subpixel movement from the shared sampler. The kernel snapshots only the union of the destination footprint and shifted source bounds plus its one-pixel sampling halo before it writes, then blends toward that source by strength. Samples are applied sequentially in `StrokeSampler` order, making a fixed document-space path independent of sparse versus dense pointer delivery. This is a small directional repair operation, not wet-paint simulation.
 
 ## History, rendering, and overlays
 
