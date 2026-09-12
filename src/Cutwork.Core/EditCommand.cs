@@ -129,13 +129,30 @@ public sealed class RasterPatch : EditCommand
     internal override AppliedEdit? Apply(CutworkDocument document)
     {
         if (document.GetLayer(_layerId) is not RasterLayer layer) throw new EditException(EditError.InvalidPatch);
-        var before = layer.CopyPixels(_region);
+        if (!document.Contains(_region)) throw new EditException(EditError.InvalidPatch);
+        var beforeBounds = layer.Bounds;
+        var canGrow = layer is RepairLayer;
+        if (!canGrow && !beforeBounds.Contains(_region)) throw new EditException(EditError.InvalidPatch);
+        var afterBounds = canGrow ? beforeBounds.Union(_region) : beforeBounds;
+        var before = canGrow
+            ? layer.CopyPixelsWithTransparentOutside(_region)
+            : layer.CopyPixels(_region);
         if (before.Length != _after.Length) throw new EditException(EditError.InvalidPatch);
-        if (before.AsSpan().SequenceEqual(_after)) return null;
+        if (before.AsSpan().SequenceEqual(_after) && beforeBounds == afterBounds) return null;
         var after = _after;
         var region = _region;
+        if (canGrow) layer.ResizePixels(afterBounds);
         layer.WritePixels(region, after);
-        return new(() => layer.WritePixels(region, before), () => layer.WritePixels(region, after),
+        return new(() =>
+            {
+                layer.WritePixels(region, before);
+                if (canGrow) layer.ResizePixels(beforeBounds);
+            },
+            () =>
+            {
+                if (canGrow) layer.ResizePixels(afterBounds);
+                layer.WritePixels(region, after);
+            },
             layer, region, default, 128L + before.LongLength + after.LongLength);
     }
 }
