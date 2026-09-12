@@ -1,0 +1,22 @@
+<UserControl x:Class="Flamoris.Cutwork.App.Controls.DocumentCanvas"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="True"
+             ClipToBounds="True">
+    <Grid Background="#17181A">
+        <Image x:Name="ImageSurface"
+               HorizontalAlignment="Left"
+               VerticalAlignment="Top"
+               Stretch="Fill"
+               RenderTransformOrigin="0,0"
+               RenderOptions.BitmapScalingMode="HighQuality" />
+        <Canvas x:Name="OverlaySurface" IsHitTestVisible="False">
+            <Line x:Name="CrosshairHorizontal" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
+            <Line x:Name="CrosshairVertical" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
+        </Canvas>
+        <TextBlock x:Name="EmptyMessage"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Foreground="#989BA2" />
+    </Grid>
+</UserControl>
