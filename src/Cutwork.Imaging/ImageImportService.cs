@@ -41,9 +41,11 @@ public sealed class ImageImportService
                 return ImageImportResult.Failure(ImageImportError.InvalidImage);
             }
 
-            if (source.Format != PixelFormats.Pbgra32)
+            // Original keeps straight-alpha BGRA authoring pixels. Premultiplication
+            // belongs to composite/display surfaces, not the immutable source.
+            if (source.Format != PixelFormats.Bgra32)
             {
-                var converted = new FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
+                var converted = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
                 converted.Freeze();
                 source = converted;
             }

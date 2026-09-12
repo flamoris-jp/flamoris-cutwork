@@ -7,6 +7,7 @@ public sealed class ImageImportTests
 {
     private const string Png3By2 = "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAFUlEQVR4nGOUC+hhYGBgYGBgYoABABFiAP4kJh6cAAAAAElFTkSuQmCC";
     private const string Jpeg3By2 = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAACAAMDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDh6KKK+iPEP//Z";
+    private const string TransparentPng1By1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGPQCKhoAAADBQFxDbwQswAAAABJRU5ErkJggg==";
 
     [TestMethod]
     [DataRow("sample.png", Png3By2)]
@@ -21,6 +22,24 @@ public sealed class ImageImportTests
             Assert.IsTrue(result.IsSuccess);
             Assert.AreEqual(3, result.Original!.Dimensions.Width);
             Assert.AreEqual(2, result.Original.Dimensions.Height);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [TestMethod]
+    public void ImportPreservesStraightAlphaAuthoringPixels()
+    {
+        var path = WriteTemporaryFile("transparent.png", Convert.FromBase64String(TransparentPng1By1));
+        try
+        {
+            var result = new ImageImportService().Import(path);
+
+            CollectionAssert.AreEqual(
+                new byte[] { 120, 80, 40, 128 },
+                result.Original!.CopyPixelBytes());
         }
         finally
         {

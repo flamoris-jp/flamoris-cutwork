@@ -2,7 +2,7 @@ namespace Flamoris.Cutwork.Core;
 
 public sealed class OriginalAsset
 {
-    private readonly byte[] _premultipliedBgra32;
+    private readonly byte[] _straightBgra32;
 
     public OriginalAsset(string sourceName, PixelSize dimensions, int stride, ReadOnlySpan<byte> pixels)
     {
@@ -21,7 +21,7 @@ public sealed class OriginalAsset
         SourceName = sourceName;
         Dimensions = dimensions;
         Stride = stride;
-        _premultipliedBgra32 = pixels.ToArray();
+        _straightBgra32 = pixels.ToArray();
     }
 
     public string SourceName { get; }
@@ -30,17 +30,17 @@ public sealed class OriginalAsset
 
     public int Stride { get; }
 
-    public int ByteLength => _premultipliedBgra32.Length;
+    public int ByteLength => _straightBgra32.Length;
 
-    public byte[] CopyPixelBytes() => (byte[])_premultipliedBgra32.Clone();
+    public byte[] CopyPixelBytes() => (byte[])_straightBgra32.Clone();
 
     public void CopyPixelBytesTo(Span<byte> destination)
     {
-        if (destination.Length < _premultipliedBgra32.Length)
+        if (destination.Length < _straightBgra32.Length)
         {
             throw new ArgumentException("Destination is too small.", nameof(destination));
         }
 
-        _premultipliedBgra32.CopyTo(destination);
+        _straightBgra32.CopyTo(destination);
     }
 }
