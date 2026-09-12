@@ -1,135 +1,233 @@
-# Manual Part Editor Spike
+# FLAMORIS Cutwork
 
-Issue: #53
+FLAMORIS Cutwork is a standalone Windows-oriented image decomposition and repair tool for preparing illustration parts used by short 2D moving-picture animation workflows.
 
-A disposable, standalone, non-ML experiment for quickly decomposing a human illustration into the few parts needed by a short moving-picture clip. This is a Phase 5 feasibility tool, not FLAMORIS production layer architecture and not a general image editor.
+Cutwork is intentionally separate from `flamoris-jp/flamoris-2D`.
 
-## Intended use
+Its job is narrower:
 
-The primary use is **human figure / body-part decomposition for approximately eight-second moving-picture clips**:
+- open a normal illustration/image
+- quickly isolate only the parts that need to move
+- repair or expose hidden regions where necessary
+- manage the resulting layers/parts
+- export the prepared result for downstream animation work
 
-- eye / eyelid material for blinking
-- face, head, or selected hair sections
-- arms, hands, and legs
-- chest, shoulders, or upper body for breathing motion
-- selected skirt or clothing sections
-- manually sampled hidden-area patches
-
-Static chairs, instruments, props, and backgrounds do not need semantic separation unless the intended motion exposes them.
-
-## Quality target
-
-Evaluate this spike by:
+The product goal is not pixel-perfect semantic segmentation. The practical target is:
 
 > **perceptual sufficiency × editing speed**
 
-Pixel-perfect segmentation, single-hair accuracy, and defects visible only at extreme zoom are not the goal. Do not make the author solve a problem that a viewer cannot see at normal playback.
+If a defect is invisible at normal playback scale, Cutwork should not force the author into needless cleanup.
 
-## Current workflow
+## Current status
 
-1. **Open Image**. The decoded RGB source is copied once and remains immutable.
-2. Choose **Part Polygon**, click exact vertices, then press **Enter** or double-click. **Esc** cancels.
-3. If needed, use **Mask Add** / **Mask Erase** to correct the pending binary selection directly. These brushes do not invoke GrabCut.
-4. Choose or type a semantic name, then press **Create Part Layer**.
-5. Repeat the polygon/create step for every part that will move.
-6. Select **Patch Source**, polygon-select a clean cheek/forehead/nearby region, and finalize it. The patch is sampled from the immutable original.
-7. Use **Move Layer** plus the right-panel Scale and Rotation controls to cover a Base hole.
-8. If a visible seam remains, apply a small **Blur Brush** or gentle **Smudge Brush** to the active derived layer.
-9. Toggle, rename, select, delete, or reorder layers in the right panel.
-10. Export a flattened RGBA PNG and/or one transparent PNG per layer. Save the active mask when useful.
+The repository currently contains the preserved Python/Tkinter experimental implementation that established the core interaction ideas and classical image-processing behavior.
 
-Part Polygon is the final binary selection: inside is foreground, outside is background. It never runs GrabCut. Patch Source also uses a polygon, but creates a transformable sample layer instead of a part mask.
+That code is now treated as an **executable reference / specification**, not as the final production UI architecture.
 
-## Layer model
+Current active work is tracked in GitHub Issues:
 
-The panel is shown top-to-bottom. New content defaults to this visual stack:
+- `#1` hands-on Guriguri / Clone Repair findings
+- `#2` Clone Paint performance profiling and responsiveness
+- `#3` Cutwork v0.1 standalone UI / architecture / i18n design
 
-1. Part layers (top)
-2. Base
-3. Patch layers (bottom)
+## Production direction
 
-The corresponding drawing order is **Patch → Base → Part**. Patch therefore appears through a hole removed from Base and stays behind the moving part.
+Cutwork should feel like a small conventional Windows graphics application rather than a collection of prototype controls.
 
-Every result is derived from:
+Planned layout:
 
-- immutable original source
-- exact binary part masks or original-source patch polygons
-- patch transform (translate, 10–1000% scale, -180–180° rotation)
-- optional per-layer local Blur/Smudge edit operations
+```text
++---------------------------------------------------------+
+| File  Edit  View  Layer  Export  Help                 |
++----+--------------------------------------+-------------+
+|    |                                      | Layers      |
+| T  |                                      |-------------|
+| o  |              Canvas                  | ...         |
+| o  |                                      |             |
+| l  |                                      | Properties  |
+| s  |                                      |-------------|
+|    |                                      | contextual  |
++----+--------------------------------------+-------------+
+```
 
-Base holes are the union of all part masks. A Patch is affine-warped directly into the output canvas, so 1000% scale does not allocate a 10× intermediate bitmap. Patch alpha receives a small edge feather.
+- left: compact vertical tool icons
+- center: image/canvas viewport
+- right: Layers + contextual Properties
+- top: conventional application menus
+- Japanese-first UI through i18n resources
 
-Semantic name presets live in [`config/part-names.json`](config/part-names.json). The combo remains editable, so project-specific names do not require code changes.
+The production toolbar should consolidate prototype modes into a smaller set of understandable tools.
 
-## Viewport and layer controls
+### Part Tool
 
-- Mouse wheel: cursor-centered zoom
-- **Fit** / **100%**: standard view resets
-- **Pan** drag or middle-button drag: move viewport
-- Layer row checkmark: visibility
-- Up / Down: reorder active layer
-- Semantic name combo: preset or free-text rename
-- Masks / Show active mask overlay: inspect active mask
-- Patch Scale: 10–1000%
-- Patch Rotation: -180–180°
-- **Undo Local Edit**: removes the last Blur/Smudge operation from the active layer
-- **Mask Add / Mask Erase**: manually corrects the pending polygon or active Part mask
-- **Undo Mask Stroke**: restores the mask from before the last brush stroke
+`Part Polygon` and `Polygon Guriguri` converge into one Part Tool.
 
-Selection, movement, and brush coordinates are converted back to original image space after zoom and pan.
+Expected interaction:
 
-Interactive redraw caches unchanged layer rasters and the current composite. Blur and Smudge operate on a small brush-local ROI instead of filtering or translating the full source image on every pointer event; slider redraw is briefly coalesced.
+1. draw a rough polygon/fence around the intended part
+2. Guriguri refinement is the normal behavior
+3. exact/manual correction remains available as fallback
 
-## Earlier experiment findings
+### Mask Brush
 
-- GrabCut was fast on a full figure against a simple, contrasting background, but did not understand semantic identity when a person touched a chair, guitar, hair, shadow, or similar-color background.
-- Exact Polygon selection was more predictable for eye and body-part work than repeatedly steering GrabCut. Box, GrabCut, FG/BG Brush, and Refine were removed from this narrower editor spike.
-- OpenCV Telea inpainting pulled dark hair, eyebrows, eyelashes, and shadow streaks into blink-oriented eye holes.
-- Flat Skin Fill avoided dark smearing but looked like a uniform skin-colored patch.
-- Gradient Skin Fill preserved broad shading but still looked synthetic and could not recreate useful local texture.
-- Manual Patch Fill was the most controllable classical alternative: the author chooses plausible original pixels and places them behind the hole.
-- Patch transform plus small local Blur/Smudge edits is a pragmatic blink-substrate workflow; it is not hidden-face reconstruction.
+`Mask Add` and `Mask Erase` converge into one brush.
 
-The removed fill methods are documented here as rejected experiment branches. They are intentionally not kept as runtime buttons or state.
+Preferred direction:
 
-## Run on Windows
+- one circular brush cursor
+- temporary add/erase polarity switch with `Alt`
+
+### Patch Tool
+
+`Patch Source` and `Move Layer` are treated as phases of one Patch workflow rather than unrelated tools.
+
+### Clone Tool
+
+Preferred interaction direction:
+
+- circular brush cursor visible at all times
+- `Alt+click` selects clone source center
+- releasing `Alt` returns immediately to painting
+- wheel changes Clone brush diameter
+- `Ctrl+wheel` preserves viewport zoom
+
+The older rectangular Clone Source fence remains experimental reference behavior only unless later testing proves it useful.
+
+## Experimental reference implementation
+
+The current Python implementation includes several comparison entry points:
+
+- `app.py`
+- `app_polygon_guriguri.py`
+- `app_boundary_guriguri.py`
+- `app_guriguri.py`
+- `app_clone_guriguri.py`
+
+For current Guriguri + Clone Repair hands-on testing, the canonical experimental launcher is:
 
 ```powershell
-cd experiments/classical-cutout
+python app_clone_guriguri.py
+```
+
+The other entry points are retained for comparison/reference and should not define the final application structure.
+
+## Experimental algorithms and findings
+
+### Polygon Guriguri
+
+A loose polygon acts as a hard search fence. The algorithm progressively removes pixels from the inside boundary toward likely visual boundaries using deterministic cost-based search.
+
+The useful interaction discovery is that the author can draw a rough 4–10 point fence, then refine it rather than manually placing dozens of exact polygon points.
+
+### Clone Repair
+
+Clone Repair copies pixels from the immutable original image into a repair layer.
+
+The current experimental implementation established:
+
+- source/destination relative offset semantics
+- optional Hole Only restriction
+- whole-stroke undo
+- local ROI clone computation
+- repair layer composition below Base
+
+Interactive performance is still under active investigation. The current Python/Tk/PIL display path should be profiled before choosing a production rendering stack.
+
+### Patch Repair
+
+Manual Patch Fill remains a useful non-generative fallback for hidden-region repair:
+
+- sample plausible source texture from the immutable original
+- translate / scale / rotate it behind a cutout hole
+- optionally apply light Blur / Smudge cleanup
+
+This proved more controllable than classical inpainting for eyelid/skin repair in the experiments.
+
+## Layer model discovered by the experiments
+
+The useful conceptual stack is:
+
+1. Part layers
+2. Base
+3. Patch / Repair layers
+
+Drawing order is effectively:
+
+```text
+Patch / Repair -> Base -> Part
+```
+
+This lets hidden-area repair appear through holes in Base while the extracted moving part remains above it.
+
+The production document model may evolve, but should preserve the user-visible semantics unless an accepted design explicitly replaces them.
+
+## Run the current experiment on Windows
+
+```powershell
+cd C:\FLAMORIS\flamoris-cutwork
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python app.py
+python app_clone_guriguri.py
 ```
 
 ## Lightweight checks
 
 ```powershell
-python -m py_compile app.py model.py image_ops.py layer_panel.py test_image_ops.py
-python -m unittest -v test_image_ops.py
+python -m py_compile app_clone_guriguri.py clone_brush.py
+python -m unittest -v test_clone_brush.py
 ```
 
-## Recommended real-image sequence
+For broader experimental regression coverage:
 
-1. Create separate left/right eye or eyelid layers from a face close-up.
-2. Toggle each part to confirm Base holes exactly match the polygons.
-3. Polygon-sample cheek or forehead skin into one or more Patch layers.
-4. Confirm the default **Patch → Base → Part** drawing order, then test manual reordering.
-5. Move, scale, and rotate a patch until it covers the eye hole with Cutout hidden.
-6. Test a small Blur/Smudge pass only where the seam is visible at normal playback.
-7. Zoom and pan during selection and confirm exported masks still land on the intended original pixels.
-8. Export individual PNGs and assemble a short blink or breathing motion outside this spike.
+```powershell
+python -m unittest -v \
+  test_image_ops.py \
+  test_guriguri.py \
+  test_boundary_guriguri.py \
+  test_polygon_guriguri.py \
+  test_clone_brush.py
+```
 
-## Known limitations
+On PowerShell, run the files on one line or invoke the tests individually if preferred.
 
-- Polygon edges are binary; this is not alpha matting for hair or translucent material.
-- Smudge is deliberately simple translation-based pixel pushing, not a paint engine.
-- Many accumulated local edit operations can make redraw slower on large source images.
-- Patches use scale, rotation, and translation only; there is no perspective warp.
-- State is not persisted as a FLAMORIS Project and there is no undo/redo architecture beyond the last local edit.
-- PSD export is not included. Individual transparent PNGs avoid adding a new PSD dependency/license decision to this disposable spike.
-- No AI/ML, face landmarks, body recognition, hidden-part generation, animation, Scene mutation, or production integration is included.
+## Current experimental limitations
 
-## Decision gate
+- Python/Tkinter/PIL redraw is not yet responsive enough for production Clone Paint.
+- multiple prototype launchers exist
+- polygon/mask edges are binary rather than full alpha matting
+- Smudge is deliberately simple
+- Patch transform is affine only
+- project persistence is not yet a production document format
+- undo/redo is local and prototype-scoped
+- no production Windows packaging yet
+- no production i18n layer yet
+- no generative AI requirement
 
-After testing real artwork, record whether exact manual parts plus transformed source patches are fast and plausible enough for normal-playback blink/breathing clips, and which operations deserve a Phase 5 product design.
+These are prototype limitations, not promises about the final product architecture.
+
+## Repository workflow
+
+`main` is the reviewed current baseline.
+
+Use small purpose-driven branches and commits. For meaningful changes:
+
+1. define the problem / acceptance criteria
+2. branch from `main`
+3. implement the smallest understandable change
+4. run the smallest relevant deterministic tests
+5. open a PR
+6. review before squash-merging to `main`
+
+Repository-wide AI/development rules are defined in [`AGENTS.md`](AGENTS.md).
+
+## Relationship to FLAMORIS 2D
+
+Cutwork and FLAMORIS 2D are separate applications and repositories:
+
+```text
+flamoris-jp/flamoris-cutwork  -> image decomposition / repair
+flamoris-jp/flamoris-2D       -> 2D animation / rigging / clip authoring
+```
+
+Cutwork may export or hand off prepared assets to FLAMORIS 2D, but it must not become an embedded editor panel or depend on FLAMORIS 2D runtime internals.
