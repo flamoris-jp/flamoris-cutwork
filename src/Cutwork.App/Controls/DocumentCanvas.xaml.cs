@@ -21,7 +21,7 @@ public partial class DocumentCanvas : UserControl
         Loaded += (_, _) => RefreshDpi();
         SizeChanged += (_, _) => OnViewportSizeChanged();
         MouseMove += Canvas_MouseMove;
-        MouseLeave += (_, _) => HideCrosshair();
+        MouseLeave += (_, _) => ClearPointerOverlay();
         MouseDown += Canvas_MouseDown;
         MouseUp += Canvas_MouseUp;
         LostMouseCapture += (_, _) => EndPan();
@@ -246,6 +246,12 @@ public partial class DocumentCanvas : UserControl
     {
         CrosshairHorizontal.Visibility = Visibility.Collapsed;
         CrosshairVertical.Visibility = Visibility.Collapsed;
+    }
+
+    private void ClearPointerOverlay()
+    {
+        HideCrosshair();
+        PointerDocumentPositionChanged?.Invoke(this, new DocumentPointerEventArgs(null));
     }
 }
 

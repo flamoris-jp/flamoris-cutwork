@@ -73,6 +73,7 @@ public partial class MainWindow : Window
 
         var document = new CutworkDocument(result.Original!);
         _session.Open(document);
+        _pointerPosition = null;
         CanvasView.Present(document);
         FitMenuItem.IsEnabled = true;
         ActualSizeMenuItem.IsEnabled = true;

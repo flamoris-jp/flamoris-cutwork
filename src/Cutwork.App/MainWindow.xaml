@@ -10,7 +10,7 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem x:Name="FileMenu">
-                <MenuItem x:Name="OpenMenuItem" InputGestureText="Ctrl+O" Click="OpenMenuItem_Click" />
+                <MenuItem x:Name="OpenMenuItem" Click="OpenMenuItem_Click" />
                 <Separator />
                 <MenuItem x:Name="ExitMenuItem" Click="ExitMenuItem_Click" />
             </MenuItem>
