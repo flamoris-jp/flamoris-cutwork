@@ -64,6 +64,9 @@ public sealed class CanvasInputRouter
         return _activeTool?.PointerMove(ToDocumentPoint(position), modifiers) ?? CanvasInputEffects.None;
     }
 
+    public CanvasInputEffects PointerLeave(CanvasModifiers modifiers) =>
+        IsPanning ? CanvasInputEffects.None : _activeTool?.PointerMove(null, modifiers) ?? CanvasInputEffects.None;
+
     public CanvasInputEffects PointerUp(CanvasPointerInput input)
     {
         if (IsPanning && input.Button == _panButton)

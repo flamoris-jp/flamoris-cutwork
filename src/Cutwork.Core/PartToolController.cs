@@ -18,7 +18,7 @@ public enum PartToolMessage
     Committed,
 }
 
-public readonly record struct PartToolStatus(PartToolMessage Message, int Value = 0, int Secondary = 0);
+public readonly record struct PartToolStatus(PartToolMessage Message, int Value = 0);
 
 public sealed record PartToolSnapshot(
     PartToolState State,

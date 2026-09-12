@@ -93,9 +93,14 @@ public sealed class PolygonGuriguriTests
         var firstMask = first.Adjust(2);
         var secondMask = second.Adjust(2);
 
+        Assert.AreEqual(new DocumentRect(1, 1, 7, 7), first.Bounds);
+        Assert.AreEqual(49, first.PolygonPixelCount);
         Assert.AreEqual(first.PolygonPixelCount, second.PolygonPixelCount);
         CollectionAssert.AreEqual(firstMask, secondMask);
         Assert.AreEqual(255, firstMask[4 * first.Bounds.Width + 4]);
+        Assert.AreEqual(
+            "68774B530E6104A0F4E1B106F647D62215F7DA4C62384C6D85FD4A513C93AA20",
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(firstMask)));
     }
 
     private static double Mean(float[] values, int width, int left, int right)

@@ -31,7 +31,11 @@ public partial class DocumentCanvas : UserControl
         Loaded += (_, _) => RefreshDpi();
         SizeChanged += (_, _) => OnViewportSizeChanged();
         MouseMove += Canvas_MouseMove;
-        MouseLeave += (_, _) => ClearPointerOverlay();
+        MouseLeave += (_, _) =>
+        {
+            _inputRouter?.PointerLeave(CurrentModifiers());
+            ClearPointerOverlay();
+        };
         MouseDown += Canvas_MouseDown;
         MouseUp += Canvas_MouseUp;
         LostMouseCapture += (_, _) => ApplyInputEffects(_inputRouter?.LostPointerCapture() ?? CanvasInputEffects.None);

@@ -86,6 +86,23 @@ public sealed class PartToolTests
     }
 
     [TestMethod]
+    public void PointerLeaveClearsOnlyThePendingHoverPoint()
+    {
+        var (session, tool) = CreateTool();
+        var router = new CanvasInputRouter(session);
+        router.SetActiveTool(tool);
+        router.PointerDown(new(new(2, 2), CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        router.PointerMove(new(8, 8), CanvasModifiers.None);
+        Assert.IsNotNull(tool.Snapshot().HoverPoint);
+
+        router.PointerLeave(CanvasModifiers.None);
+
+        Assert.IsNull(tool.Snapshot().HoverPoint);
+        Assert.AreEqual(new DocumentPoint(2, 2), tool.Snapshot().Fence.Single());
+        Assert.AreEqual(0, session.UndoCount);
+    }
+
+    [TestMethod]
     public void EnterDoubleClickEscapeAndWheelUseOneControllerBoundary()
     {
         var (session, tool) = CreateTool();
