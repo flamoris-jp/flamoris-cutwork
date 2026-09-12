@@ -89,13 +89,16 @@ public sealed class CanvasInputRouter
     public CanvasInputEffects Wheel(ViewportPoint position, int delta, CanvasModifiers modifiers)
     {
         if (_session.Document is null || delta == 0) return CanvasInputEffects.None;
-        var steps = Math.Sign(delta) * Math.Max(1, (int)Math.Round(Math.Abs(delta) / 120.0));
+        var wheelNotches = Math.Sign(delta) * Math.Max(1, (int)Math.Round(Math.Abs(delta) / 120.0));
 
         // Ctrl+wheel is globally reserved for viewport zoom. A tool may consume
         // plain wheel; otherwise plain wheel retains normal canvas zoom.
         if (!modifiers.HasFlag(CanvasModifiers.Control) && _activeTool is not null)
         {
-            var result = _activeTool.Wheel(steps, modifiers);
+            // WPF reports the physical forward wheel rotation as a negative
+            // delta. Fitting steps grow inward, so reverse the platform delta
+            // only for tool adjustment: forward shrinks; backward restores.
+            var result = _activeTool.Wheel(-wheelNotches, modifiers);
             if (result.HasFlag(CanvasInputEffects.Handled)) return result;
         }
 

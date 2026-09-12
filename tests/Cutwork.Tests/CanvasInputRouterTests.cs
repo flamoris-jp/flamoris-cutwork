@@ -38,17 +38,19 @@ public sealed class CanvasInputRouterTests
     }
 
     [TestMethod]
-    public void PlainWheelLetsToolConsumeButControlWheelAlwaysZooms()
+    public void PlainWheelMapsPhysicalForwardToPositiveToolStepsAndControlWheelAlwaysZooms()
     {
         var (session, router, tool) = CreateRouter();
         tool.HandleWheel = true;
 
-        var plain = router.Wheel(new ViewportPoint(50, 50), 120, CanvasModifiers.None);
+        // WPF reports the physical forward rotation as a negative delta.
+        var plain = router.Wheel(new ViewportPoint(50, 50), -120, CanvasModifiers.None);
         var zoomBefore = session.Viewport.Zoom;
         var control = router.Wheel(new ViewportPoint(50, 50), 120, CanvasModifiers.Control);
 
         Assert.IsTrue(plain.HasFlag(CanvasInputEffects.ToolOverlayChanged));
         Assert.AreEqual(1, tool.WheelCount);
+        Assert.AreEqual(1, tool.LastWheelSteps);
         Assert.IsTrue(control.HasFlag(CanvasInputEffects.ViewportChanged));
         Assert.IsTrue(session.Viewport.Zoom > zoomBefore);
         Assert.AreEqual(1, tool.WheelCount);
@@ -70,6 +72,7 @@ public sealed class CanvasInputRouterTests
         public bool HandleWheel { get; set; }
         public int PointerDownCount { get; private set; }
         public int WheelCount { get; private set; }
+        public int LastWheelSteps { get; private set; }
         public DocumentPoint? LastPoint { get; private set; }
         public void Activate() { }
         public void Deactivate() { }
@@ -84,6 +87,7 @@ public sealed class CanvasInputRouterTests
         public CanvasInputEffects Wheel(int steps, CanvasModifiers modifiers)
         {
             WheelCount++;
+            LastWheelSteps = steps;
             return HandleWheel ? CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None;
         }
         public CanvasInputEffects KeyDown(CanvasToolKey key, CanvasModifiers modifiers) => CanvasInputEffects.None;

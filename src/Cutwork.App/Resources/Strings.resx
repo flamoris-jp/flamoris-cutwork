@@ -29,7 +29,7 @@
   <data name="PartTool_Status_DrawingFence" xml:space="preserve"><value>囲い：{0}点。Enterまたはダブルクリックで境界合わせへ進みます。</value></data>
   <data name="PartTool_Status_NeedsThreePoints" xml:space="preserve"><value>囲いには3点以上必要です（現在{0}点）。</value></data>
   <data name="PartTool_Status_FenceTooSmall" xml:space="preserve"><value>囲いが小さすぎます（{0} px）。少し広く囲んでください。</value></data>
-  <data name="PartTool_Status_FittingPreview" xml:space="preserve"><value>境界合わせ：段階 {0}、{1}/{2} px。ホイール上＝内側、下＝戻す、Ctrl+ホイール＝ズーム、Enter＝確定。</value></data>
+  <data name="PartTool_Status_FittingPreview" xml:space="preserve"><value>境界合わせ：段階 {0}、{1}/{2} px。ホイール前回転＝内側、後ろ回転＝戻す、Ctrl+ホイール＝ズーム、Enter＝確定。</value></data>
   <data name="PartTool_Status_Cancelled" xml:space="preserve"><value>未確定のパーツを取り消しました。</value></data>
   <data name="PartTool_Status_Committed" xml:space="preserve"><value>パーツを作成しました。元に戻す1回で作成全体を取り消せます。</value></data>
   <data name="Panel_Layers" xml:space="preserve"><value>レイヤー</value></data>
