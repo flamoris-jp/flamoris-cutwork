@@ -91,6 +91,7 @@ public sealed class CanvasInputRouterTests
             return HandleWheel ? CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None;
         }
         public CanvasInputEffects KeyDown(CanvasToolKey key, CanvasModifiers modifiers) => CanvasInputEffects.None;
+        public CanvasInputEffects LostPointerCapture() => CanvasInputEffects.None;
         public void Cancel() { }
     }
 }

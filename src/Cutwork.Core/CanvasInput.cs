@@ -54,5 +54,6 @@ public interface ICanvasToolInput
     CanvasInputEffects PointerUp(DocumentPoint? point, CanvasPointerButton button, CanvasModifiers modifiers);
     CanvasInputEffects Wheel(int steps, CanvasModifiers modifiers);
     CanvasInputEffects KeyDown(CanvasToolKey key, CanvasModifiers modifiers);
+    CanvasInputEffects LostPointerCapture();
     void Cancel();
 }
