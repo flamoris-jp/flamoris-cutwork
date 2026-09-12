@@ -91,10 +91,9 @@ src/                         C# / WPF production code
 tests/                       production deterministic tests
 experiments/python-tkinter/  preserved Python/Tkinter experiments
 docs/                        architecture, decisions, roadmap, benchmarks
-config/                      repository/product configuration retained for later phases
 ```
 
-The repository root is production-oriented. Experimental Python launchers, modules, dependencies, and tests live under `experiments/python-tkinter/`.
+The repository root is production-oriented. Experimental Python launchers, modules, dependencies, configuration, and tests live under `experiments/python-tkinter/`.
 
 ## Experimental Python/Tkinter reference
 
