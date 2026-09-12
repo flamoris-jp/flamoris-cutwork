@@ -17,4 +17,3 @@ Layer Handoffの書き出しができます。
 
 ソースコード:
 https://github.com/flamoris-jp/flamoris-cutwork
-
