@@ -125,10 +125,14 @@ public sealed class BitmapPresentationTests
             var patchTool = new PatchToolController(session, new PatchSourceSampler());
             var cloneTool = new CloneRepairController(session, new CloneRepairKernel());
             cloneTool.SetRadius(4);
+            var finishingKernel = new RepairFinishingKernel();
+            var blurTool = new RepairFinishingController(session, finishingKernel, RepairFinishingKind.Blur);
+            blurTool.SetRadius(5);
+            var smudgeTool = new RepairFinishingController(session, finishingKernel, RepairFinishingKind.Smudge);
             var router = new CanvasInputRouter(session);
             var canvas = new DocumentCanvas();
             canvas.AttachSession(session);
-            canvas.AttachInputRouter(router, partTool, maskTool, patchTool, cloneTool);
+            canvas.AttachInputRouter(router, partTool, maskTool, patchTool, cloneTool, blurTool, smudgeTool);
             canvas.Present(session.Document!);
             canvas.Measure(new Size(800, 600)); canvas.Arrange(new Rect(0, 0, 800, 600));
             canvas.ActualSize();
@@ -163,6 +167,20 @@ public sealed class BitmapPresentationTests
             Assert.AreEqual(Visibility.Visible, sourceMarker.Visibility);
             Assert.AreEqual(Visibility.Visible, cursor.Visibility);
             Assert.AreEqual(cloneTool.Radius * 2 * session.Viewport.Projection.ScaleX,
+                cursor.Width, 0.001);
+            Assert.AreEqual(generation, canvas.BitmapGeneration);
+            Assert.AreEqual(revision, session.Document.Revision);
+            Assert.AreEqual(0, session.UndoCount);
+
+            var repair = new RepairLayer(new(0, 0, 20, 20), new byte[20 * 20 * 4]);
+            session.Execute(new AddLayer(repair));
+            session.Open(session.Document);
+            session.SelectLayer(repair.Id);
+            revision = session.Document!.Revision;
+            router.SetActiveTool(blurTool);
+            blurTool.PointerMove(new(10, 10), CanvasModifiers.None);
+            Assert.AreEqual(Visibility.Visible, cursor.Visibility);
+            Assert.AreEqual(blurTool.Radius * 2 * session.Viewport.Projection.ScaleX,
                 cursor.Width, 0.001);
             Assert.AreEqual(generation, canvas.BitmapGeneration);
             Assert.AreEqual(revision, session.Document.Revision);

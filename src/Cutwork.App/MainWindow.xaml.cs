@@ -16,6 +16,8 @@ public partial class MainWindow : Window
     private readonly MaskBrushController _maskTool;
     private readonly PatchToolController _patchTool;
     private readonly CloneRepairController _cloneTool;
+    private readonly RepairFinishingController _blurTool;
+    private readonly RepairFinishingController _smudgeTool;
     private readonly CanvasInputRouter _inputRouter;
     private DocumentPoint? _pointerPosition;
 
@@ -26,10 +28,14 @@ public partial class MainWindow : Window
         _maskTool = new MaskBrushController(_session);
         _patchTool = new PatchToolController(_session, new PatchSourceSampler());
         _cloneTool = new CloneRepairController(_session, new CloneRepairKernel());
+        var finishingKernel = new RepairFinishingKernel();
+        _blurTool = new RepairFinishingController(_session, finishingKernel, RepairFinishingKind.Blur);
+        _smudgeTool = new RepairFinishingController(_session, finishingKernel, RepairFinishingKind.Smudge);
         _inputRouter = new CanvasInputRouter(_session);
         InitializeLayerEditing();
         CanvasView.AttachSession(_session);
-        CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool, _cloneTool);
+        CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool, _cloneTool,
+            _blurTool, _smudgeTool);
         CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
         CanvasView.ViewportChanged += (_, _) => UpdateStatus();
         CanvasView.EditRejected += (_, e) => ShowEditError(e.Exception);
@@ -49,6 +55,16 @@ public partial class MainWindow : Window
             UpdateStatus();
         };
         _cloneTool.Changed += (_, _) =>
+        {
+            UpdatePhase4ToolUi();
+            UpdateStatus();
+        };
+        _blurTool.Changed += (_, _) =>
+        {
+            UpdatePhase4ToolUi();
+            UpdateStatus();
+        };
+        _smudgeTool.Changed += (_, _) =>
         {
             UpdatePhase4ToolUi();
             UpdateStatus();
@@ -125,6 +141,8 @@ public partial class MainWindow : Window
         MaskToolButton.IsEnabled = true;
         PatchToolButton.IsEnabled = true;
         CloneToolButton.IsEnabled = true;
+        BlurToolButton.IsEnabled = true;
+        SmudgeToolButton.IsEnabled = true;
         UpdatePreviewChecks();
         ApplyLocalization();
     }
