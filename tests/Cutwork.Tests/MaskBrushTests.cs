@@ -60,18 +60,20 @@ public sealed class MaskBrushTests
     [TestMethod]
     public void EraseAndTemporaryAltInverseRestorePrimaryAfterRelease()
     {
-        var (_, part, tool) = Create(maskValue: 255);
+        var (session, part, tool) = Create(maskValue: 255);
         tool.SetRadius(1);
         tool.SetPrimaryPolarity(MaskPolarity.Erase);
 
-        Stroke(tool, new(3, 3), CanvasModifiers.None);
-        Stroke(tool, new(6, 3), CanvasModifiers.Alt);
-        Stroke(tool, new(9, 3), CanvasModifiers.None);
+        tool.PointerDown(new(2, 5), 1, CanvasModifiers.None);
+        tool.PointerMove(new(6, 5), CanvasModifiers.Alt);
+        tool.PointerMove(new(10, 5), CanvasModifiers.None);
+        tool.PointerUp(new(10, 5), CanvasPointerButton.Left, CanvasModifiers.None);
 
-        Assert.AreEqual((byte)0, part.MaskAt(2, 2));
-        Assert.AreEqual((byte)255, part.MaskAt(5, 2));
-        Assert.AreEqual((byte)0, part.MaskAt(8, 2));
+        Assert.AreEqual((byte)0, part.MaskAt(1, 4));
+        Assert.AreEqual((byte)255, part.MaskAt(4, 4));
+        Assert.AreEqual((byte)0, part.MaskAt(9, 4));
         Assert.AreEqual(MaskPolarity.Erase, tool.PrimaryPolarity);
+        Assert.AreEqual(1, session.UndoCount);
     }
 
     [TestMethod]
