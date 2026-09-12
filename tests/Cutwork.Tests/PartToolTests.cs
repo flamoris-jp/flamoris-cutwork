@@ -115,13 +115,13 @@ public sealed class PartToolTests
         var maskBefore = tool.Snapshot().Mask.ToArray();
         var zoomBefore = session.Viewport.Zoom;
 
-        // Physical forward rotation is positive in WPF and shrinks inward.
-        router.Wheel(new(5, 5), 120, CanvasModifiers.None);
+        // Wheel down is negative in WPF and shrinks inward.
+        router.Wheel(new(5, 5), -120, CanvasModifiers.None);
         Assert.AreEqual(1, tool.Snapshot().Step);
         Assert.IsTrue(tool.Snapshot().Mask.ToArray().Count(value => value != 0)
             < maskBefore.Count(value => value != 0));
-        // Physical backward rotation restores outward.
-        router.Wheel(new(5, 5), -120, CanvasModifiers.None);
+        // Wheel up restores outward.
+        router.Wheel(new(5, 5), 120, CanvasModifiers.None);
         CollectionAssert.AreEqual(maskBefore, tool.Snapshot().Mask.ToArray());
         router.Wheel(new(5, 5), 120, CanvasModifiers.Control);
         Assert.IsTrue(session.Viewport.Zoom > zoomBefore);
