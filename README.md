@@ -4,15 +4,15 @@ FLAMORIS Cutwork is a standalone Windows-oriented image decomposition and repair
 
 Cutwork is intentionally separate from `flamoris-jp/flamoris-2D`.
 
-Its job is narrower:
+Its job is narrow:
 
-- open a normal illustration/image
-- quickly isolate only the parts that need to move
-- repair or expose hidden regions where necessary
-- manage the resulting layers/parts
-- export the prepared result for downstream animation work
+- open a normal illustration/image;
+- quickly isolate only the parts that need to move;
+- repair or expose hidden regions where necessary;
+- manage the resulting layers/parts; and
+- export the prepared result for downstream animation work.
 
-The product goal is not pixel-perfect semantic segmentation. The practical target is:
+The practical product target is:
 
 > **perceptual sufficiency × editing speed**
 
@@ -20,29 +20,26 @@ If a defect is invisible at normal playback scale, Cutwork should not force the 
 
 ## Current status
 
-The repository contains the preserved Python/Tkinter experiment and the first .NET 10 / WPF production foundation.
+The primary implementation is now the **C# / .NET 10 / WPF production application** under `src/`.
 
-The Python code is treated as an **executable reference / specification**, not as the production UI architecture. Production code lives under `src/` and does not import or execute it.
+The earlier Python/Tkinter implementation is preserved under [`experiments/python-tkinter/`](experiments/python-tkinter/) as an executable behavioral/reference experiment. Production code must not import or execute it.
 
-Current active work is tracked in GitHub Issues:
+Current milestone:
 
-- `#1` hands-on Guriguri / Clone Repair findings
-- `#2` Clone Paint performance profiling and responsiveness
-- `#3` Cutwork v0.1 standalone UI / architecture / i18n design
-- `#6` Python prototype performance baseline
-- `#8` Windows foundation and first real-image canvas
+- Phase 0: Python prototype performance baseline complete;
+- Phase 1: Windows foundation and first real-image canvas complete;
+- next: Phase 2, Document / Layer Stack / Compositor / Undo-Redo.
 
 ## Design authority
 
 - [`docs/decisions/0001-production-stack.md`](docs/decisions/0001-production-stack.md) — production stack decision and evaluated alternatives
 - [`docs/production-architecture.md`](docs/production-architecture.md) — application, document, tools, rendering, persistence, i18n, and migration architecture
 - [`docs/roadmap.md`](docs/roadmap.md) — phased implementation and hands-on acceptance roadmap
+- [`docs/python-prototype-benchmark.md`](docs/python-prototype-benchmark.md) — Phase 0 performance baseline
 
-## Production direction
+## Production application
 
-Cutwork should feel like a small conventional Windows graphics application rather than a collection of prototype controls.
-
-Planned layout:
+The production UI follows a conventional Windows image-editor layout:
 
 ```text
 +---------------------------------------------------------+
@@ -58,177 +55,86 @@ Planned layout:
 +----+--------------------------------------+-------------+
 ```
 
-- left: compact vertical tool icons
-- center: image/canvas viewport
-- right: Layers + contextual Properties
-- top: conventional application menus
-- Japanese-first UI through i18n resources
+Current Phase 1 behavior includes:
 
-The production toolbar should consolidate prototype modes into a smaller set of understandable tools.
+- PNG/JPEG import;
+- immutable Original asset;
+- `WriteableBitmap` presentation foundation;
+- Fit and Actual Size;
+- wheel zoom;
+- middle-button pan;
+- Space+drag pan;
+- DPI-aware document/viewport coordinates;
+- independent overlay presentation;
+- Japanese-first `.resx` resources with English switching; and
+- Original / Composite command boundary.
 
-## Run the production foundation
+### Run on Windows
 
-The Phase 1 application requires Windows and the .NET 10 SDK:
+Requires Windows and the .NET 10 SDK.
 
 ```powershell
 dotnet run --project src/Cutwork.App/Cutwork.App.csproj
 ```
 
-Build and run the deterministic production checks with:
+Build and test:
 
 ```powershell
 dotnet build Cutwork.sln --configuration Release
 dotnet test Cutwork.sln --configuration Release --no-build
 ```
 
-The current production checkpoint opens PNG/JPEG artwork and provides Fit, Actual Size, wheel zoom, middle-button pan, Space+drag pan, Japanese/English switching, and Original/Composite preview commands. Editable layers and tools begin in later phases.
-
-### Part Tool
-
-`Part Polygon` and `Polygon Guriguri` converge into one Part Tool.
-
-Expected interaction:
-
-1. draw a rough polygon/fence around the intended part
-2. Guriguri refinement is the normal behavior
-3. exact/manual correction remains available as fallback
-
-### Mask Brush
-
-`Mask Add` and `Mask Erase` converge into one brush.
-
-Preferred direction:
-
-- one circular brush cursor
-- temporary add/erase polarity switch with `Alt`
-
-### Patch Tool
-
-`Patch Source` and `Move Layer` are treated as phases of one Patch workflow rather than unrelated tools.
-
-### Clone Tool
-
-Preferred interaction direction:
-
-- circular brush cursor visible at all times
-- `Alt+click` selects clone source center
-- releasing `Alt` returns immediately to painting
-- wheel changes Clone brush diameter
-- `Ctrl+wheel` preserves viewport zoom
-
-The older rectangular Clone Source fence remains experimental reference behavior only unless later testing proves it useful.
-
-## Experimental reference implementation
-
-The current Python implementation includes several comparison entry points:
-
-- `app.py`
-- `app_polygon_guriguri.py`
-- `app_boundary_guriguri.py`
-- `app_guriguri.py`
-- `app_clone_guriguri.py`
-
-For current Guriguri + Clone Repair hands-on testing, the canonical experimental launcher is:
-
-```powershell
-python app_clone_guriguri.py
-```
-
-The other entry points are retained for comparison/reference and should not define the final application structure.
-
-## Experimental algorithms and findings
-
-### Polygon Guriguri
-
-A loose polygon acts as a hard search fence. The algorithm progressively removes pixels from the inside boundary toward likely visual boundaries using deterministic cost-based search.
-
-The useful interaction discovery is that the author can draw a rough 4–10 point fence, then refine it rather than manually placing dozens of exact polygon points.
-
-### Clone Repair
-
-Clone Repair copies pixels from the immutable original image into a repair layer.
-
-The current experimental implementation established:
-
-- source/destination relative offset semantics
-- optional Hole Only restriction
-- whole-stroke undo
-- local ROI clone computation
-- repair layer composition below Base
-
-Interactive performance is still under active investigation. The current Python/Tk/PIL display path should be profiled before choosing a production rendering stack.
-
-### Patch Repair
-
-Manual Patch Fill remains a useful non-generative fallback for hidden-region repair:
-
-- sample plausible source texture from the immutable original
-- translate / scale / rotate it behind a cutout hole
-- optionally apply light Blur / Smudge cleanup
-
-This proved more controllable than classical inpainting for eyelid/skin repair in the experiments.
-
-## Layer model discovered by the experiments
-
-The useful conceptual stack is:
-
-1. Part layers
-2. Base
-3. Patch / Repair layers
-
-Drawing order is effectively:
+## Repository layout
 
 ```text
-Patch / Repair -> Base -> Part
+src/                         C# / WPF production code
+tests/                       production deterministic tests
+experiments/python-tkinter/  preserved Python/Tkinter experiments
+docs/                        architecture, decisions, roadmap, benchmarks
+config/                      repository/product configuration retained for later phases
 ```
 
-This lets hidden-area repair appear through holes in Base while the extracted moving part remains above it.
+The repository root is production-oriented. Experimental Python launchers, modules, dependencies, and tests live under `experiments/python-tkinter/`.
 
-The production document model may evolve, but should preserve the user-visible semantics unless an accepted design explicitly replaces them.
+## Experimental Python/Tkinter reference
 
-## Run the current experiment on Windows
+The preserved experiment contains the behavior discoveries that informed the production design, including:
+
+- Guriguri selection behavior;
+- Clone Repair semantics;
+- immutable-original sampling;
+- Hole Only behavior;
+- Patch/Repair composition findings; and
+- deterministic regression tests for image operations.
+
+It does **not** define the production UI architecture.
+
+See [`experiments/python-tkinter/README.md`](experiments/python-tkinter/README.md) for setup, launchers, tests, and benchmark commands.
+
+The canonical late-stage prototype launcher remains:
 
 ```powershell
-cd C:\FLAMORIS\flamoris-cutwork
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python app_clone_guriguri.py
+python experiments/python-tkinter/app_clone_guriguri.py
 ```
 
-## Lightweight checks
+## Production direction
 
-```powershell
-python -m py_compile app_clone_guriguri.py clone_brush.py
-python -m unittest -v test_clone_brush.py
-```
+The planned production tool model remains intentionally small:
 
-For broader experimental regression coverage:
+- Part Tool: rough polygon/fence + Guriguri refinement;
+- Mask Brush: add/erase through one brush workflow;
+- Patch Tool: source selection + placement/transform;
+- Clone Tool: point-source repair using immutable Original;
+- Blur / Smudge: local repair finishing;
+- Hand/Pan: viewport-only navigation.
 
-```powershell
-python -m unittest -v \
-  test_image_ops.py \
-  test_guriguri.py \
-  test_boundary_guriguri.py \
-  test_polygon_guriguri.py \
-  test_clone_brush.py
-```
+The useful conceptual layer stack discovered by the experiments is:
 
-On PowerShell, run the files on one line or invoke the tests individually if preferred.
+1. Part layers;
+2. Base;
+3. Patch / Repair layers.
 
-## Current experimental limitations
-
-- Python/Tkinter/PIL redraw is not yet responsive enough for production Clone Paint.
-- multiple prototype launchers exist
-- polygon/mask edges are binary rather than full alpha matting
-- Smudge is deliberately simple
-- Patch transform is affine only
-- project persistence is not yet a production document format
-- undo/redo is local and prototype-scoped
-- no production Windows packaging yet
-- no generative AI requirement
-
-These are prototype limitations, not promises about the final product architecture.
+The accepted production architecture, not the old Tkinter window structure, is authoritative for implementation.
 
 ## Repository workflow
 
@@ -236,12 +142,13 @@ These are prototype limitations, not promises about the final product architectu
 
 Use small purpose-driven branches and commits. For meaningful changes:
 
-1. define the problem / acceptance criteria
-2. branch from `main`
-3. implement the smallest understandable change
-4. run the smallest relevant deterministic tests
-5. open a PR
-6. review before squash-merging to `main`
+1. define the problem and acceptance criteria;
+2. branch from `main`;
+3. implement the smallest understandable change;
+4. run the smallest relevant deterministic tests;
+5. perform hands-on verification when the risk is visual/interactive;
+6. open a PR;
+7. review before merging to `main`.
 
 Repository-wide AI/development rules are defined in [`AGENTS.md`](AGENTS.md).
 
