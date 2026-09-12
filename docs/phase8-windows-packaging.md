@@ -40,7 +40,8 @@ dotnet publish src/Cutwork.App/Cutwork.App.csproj `
 
 profileは`src/Cutwork.App/Properties/PublishProfiles/win-x64.pubxml`です。
 WPFの互換性と診断可能性を優先し、single-file、trimming、ReadyToRunは使用しません。
-入口となるproduct executableは`Cutwork.exe`だけです。
+satellite resourcesは製品が対応する日本語・英語に限定します。入口となるproduct
+executableは`Cutwork.exe`だけです。
 
 出力:
 

@@ -29,12 +29,14 @@ $profileRuntime = [string]$profileXml.Project.PropertyGroup.RuntimeIdentifier
 $profileSelfContained = [string]$profileXml.Project.PropertyGroup.SelfContained
 $profileConfiguration = [string]$profileXml.Project.PropertyGroup.Configuration
 $profileCopySymbols = [string]$profileXml.Project.PropertyGroup.CopyOutputSymbolsToPublishDirectory
+$profileLanguages = [string]$profileXml.Project.PropertyGroup.SatelliteResourceLanguages
 if ($projectVersion -cne $Version) {
     throw "Package version $Version does not match project VersionPrefix $projectVersion."
 }
 if ($profileRuntime -cne $RuntimeIdentifier -or $profileSelfContained -cne "true" -or
-    $profileConfiguration -cne $Configuration -or $profileCopySymbols -cne "false") {
-    throw "Publish profile must remain Release, win-x64, self-contained, and free of debug symbols."
+    $profileConfiguration -cne $Configuration -or $profileCopySymbols -cne "false" -or
+    $profileLanguages -cne "ja;en") {
+    throw "Publish profile must remain Release, win-x64, self-contained, JA/EN-only, and free of debug symbols."
 }
 
 function Remove-ExactPath {
@@ -106,6 +108,14 @@ $forbiddenPublishFiles = @(Get-ChildItem -LiteralPath $publishPath -File -Recurs
 if ($forbiddenPublishFiles.Count -ne 0) {
     $names = ($forbiddenPublishFiles | ForEach-Object FullName) -join "`n"
     throw "Forbidden source, debug, experiment, or unused dependency content was published:`n$names"
+}
+
+$unsupportedCultureDirectories = @(Get-ChildItem -LiteralPath $publishPath -Directory | Where-Object {
+    $_.Name -match '^[a-z]{2}(-[A-Za-z0-9]+)?$' -and $_.Name -notin @("ja", "en")
+})
+if ($unsupportedCultureDirectories.Count -ne 0) {
+    $names = ($unsupportedCultureDirectories | ForEach-Object Name) -join ", "
+    throw "Unsupported satellite resource cultures were published: $names"
 }
 
 New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
