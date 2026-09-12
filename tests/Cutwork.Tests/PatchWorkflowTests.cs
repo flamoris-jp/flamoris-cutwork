@@ -142,9 +142,10 @@ public sealed class PatchWorkflowTests
     public void TransformRecompositesTheOldAndNewUnionInsteadOfTheFullDocument()
     {
         var session = Session();
+        var document = session.Document!;
         var patch = new PatchLayer(new(1, 1, 2, 2), Enumerable.Repeat((byte)255, 16).ToArray());
         session.Execute(new AddLayer(patch));
-        using var cache = new CompositeCache(session.Document!);
+        using var cache = new CompositeCache(document);
         cache.RenderPending();
         var before = cache.CompositedPixelCount;
 
@@ -153,7 +154,7 @@ public sealed class PatchWorkflowTests
 
         Assert.AreEqual(new DocumentRect(1, 1, 6, 6), update.Region);
         Assert.AreEqual(36, cache.CompositedPixelCount - before);
-        Assert.IsTrue(update.Region.Width < session.Document.Dimensions.Width);
+        Assert.IsTrue(update.Region.Width < document.Dimensions.Width);
     }
 
     [TestMethod]

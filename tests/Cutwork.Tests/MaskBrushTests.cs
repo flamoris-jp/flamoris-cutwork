@@ -44,15 +44,16 @@ public sealed class MaskBrushTests
     public void LocalStrokeRecompositesOnlyItsDirtyRoi()
     {
         var (session, _, tool) = Create(maskValue: 0);
+        var document = session.Document!;
         tool.SetRadius(1);
-        using var cache = new CompositeCache(session.Document!);
+        using var cache = new CompositeCache(document);
         cache.RenderPending();
         var before = cache.CompositedPixelCount;
 
         Stroke(tool, new(5, 5), CanvasModifiers.None);
         var update = cache.RenderPending()!;
 
-        Assert.IsTrue(update.Region.Width < session.Document.Dimensions.Width);
+        Assert.IsTrue(update.Region.Width < document.Dimensions.Width);
         Assert.IsTrue(cache.CompositedPixelCount - before < 12 * 12);
     }
 
