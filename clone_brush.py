@@ -8,6 +8,23 @@ Rect = tuple[int, int, int, int]
 Point = tuple[int, int]
 
 
+def clone_segment_geometry(
+    start: Point,
+    end: Point,
+    radius: int,
+    width: int,
+    height: int,
+) -> tuple[Rect, int]:
+    """Return the exact kernel ROI and a raster-centerline point estimate."""
+    radius = max(1, int(radius))
+    x0 = max(0, min(start[0], end[0]) - radius - 2)
+    x1 = min(width, max(start[0], end[0]) + radius + 3)
+    y0 = max(0, min(start[1], end[1]) - radius - 2)
+    y1 = min(height, max(start[1], end[1]) + radius + 3)
+    point_count = max(abs(end[0] - start[0]), abs(end[1] - start[1])) + 1
+    return (x0, y0, x1, y1), point_count
+
+
 def normalize_rect(first: Point, second: Point, width: int, height: int) -> Rect:
     """Return an image-clamped, half-open rectangle (x0, y0, x1, y1)."""
     x0, x1 = sorted((int(first[0]), int(second[0])))
@@ -58,10 +75,13 @@ def paint_aligned_clone(
         return 0
 
     radius = max(1, int(radius))
-    x0 = max(0, min(stroke_start[0], stroke_end[0]) - radius - 2)
-    x1 = min(width, max(stroke_start[0], stroke_end[0]) + radius + 3)
-    y0 = max(0, min(stroke_start[1], stroke_end[1]) - radius - 2)
-    y1 = min(height, max(stroke_start[1], stroke_end[1]) + radius + 3)
+    (x0, y0, x1, y1), _ = clone_segment_geometry(
+        stroke_start,
+        stroke_end,
+        radius,
+        width,
+        height,
+    )
     if x0 >= x1 or y0 >= y1:
         return 0
 
