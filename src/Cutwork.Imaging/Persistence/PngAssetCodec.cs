@@ -25,10 +25,10 @@ internal static class PngAssetCodec
     }
 
     internal static byte[] DecodeBgra32(ReadOnlySpan<byte> png, PixelSize expected) =>
-        Decode(png, expected, PixelFormats.Bgra32, checked(expected.Width * 4));
+        Decode(png, expected, PixelFormats.Bgra32, checked(expected.Width * 4), colorType: 6);
 
     internal static byte[] DecodeGray8(ReadOnlySpan<byte> png, PixelSize expected) =>
-        Decode(png, expected, PixelFormats.Gray8, expected.Width);
+        Decode(png, expected, PixelFormats.Gray8, expected.Width, colorType: 0);
 
     private static byte[] Encode(PixelSize size, byte[] pixels, int stride, PixelFormat format)
     {
@@ -41,9 +41,9 @@ internal static class PngAssetCodec
     }
 
     private static byte[] Decode(ReadOnlySpan<byte> png, PixelSize expected,
-        PixelFormat targetFormat, int stride)
+        PixelFormat targetFormat, int stride, byte colorType)
     {
-        ValidateHeader(png, expected);
+        ValidateHeader(png, expected, colorType);
         try
         {
             using var input = new MemoryStream(png.ToArray(), writable: false);
@@ -54,7 +54,7 @@ internal static class PngAssetCodec
             if (source.PixelWidth != expected.Width || source.PixelHeight != expected.Height)
                 throw new FlimgException(FlimgError.AssetDimensionMismatch);
             if (source.Format != targetFormat)
-                source = new FormatConvertedBitmap(source, targetFormat, null, 0);
+                throw new FlimgException(FlimgError.MalformedPng);
             var result = new byte[checked(stride * expected.Height)];
             source.CopyPixels(result, stride, 0);
             return result;
@@ -67,14 +67,19 @@ internal static class PngAssetCodec
         }
     }
 
-    private static void ValidateHeader(ReadOnlySpan<byte> png, PixelSize expected)
+    private static void ValidateHeader(ReadOnlySpan<byte> png, PixelSize expected, byte colorType)
     {
-        if (png.Length < 24 || !png[..8].SequenceEqual(Signature)
+        if (png.Length < 33 || !png[..8].SequenceEqual(Signature)
+            || BinaryPrimitives.ReadUInt32BigEndian(png.Slice(8, 4)) != 13
             || !png.Slice(12, 4).SequenceEqual("IHDR"u8))
             throw new FlimgException(FlimgError.MalformedPng);
         var width = BinaryPrimitives.ReadUInt32BigEndian(png.Slice(16, 4));
         var height = BinaryPrimitives.ReadUInt32BigEndian(png.Slice(20, 4));
         if (width != expected.Width || height != expected.Height)
             throw new FlimgException(FlimgError.AssetDimensionMismatch);
+        // v1 assets are canonical RGBA8 (Original/Patch/Repair) or Gray8 (Part).
+        // Compression 0, filter 0, and interlace 0/1 are the complete PNG-valid IHDR values.
+        if (png[24] != 8 || png[25] != colorType || png[26] != 0 || png[27] != 0 || png[28] > 1)
+            throw new FlimgException(FlimgError.MalformedPng);
     }
 }

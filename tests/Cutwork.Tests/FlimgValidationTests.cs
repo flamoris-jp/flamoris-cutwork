@@ -4,6 +4,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging.Persistence;
 
 namespace Flamoris.Cutwork.Tests;
@@ -151,6 +154,44 @@ public sealed class FlimgValidationTests
     }
 
     [TestMethod]
+    public void CanonicalOriginalRejectsRgbIndexedAndGrayscalePngs()
+    {
+        var size = new PixelSize(2, 2);
+        var rgb = EncodeFixturePng(size, PixelFormats.Rgb24);
+        var indexed = EncodeFixturePng(size, PixelFormats.Indexed8,
+            new BitmapPalette([Colors.Black, Colors.White]));
+        var grayscale = EncodeFixturePng(size, PixelFormats.Gray8);
+        Assert.AreEqual((byte)2, rgb[25]);
+        Assert.AreEqual((byte)3, indexed[25]);
+        Assert.AreEqual((byte)0, grayscale[25]);
+
+        AssertPngRejected(() => PngAssetCodec.DecodeBgra32(rgb, size));
+        AssertPngRejected(() => PngAssetCodec.DecodeBgra32(indexed, size));
+        AssertPngRejected(() => PngAssetCodec.DecodeBgra32(grayscale, size));
+    }
+
+    [TestMethod]
+    public void CanonicalPartRejectsRgbaPng()
+    {
+        var size = new PixelSize(2, 2);
+        var rgba = EncodeFixturePng(size, PixelFormats.Bgra32);
+        Assert.AreEqual((byte)6, rgba[25]);
+
+        AssertPngRejected(() => PngAssetCodec.DecodeGray8(rgba, size));
+    }
+
+    [TestMethod]
+    public void CanonicalRgba8AndGray8PngsAreAccepted()
+    {
+        var size = new PixelSize(2, 2);
+        var rgba = EncodeFixturePng(size, PixelFormats.Bgra32);
+        var grayscale = EncodeFixturePng(size, PixelFormats.Gray8);
+
+        Assert.AreEqual(16, PngAssetCodec.DecodeBgra32(rgba, size).Length);
+        Assert.AreEqual(4, PngAssetCodec.DecodeGray8(grayscale, size).Length);
+    }
+
+    [TestMethod]
     public void DeclaredAndManifestSizeLimitsAreRejected()
     {
         AssertRejected(FlimgError.InvalidDimensions, MutateManifest(root =>
@@ -292,6 +333,28 @@ public sealed class FlimgValidationTests
             return;
         }
         Assert.Fail($"Central directory entry not found: {path}");
+    }
+
+    private static byte[] EncodeFixturePng(PixelSize size, PixelFormat format,
+        BitmapPalette? palette = null)
+    {
+        var stride = checked((size.Width * format.BitsPerPixel + 7) / 8);
+        var pixels = new byte[checked(stride * size.Height)];
+        if (format == PixelFormats.Bgra32)
+            for (var index = 3; index < pixels.Length; index += 4) pixels[index] = 255;
+        var bitmap = BitmapSource.Create(size.Width, size.Height, 96, 96, format, palette,
+            pixels, stride);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var output = new MemoryStream();
+        encoder.Save(output);
+        return output.ToArray();
+    }
+
+    private static void AssertPngRejected(Action action)
+    {
+        var exception = Assert.ThrowsExactly<FlimgException>(action);
+        Assert.AreEqual(FlimgError.MalformedPng, exception.Error);
     }
 
     private static void AssertRejected(FlimgError expected, byte[] bytes)
