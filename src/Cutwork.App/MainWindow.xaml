@@ -72,6 +72,12 @@
                                   Padding="3"
                                   IsEnabled="False"
                                   Click="PatchTool_Click" />
+                    <ToggleButton x:Name="CloneToolButton"
+                                  MinHeight="42"
+                                  Margin="0,4,0,0"
+                                  Padding="3"
+                                  IsEnabled="False"
+                                  Click="CloneTool_Click" />
                     <Button x:Name="PartCommitButton"
                             Margin="0,10,0,0"
                             Padding="3"
@@ -158,6 +164,13 @@
                                 <TextBox x:Name="PatchRotationEditor" Margin="0,4,0,6" />
                                 <Button x:Name="PatchApplyButton" HorizontalAlignment="Left" Padding="8,3"
                                         Click="PatchApply_Click" />
+                            </StackPanel>
+                            <StackPanel x:Name="ClonePropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
+                                <Separator />
+                                <TextBlock x:Name="CloneRadiusLabel" Margin="0,8,0,0" />
+                                <TextBox x:Name="CloneRadiusEditor" Margin="0,4,0,6" />
+                                <Button x:Name="CloneApplyButton" HorizontalAlignment="Left" Padding="8,3"
+                                        Click="CloneApply_Click" />
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
