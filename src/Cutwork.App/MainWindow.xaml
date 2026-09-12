@@ -14,7 +14,10 @@
                 <Separator />
                 <MenuItem x:Name="ExitMenuItem" Click="ExitMenuItem_Click" />
             </MenuItem>
-            <MenuItem x:Name="EditMenu" />
+            <MenuItem x:Name="EditMenu">
+                <MenuItem x:Name="UndoMenuItem" />
+                <MenuItem x:Name="RedoMenuItem" />
+            </MenuItem>
             <MenuItem x:Name="ViewMenu">
                 <MenuItem x:Name="FitMenuItem" IsEnabled="False" Click="FitMenuItem_Click" />
                 <MenuItem x:Name="ActualSizeMenuItem" IsEnabled="False" Click="ActualSizeMenuItem_Click" />
@@ -29,7 +32,9 @@
             </MenuItem>
             <MenuItem x:Name="LayerMenu" />
             <MenuItem x:Name="ExportMenu" />
-            <MenuItem x:Name="HelpMenu" />
+            <MenuItem x:Name="HelpMenu">
+                <MenuItem x:Name="DeveloperFixtureMenuItem" Visibility="Collapsed" IsEnabled="False" Click="DeveloperFixture_Click" />
+            </MenuItem>
         </Menu>
 
         <Border DockPanel.Dock="Bottom" Background="#292B2F" Padding="8,5">
@@ -58,8 +63,39 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <GroupBox x:Name="LayersGroup" Margin="8,8,8,4" Foreground="#E7E7E7" />
-                <GroupBox x:Name="PropertiesGroup" Grid.Row="1" Margin="8,4,8,8" Foreground="#E7E7E7" />
+                <GroupBox x:Name="LayersGroup" Margin="8,8,8,4" Foreground="#E7E7E7">
+                    <DockPanel>
+                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                            <Button x:Name="LayerUpButton" Margin="2" Padding="6,3" Click="LayerUp_Click" />
+                            <Button x:Name="LayerDownButton" Margin="2" Padding="6,3" Click="LayerDown_Click" />
+                            <Button x:Name="LayerDeleteButton" Margin="2" Padding="6,3" Click="LayerDelete_Click" />
+                        </WrapPanel>
+                        <ListBox x:Name="LayerList" Background="#202124" Foreground="#E7E7E7"
+                                 SelectionChanged="LayerSelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="2,5">
+                                        <CheckBox IsChecked="{Binding Visible, Mode=OneWay}" Tag="{Binding Id}"
+                                                  ToolTip="{Binding VisibilityLabel}" Click="LayerVisibility_Click" Margin="0,0,8,0" />
+                                        <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="170" ToolTip="{Binding KindLabel}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </GroupBox>
+                <GroupBox x:Name="PropertiesGroup" Grid.Row="1" Margin="8,4,8,8" Foreground="#E7E7E7">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="6">
+                            <TextBlock x:Name="SelectedKindText" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <TextBlock x:Name="LayerNameLabel" />
+                            <TextBox x:Name="LayerNameEditor" Margin="0,4,0,4" />
+                            <Button x:Name="LayerRenameButton" HorizontalAlignment="Left" Padding="8,3" Click="LayerRename_Click" />
+                            <TextBlock x:Name="LayerBoundsText" Margin="0,12,0,8" TextWrapping="Wrap" />
+                            <TextBlock x:Name="LayerKindDescription" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </GroupBox>
             </Grid>
         </Grid>
     </DockPanel>

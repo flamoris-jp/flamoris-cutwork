@@ -32,4 +32,33 @@
   <data name="Error_UnsupportedFormat" xml:space="preserve"><value>PNGまたはJPEGファイルを選択してください。</value></data>
   <data name="Error_InvalidImage" xml:space="preserve"><value>画像ファイルが壊れているか、読み取れません。</value></data>
   <data name="Error_IoFailure" xml:space="preserve"><value>画像ファイルへアクセスできません。</value></data>
+  <data name="Edit_Undo" xml:space="preserve"><value>元に戻す</value></data>
+  <data name="Edit_Redo" xml:space="preserve"><value>やり直す</value></data>
+  <data name="Developer_AddLayers" xml:space="preserve"><value>開発用：確認レイヤーを追加</value></data>
+  <data name="Layer_MoveUp" xml:space="preserve"><value>上へ</value></data>
+  <data name="Layer_MoveDown" xml:space="preserve"><value>下へ</value></data>
+  <data name="Layer_Delete" xml:space="preserve"><value>削除</value></data>
+  <data name="Layer_Name" xml:space="preserve"><value>名前</value></data>
+  <data name="Layer_Rename" xml:space="preserve"><value>名前を適用</value></data>
+  <data name="Layer_Visible" xml:space="preserve"><value>表示／非表示</value></data>
+  <data name="LayerKind_Base" xml:space="preserve"><value>ベース</value></data>
+  <data name="LayerKind_Part" xml:space="preserve"><value>パーツ</value></data>
+  <data name="LayerKind_Patch" xml:space="preserve"><value>パッチ</value></data>
+  <data name="LayerKind_Repair" xml:space="preserve"><value>補修・ペイント</value></data>
+  <data name="Properties_NoSelection" xml:space="preserve"><value>レイヤーを選択してください</value></data>
+  <data name="Layer_Bounds" xml:space="preserve"><value>範囲：X {0}, Y {1} / {2} × {3} px</value></data>
+  <data name="LayerDescription_Base" xml:space="preserve"><value>元画像から生成される固定レイヤーです。移動・削除はできません。パーツを非表示にしても穴は残ります。</value></data>
+  <data name="LayerDescription_Part" xml:space="preserve"><value>元画像をマスクで切り出したパーツです。ベースより上の範囲で並べ替えできます。</value></data>
+  <data name="LayerDescription_Patch" xml:space="preserve"><value>局所画像を保持する下塗りパッチです。配置・拡縮・回転の操作は後のフェーズで追加します。</value></data>
+  <data name="LayerDescription_Repair" xml:space="preserve"><value>補修用の下塗り画素レイヤーです。ベースより下の範囲で並べ替えできます。</value></data>
+  <data name="Status_UnsavedMarker" xml:space="preserve"><value> — 未保存</value></data>
+  <data name="Edit_ErrorTitle" xml:space="preserve"><value>編集できません</value></data>
+  <data name="EditError_NoDocument" xml:space="preserve"><value>先に画像を開いてください。</value></data>
+  <data name="EditError_MissingLayer" xml:space="preserve"><value>対象のレイヤーが見つかりません。</value></data>
+  <data name="EditError_BaseFixed" xml:space="preserve"><value>ベースは移動・削除できません。</value></data>
+  <data name="EditError_BandCrossing" xml:space="preserve"><value>ベースを越えて並べ替えることはできません。</value></data>
+  <data name="EditError_InvalidLayer" xml:space="preserve"><value>このレイヤーは追加できません。</value></data>
+  <data name="EditError_InvalidPatch" xml:space="preserve"><value>編集範囲または画素データが無効です。</value></data>
+  <data name="EditError_HistoryBudgetExceeded" xml:space="preserve"><value>この操作は履歴のメモリ上限を超えたため取り消しました。</value></data>
+  <data name="EditError_TransactionActive" xml:space="preserve"><value>進行中の編集を確定または取り消してください。</value></data>
 </root>

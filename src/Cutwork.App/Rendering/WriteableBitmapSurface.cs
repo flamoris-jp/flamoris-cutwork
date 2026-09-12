@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Flamoris.Cutwork.Core;
+using Flamoris.Cutwork.Imaging;
 
 namespace Flamoris.Cutwork.App.Rendering;
 
@@ -10,6 +11,31 @@ public sealed class WriteableBitmapSurface
     public WriteableBitmap? Bitmap { get; private set; }
 
     public long Generation { get; private set; }
+    public DocumentRect LastUpdatedRegion { get; private set; }
+    public long TransferredPixelCount { get; private set; }
+
+    public void Clear() => Bitmap = null;
+
+    public void Initialize(PixelSize dimensions)
+    {
+        Bitmap = new WriteableBitmap(dimensions.Width, dimensions.Height, 96, 96, PixelFormats.Pbgra32, null);
+        Generation++;
+    }
+
+    public void Apply(CompositeUpdate update)
+    {
+        var bitmap = Bitmap ?? throw new InvalidOperationException("Surface is not initialized.");
+        var region = update.Region;
+        if (region.IsEmpty) return;
+        if (!new DocumentRect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight).Contains(region) ||
+            update.PremultipliedBgra.Length != checked(region.Width * region.Height * 4))
+            throw new ArgumentException("Invalid presentation region.", nameof(update));
+        // Packed ROI source with an explicit destination. No full-frame copy or bitmap replacement.
+        bitmap.WritePixels(new Int32Rect(0, 0, region.Width, region.Height),
+            update.PremultipliedBgra, region.Width * 4, region.X, region.Y);
+        LastUpdatedRegion = region;
+        TransferredPixelCount += (long)region.Width * region.Height;
+    }
 
     public void PresentOriginal(OriginalAsset original)
     {
@@ -31,6 +57,8 @@ public sealed class WriteableBitmapSurface
             0);
         Bitmap = bitmap;
         Generation++;
+        LastUpdatedRegion = DocumentRect.FromSize(dimensions);
+        TransferredPixelCount += (long)dimensions.Width * dimensions.Height;
     }
 
     private static void PremultiplyInPlace(Span<byte> bgra32)
@@ -45,5 +73,5 @@ public sealed class WriteableBitmapSurface
     }
 
     private static byte Premultiply(byte color, byte alpha) =>
-        (byte)((color * alpha + 127) / 255);
+        CompositeCache.Multiply(color, alpha);
 }

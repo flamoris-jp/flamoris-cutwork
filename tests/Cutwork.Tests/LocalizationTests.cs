@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
+using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.App;
 
 namespace Flamoris.Cutwork.Tests;
@@ -24,5 +26,20 @@ public sealed class LocalizationTests
 
         Assert.AreEqual("ja-JP", localization.Culture.Name);
         Assert.AreEqual("ファイル", localization["Menu_File"]);
+    }
+
+    [TestMethod]
+    public void CatalogPlaceholdersAndEditErrorCoverageMatch()
+    {
+        var japanese = new LocalizationService();
+        var english = new LocalizationService(); english.SetCulture(new CultureInfo("en-US"));
+        var keys = LocalizationService.GetKeys(new CultureInfo("ja-JP"));
+        foreach (var key in keys)
+        {
+            var ja = Regex.Matches(japanese[key], @"\{(\d+)[^}]*\}").Select(match => match.Groups[1].Value).ToArray();
+            var en = Regex.Matches(english[key], @"\{(\d+)[^}]*\}").Select(match => match.Groups[1].Value).ToArray();
+            CollectionAssert.AreEquivalent(ja, en, key);
+        }
+        foreach (var error in Enum.GetValues<EditError>()) Assert.IsTrue(keys.Contains($"EditError_{error}"));
     }
 }

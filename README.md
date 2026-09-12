@@ -84,6 +84,26 @@ dotnet build Cutwork.sln --configuration Release
 dotnet test Cutwork.sln --configuration Release --no-build
 ```
 
+### Phase 2 developer checkpoint
+
+Phase 2 adds the authored layer stack, Layers/Properties panels, partial composition,
+and transactional Undo/Redo. End-user creation tools begin in Phase 3.
+
+```powershell
+dotnet run --project src/Cutwork.App/Cutwork.App.csproj -- --developer
+```
+
+Open an image, then use **Help → Developer: Add Fixture Layers** (Japanese:
+**ヘルプ → 開発用：確認レイヤーを追加**). This adds a central rectangular Part and
+two colored underpaint layers in one transaction. Hide the Part to inspect the
+hole and repairs; add the fixture twice to test foreground reordering. Rename,
+toggle visibility, reorder within a band, delete, Undo (Ctrl+Z), and Redo (Ctrl+Y).
+Base cannot move or be deleted. The unsaved marker is session state only: project
+Save/Open and `.flimg` are not implemented yet.
+
+See [Phase 2 editing spine](docs/phase2-editing-spine.md) for pixel, dirty-region,
+history, and memory-budget contracts.
+
 ## Repository layout
 
 ```text
