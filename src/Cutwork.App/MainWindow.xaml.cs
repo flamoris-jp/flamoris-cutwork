@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeLayerEditing();
         CanvasView.AttachSession(_session);
         CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
         CanvasView.ViewportChanged += (_, _) => UpdateStatus();
@@ -49,6 +50,7 @@ public partial class MainWindow : Window
         UpdateStatus();
         JapaneseMenuItem.IsChecked = text.Culture.Name == "ja-JP";
         EnglishMenuItem.IsChecked = text.Culture.Name == "en-US";
+        LocalizeLayerEditing();
     }
 
     private void OpenMenuItem_Click(object sender, RoutedEventArgs e)
@@ -123,6 +125,7 @@ public partial class MainWindow : Window
 
         var document = _session.Document;
         Title = $"{text["AppTitle"]} — {document.Original.SourceName}";
+        if (_session.IsDirty) Title += text["Status_UnsavedMarker"];
         StatusText.Text = _pointerPosition is { } point
             ? string.Format(
                 text.Culture,
