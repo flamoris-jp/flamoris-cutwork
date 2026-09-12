@@ -37,7 +37,7 @@ These exist for comparison and migration evidence. They should not drive the pro
 Run the complete experiment regression suite from this directory:
 
 ```powershell
-python -m unittest discover -s tests -p "test_*.py" -v
+python -m unittest discover -s tests -t . -p "test_*.py" -v
 ```
 
 Useful focused checks:
