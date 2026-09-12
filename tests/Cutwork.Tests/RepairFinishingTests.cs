@@ -110,9 +110,9 @@ public sealed class RepairFinishingTests
     public void RadiusStrengthAndWheelStayWithinDocumentSpaceBounds()
     {
         var (session, _, tool) = Create(RepairFinishingKind.Blur);
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => tool.SetRadius(.49));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => tool.SetStrength(0));
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => tool.SetStrength(1.01));
+        AssertOutOfRange(() => tool.SetRadius(.49));
+        AssertOutOfRange(() => tool.SetStrength(0));
+        AssertOutOfRange(() => tool.SetStrength(1.01));
         tool.SetRadius(12);
         tool.SetStrength(.35);
         var router = new CanvasInputRouter(session);
@@ -225,6 +225,18 @@ public sealed class RepairFinishingTests
         tool.PointerDown(from, 1, CanvasModifiers.None);
         tool.PointerMove(to, CanvasModifiers.None);
         tool.PointerUp(to, CanvasPointerButton.Left, CanvasModifiers.None);
+    }
+
+    private static void AssertOutOfRange(Action action)
+    {
+        try
+        {
+            action();
+            Assert.Fail("Expected ArgumentOutOfRangeException.");
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+        }
     }
 
     private static (EditorSession Session, RepairLayer Repair, RepairFinishingController Tool) Create(
