@@ -20,15 +20,17 @@ If a defect is invisible at normal playback scale, Cutwork should not force the 
 
 ## Current status
 
-The repository currently contains the preserved Python/Tkinter experimental implementation that established the core interaction ideas and classical image-processing behavior.
+The repository contains the preserved Python/Tkinter experiment and the first .NET 10 / WPF production foundation.
 
-That code is now treated as an **executable reference / specification**, not as the final production UI architecture.
+The Python code is treated as an **executable reference / specification**, not as the production UI architecture. Production code lives under `src/` and does not import or execute it.
 
 Current active work is tracked in GitHub Issues:
 
 - `#1` hands-on Guriguri / Clone Repair findings
 - `#2` Clone Paint performance profiling and responsiveness
 - `#3` Cutwork v0.1 standalone UI / architecture / i18n design
+- `#6` Python prototype performance baseline
+- `#8` Windows foundation and first real-image canvas
 
 ## Design authority
 
@@ -63,6 +65,23 @@ Planned layout:
 - Japanese-first UI through i18n resources
 
 The production toolbar should consolidate prototype modes into a smaller set of understandable tools.
+
+## Run the production foundation
+
+The Phase 1 application requires Windows and the .NET 10 SDK:
+
+```powershell
+dotnet run --project src/Cutwork.App/Cutwork.App.csproj
+```
+
+Build and run the deterministic production checks with:
+
+```powershell
+dotnet build Cutwork.sln --configuration Release
+dotnet test Cutwork.sln --configuration Release --no-build
+```
+
+The current production checkpoint opens PNG/JPEG artwork and provides Fit, Actual Size, wheel zoom, middle-button pan, Space+drag pan, Japanese/English switching, and Original/Composite preview commands. Editable layers and tools begin in later phases.
 
 ### Part Tool
 
@@ -207,7 +226,6 @@ On PowerShell, run the files on one line or invoke the tests individually if pre
 - project persistence is not yet a production document format
 - undo/redo is local and prototype-scoped
 - no production Windows packaging yet
-- no production i18n layer yet
 - no generative AI requirement
 
 These are prototype limitations, not promises about the final product architecture.
