@@ -185,18 +185,26 @@ public sealed class CloneRepairController : ICanvasToolInput
     {
         if (samples.Count == 0 || _repair is null || _transaction is null || _strokeOffset is not { } offset)
             return;
+        var repair = _repair;
+        var transaction = _transaction;
         try
         {
-            var patch = _kernel.CreatePatch(_session.Document!.Original, _repair, samples, offset, Radius);
-            if (!patch.Region.IsEmpty && patch.HasChanges)
+            foreach (var batch in StrokeSampler.Batch(samples))
             {
-                _transaction.Apply(new RasterPatch(_repair.Id, patch.Region, patch.StraightBgra.Span));
-                _hasRasterChange = true;
+                transaction.ApplyBatch(() =>
+                {
+                    var patch = _kernel.CreatePatch(_session.Document!.Original, repair,
+                        batch, offset, Radius);
+                    if (patch.Region.IsEmpty || !patch.HasChanges) return;
+                    transaction.Apply(new RasterPatch(repair.Id, patch.Region,
+                        patch.StraightBgra.Span));
+                    _hasRasterChange = true;
+                });
             }
         }
         catch
         {
-            _transaction.Cancel();
+            transaction.Cancel();
             ClearStroke();
             Status = new(CloneRepairMessage.Cancelled);
             NotifyChanged();

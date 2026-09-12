@@ -151,19 +151,39 @@ public sealed class MaskBrushController : ICanvasToolInput
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples, MaskPolarity polarity)
     {
         if (samples.Count == 0 || _part is null || _transaction is null) return;
+        var part = _part;
+        var transaction = _transaction;
+        try
+        {
+            foreach (var batch in StrokeSampler.Batch(samples))
+                transaction.ApplyBatch(() => ApplySampleBatch(transaction, part, batch, polarity));
+        }
+        catch
+        {
+            transaction.Cancel();
+            ClearStroke();
+            Status = new(MaskBrushMessage.Cancelled);
+            NotifyChanged();
+            throw;
+        }
+    }
+
+    private void ApplySampleBatch(EditTransaction transaction, PartLayer part,
+        IReadOnlyList<DocumentPoint> samples, MaskPolarity polarity)
+    {
         var region = default(DocumentRect);
         foreach (var sample in samples)
         {
             var dab = DabBounds(sample);
-            region = region.Union(polarity == MaskPolarity.Add ? dab : dab.Intersect(_part.Bounds));
+            region = region.Union(polarity == MaskPolarity.Add ? dab : dab.Intersect(part.Bounds));
         }
         if (region.IsEmpty) return;
 
         // A disconnected click must not inflate a compact Part into a near-full-frame rectangle.
         // Continuous sampled strokes naturally overlap the current local surface as they cross its edge.
-        if (polarity == MaskPolarity.Add && region.Intersect(_part.Bounds).IsEmpty) return;
+        if (polarity == MaskPolarity.Add && region.Intersect(part.Bounds).IsEmpty) return;
 
-        var after = _part.CopyMaskWithTransparentOutside(region);
+        var after = part.CopyMaskWithTransparentOutside(region);
         var value = polarity == MaskPolarity.Add ? (byte)255 : (byte)0;
         var radiusSquared = Radius * Radius;
         for (var y = region.Y; y < region.Bottom; y++)
@@ -176,14 +196,7 @@ public sealed class MaskBrushController : ICanvasToolInput
                     + (centerY - sample.Y) * (centerY - sample.Y) <= radiusSquared)) continue;
             after[(y - region.Y) * region.Width + x - region.X] = value;
         }
-        try { _transaction.Apply(new MaskPatch(_part.Id, region, after)); }
-        catch
-        {
-            ClearStroke();
-            Status = new(MaskBrushMessage.Cancelled);
-            NotifyChanged();
-            throw;
-        }
+        transaction.Apply(new MaskPatch(part.Id, region, after));
     }
 
     private DocumentRect DabBounds(DocumentPoint point)

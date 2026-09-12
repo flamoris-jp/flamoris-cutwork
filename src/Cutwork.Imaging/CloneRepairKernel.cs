@@ -15,6 +15,8 @@ public sealed class CloneRepairKernel : ICloneRepairKernel
             throw new ArgumentOutOfRangeException(nameof(offset));
         if (!double.IsFinite(radius) || radius <= 0) throw new ArgumentOutOfRangeException(nameof(radius));
         if (destinationSamples.Count == 0) return default;
+        if (destinationSamples.Count > StrokeSampler.MaximumBatchSamples)
+            throw new ArgumentOutOfRangeException(nameof(destinationSamples));
 
         var region = DestinationBounds(destinationSamples, radius, original.Dimensions);
         if (region.IsEmpty) return default;

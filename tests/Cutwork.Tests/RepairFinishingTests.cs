@@ -95,10 +95,12 @@ public sealed class RepairFinishingTests
     }
 
     [TestMethod]
-    public void SmudgeSamplingIsStableAcrossSparseAndDensePointerEvents()
+    [DataRow(RepairFinishingKind.Blur)]
+    [DataRow(RepairFinishingKind.Smudge)]
+    public void SamplingIsStableAcrossSparseAndDensePointerEvents(RepairFinishingKind kind)
     {
-        var sparse = Create(RepairFinishingKind.Smudge);
-        var dense = Create(RepairFinishingKind.Smudge);
+        var sparse = Create(kind);
+        var dense = Create(kind);
         sparse.Tool.SetRadius(1);
         dense.Tool.SetRadius(1);
 
@@ -231,6 +233,31 @@ public sealed class RepairFinishingTests
         CollectionAssert.AreEqual(bytes, repair.CopyPixels(repair.Bounds));
     }
 
+    [TestMethod]
+    [DataRow(RepairFinishingKind.Blur)]
+    [DataRow(RepairFinishingKind.Smudge)]
+    public void LongSparseDiagonalCoalescesKernelWorkIntoBoundedPublications(
+        RepairFinishingKind kind)
+    {
+        var kernel = new RecordingFinishingKernel();
+        var (session, _, tool) = Create(kind, 128, 128, kernel: kernel);
+        tool.SetRadius(1);
+        tool.PointerDown(new(4.5, 4.5), 1, CanvasModifiers.None);
+        kernel.CallCount = 0;
+        var publications = 0;
+        session.Document!.Changed += (_, _) => publications++;
+
+        tool.PointerMove(new(123.5, 123.5), CanvasModifiers.None);
+        tool.PointerUp(new(123.5, 123.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        Assert.IsTrue(kernel.CallCount > StrokeSampler.MaximumBatchSamples);
+        Assert.IsTrue(publications < kernel.CallCount,
+            $"Expected batched publication, saw {publications} for {kernel.CallCount} kernel calls.");
+        Assert.IsTrue(publications <= (kernel.CallCount + StrokeSampler.MaximumBatchSamples - 1)
+            / StrokeSampler.MaximumBatchSamples + 1);
+        Assert.AreEqual(1, session.UndoCount);
+    }
+
     private static void VerifyCancel(Func<RepairFinishingController, CanvasInputEffects> cancel)
     {
         var (session, repair, tool) = Create(RepairFinishingKind.Blur);
@@ -268,7 +295,8 @@ public sealed class RepairFinishingTests
     }
 
     private static (EditorSession Session, RepairLayer Repair, RepairFinishingController Tool) Create(
-        RepairFinishingKind kind, int width = 12, int height = 10, DocumentRect? repairBounds = null)
+        RepairFinishingKind kind, int width = 12, int height = 10,
+        DocumentRect? repairBounds = null, IRepairFinishingKernel? kernel = null)
     {
         var bounds = repairBounds ?? new DocumentRect(0, 0, width, height);
         var originalPixels = HorizontalGradient(width, height);
@@ -281,7 +309,7 @@ public sealed class RepairFinishingTests
         session.Open(session.Document!);
         session.MarkSaved();
         session.SelectLayer(repair.Id);
-        var tool = new RepairFinishingController(session, new RepairFinishingKernel(), kind);
+        var tool = new RepairFinishingController(session, kernel ?? new RepairFinishingKernel(), kind);
         tool.Activate();
         return (session, repair, tool);
     }
@@ -312,5 +340,27 @@ public sealed class RepairFinishingTests
         var offset = ((y - patch.Region.Y) * patch.Region.Width + x - patch.Region.X) * 4;
         CollectionAssert.AreEqual(new[] { b, g, r, a },
             patch.StraightBgra.Span.Slice(offset, 4).ToArray());
+    }
+
+    private sealed class RecordingFinishingKernel : IRepairFinishingKernel
+    {
+        public int CallCount { get; set; }
+
+        public RepairFinishingPatch Blur(RepairLayer target, DocumentPoint center,
+            double radius, double strength, PixelSize documentSize) => Patch(target, center);
+
+        public RepairFinishingPatch Smudge(RepairLayer target, DocumentPoint from, DocumentPoint to,
+            double radius, double strength, PixelSize documentSize) => Patch(target, to);
+
+        private RepairFinishingPatch Patch(RepairLayer target, DocumentPoint point)
+        {
+            CallCount++;
+            var x = Math.Clamp((int)Math.Floor(point.X), target.Bounds.X, target.Bounds.Right - 1);
+            var y = Math.Clamp((int)Math.Floor(point.Y), target.Bounds.Y, target.Bounds.Bottom - 1);
+            var region = new DocumentRect(x, y, 1, 1);
+            var pixels = target.CopyPixels(region);
+            pixels[0] ^= 1;
+            return new(region, pixels);
+        }
     }
 }

@@ -198,6 +198,35 @@ public sealed class MaskBrushTests
         Assert.IsTrue(part.CopyMask(part.Bounds).All(value => value == 0));
     }
 
+    [TestMethod]
+    public void LongSparseDiagonalUsesBoundedCorridorsAndMatchesDenseInput()
+    {
+        var sparse = CreateLarge(128);
+        var dense = CreateLarge(128);
+        sparse.Tool.SetRadius(2);
+        dense.Tool.SetRadius(2);
+        long maximumPublishedArea = 0;
+        sparse.Session.Document!.Changed += (_, change) => maximumPublishedArea = Math.Max(
+            maximumPublishedArea, (long)change.DirtyRegion.Width * change.DirtyRegion.Height);
+
+        sparse.Tool.PointerDown(new(4.5, 4.5), 1, CanvasModifiers.None);
+        sparse.Tool.PointerMove(new(123.5, 123.5), CanvasModifiers.None);
+        sparse.Tool.PointerUp(new(123.5, 123.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        dense.Tool.PointerDown(new(4.5, 4.5), 1, CanvasModifiers.None);
+        for (var coordinate = 8.5; coordinate < 123.5; coordinate += 4)
+            dense.Tool.PointerMove(new(coordinate, coordinate), CanvasModifiers.None);
+        dense.Tool.PointerUp(new(123.5, 123.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        CollectionAssert.AreEqual(sparse.Part.CopyMask(sparse.Part.Bounds),
+            dense.Part.CopyMask(dense.Part.Bounds));
+        Assert.IsTrue(maximumPublishedArea < 256,
+            $"Expected bounded corridor publications, saw {maximumPublishedArea} pixels.");
+        Assert.IsTrue(sparse.Session.HistoryBytes < 20_000,
+            $"Expected corridor-sized history, retained {sparse.Session.HistoryBytes} bytes.");
+        Assert.AreEqual(1, sparse.Session.UndoCount);
+    }
+
     private static void Stroke(MaskBrushController tool, DocumentPoint point, CanvasModifiers modifiers)
     {
         tool.PointerDown(point, 1, modifiers);
@@ -228,6 +257,23 @@ public sealed class MaskBrushTests
         var session = new EditorSession();
         session.Open(new CutworkDocument(new OriginalAsset("fixture.png", new(16, 12), 64, pixels)));
         var part = new PartLayer(new(4, 4, 4, 4), new byte[16]);
+        session.Execute(new AddLayer(part));
+        session.Open(session.Document!);
+        session.MarkSaved();
+        session.SelectLayer(part.Id);
+        var tool = new MaskBrushController(session);
+        tool.Activate();
+        return (session, part, tool);
+    }
+
+    private static (EditorSession Session, PartLayer Part, MaskBrushController Tool) CreateLarge(int size)
+    {
+        var pixels = Enumerable.Repeat(new byte[] { 20, 40, 60, 255 }, size * size)
+            .SelectMany(pixel => pixel).ToArray();
+        var session = new EditorSession();
+        session.Open(new CutworkDocument(new OriginalAsset("fixture.png", new(size, size),
+            size * 4, pixels)));
+        var part = new PartLayer(new(0, 0, size, size), new byte[size * size]);
         session.Execute(new AddLayer(part));
         session.Open(session.Document!);
         session.MarkSaved();

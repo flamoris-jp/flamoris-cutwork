@@ -7,6 +7,7 @@ namespace Flamoris.Cutwork.Core;
 /// </summary>
 public sealed class StrokeSampler
 {
+    public const int MaximumBatchSamples = 8;
     private const double DuplicateEpsilon = 1e-6;
     private DocumentPoint? _lastInput;
     private double _distanceSinceEmission;
@@ -55,6 +56,20 @@ public sealed class StrokeSampler
         _distanceSinceEmission += Math.Max(0, remaining);
         _lastInput = point;
         return result;
+    }
+
+    /// <summary>Splits one pointer event into deterministic, bounded authoring corridors.</summary>
+    public static IEnumerable<IReadOnlyList<DocumentPoint>> Batch(
+        IReadOnlyList<DocumentPoint> samples)
+    {
+        ArgumentNullException.ThrowIfNull(samples);
+        for (var offset = 0; offset < samples.Count; offset += MaximumBatchSamples)
+        {
+            var count = Math.Min(MaximumBatchSamples, samples.Count - offset);
+            var batch = new DocumentPoint[count];
+            for (var index = 0; index < count; index++) batch[index] = samples[offset + index];
+            yield return batch;
+        }
     }
 
     private static void Validate(DocumentPoint point)

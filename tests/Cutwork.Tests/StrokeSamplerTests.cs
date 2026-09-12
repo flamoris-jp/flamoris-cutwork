@@ -45,4 +45,19 @@ public sealed class StrokeSamplerTests
 
         CollectionAssert.AreEqual(a, b);
     }
+
+    [TestMethod]
+    public void LongSparseInputIsPartitionedIntoBoundedOrderedBatches()
+    {
+        var sampler = new StrokeSampler(1);
+        sampler.Begin(new(0, 0));
+        var samples = sampler.Add(new(1000, 1000));
+        var batches = StrokeSampler.Batch(samples).ToArray();
+
+        Assert.IsTrue(samples.Count > StrokeSampler.MaximumBatchSamples);
+        Assert.IsTrue(batches.Length > 1);
+        Assert.IsTrue(batches.All(batch => batch.Count is > 0
+            && batch.Count <= StrokeSampler.MaximumBatchSamples));
+        CollectionAssert.AreEqual(samples.ToArray(), batches.SelectMany(batch => batch).ToArray());
+    }
 }

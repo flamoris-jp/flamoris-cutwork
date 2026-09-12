@@ -184,23 +184,32 @@ public sealed class RepairFinishingController : ICanvasToolInput
     {
         if (samples.Count == 0 || _target is null || _transaction is null
             || _session.Document is not { } document) return;
+        var target = _target;
+        var transaction = _transaction;
         try
         {
-            for (var index = 0; index < samples.Count; index++)
+            foreach (var batch in StrokeSampler.Batch(samples))
             {
-                var sample = samples[index];
-                var patch = Kind == RepairFinishingKind.Blur
-                    ? _kernel.Blur(_target, sample, Radius, Strength, document.Dimensions)
-                    : _kernel.Smudge(_target, _lastSample!.Value, sample,
-                        Radius, Strength, document.Dimensions);
-                _lastSample = sample;
-                if (!patch.Region.IsEmpty && patch.HasChanges)
-                    _transaction.Apply(new RasterPatch(_target.Id, patch.Region, patch.StraightBgra.Span));
+                transaction.ApplyBatch(() =>
+                {
+                    for (var index = 0; index < batch.Count; index++)
+                    {
+                        var sample = batch[index];
+                        var patch = Kind == RepairFinishingKind.Blur
+                            ? _kernel.Blur(target, sample, Radius, Strength, document.Dimensions)
+                            : _kernel.Smudge(target, _lastSample!.Value, sample,
+                                Radius, Strength, document.Dimensions);
+                        _lastSample = sample;
+                        if (!patch.Region.IsEmpty && patch.HasChanges)
+                            transaction.Apply(new RasterPatch(target.Id, patch.Region,
+                                patch.StraightBgra.Span));
+                    }
+                });
             }
         }
         catch
         {
-            _transaction.Cancel();
+            transaction.Cancel();
             ClearStroke();
             Message = RepairFinishingMessage.Cancelled;
             NotifyChanged();
