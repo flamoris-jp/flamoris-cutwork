@@ -253,4 +253,3 @@ public sealed class DocumentPointerEventArgs(DocumentPoint? position) : EventArg
 {
     public DocumentPoint? Position { get; } = position;
 }
-}
