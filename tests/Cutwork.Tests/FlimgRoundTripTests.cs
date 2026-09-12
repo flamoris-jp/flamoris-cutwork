@@ -149,6 +149,8 @@ public sealed class FlimgRoundTripTests
         return new FlimgArchiveCodec().Read(stream);
     }
 
+    private static CutworkDocument RoundTrip(CutworkDocument document) => Read(Write(document));
+
     internal static string ReadManifest(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes);
