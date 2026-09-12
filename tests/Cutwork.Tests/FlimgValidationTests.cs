@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -126,6 +127,57 @@ public sealed class FlimgValidationTests
     }
 
     [TestMethod]
+    public void PhysicalEntryReadsStopAtDeclaredLengthPlusOne()
+    {
+        using var overlong = new MemoryStream([1, 2, 3, 4, 5, 6]);
+        var exception = Assert.ThrowsExactly<FlimgException>(() => FlimgArchiveCodec.ReadBounded(
+            overlong, declaredLength: 4, limit: 4, new ArchiveReadBudget(100)));
+
+        Assert.AreEqual(FlimgError.MalformedArchive, exception.Error);
+        Assert.AreEqual(5, overlong.Position);
+
+        using var tooShort = new MemoryStream([1, 2, 3]);
+        exception = Assert.ThrowsExactly<FlimgException>(() => FlimgArchiveCodec.ReadBounded(
+            tooShort, declaredLength: 4, limit: 4, new ArchiveReadBudget(100)));
+        Assert.AreEqual(FlimgError.MalformedArchive, exception.Error);
+    }
+
+    [TestMethod]
+    public void PhysicalEntryReadsEnforceCumulativeArchiveBudget()
+    {
+        var budget = new ArchiveReadBudget(6);
+        using var first = new MemoryStream([1, 2, 3, 4]);
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4 },
+            FlimgArchiveCodec.ReadBounded(first, 4, 4, budget));
+
+        using var second = new MemoryStream([5, 6, 7, 8]);
+        var exception = Assert.ThrowsExactly<FlimgException>(() =>
+            FlimgArchiveCodec.ReadBounded(second, 4, 4, budget));
+
+        Assert.AreEqual(FlimgError.SizeLimitExceeded, exception.Error);
+        Assert.AreEqual(2, budget.Remaining);
+    }
+
+    [TestMethod]
+    public void ForgedDeclaredLengthIsRejectedAsMalformedArchive()
+    {
+        var archive = Archive([("manifest.json", "12345678"u8.ToArray())],
+            CompressionLevel.NoCompression);
+        PatchCentralDirectoryLength(archive, "manifest.json", 7);
+
+        AssertRejected(FlimgError.MalformedArchive, archive);
+    }
+
+    [TestMethod]
+    public void ExcessiveEntryCountIsRejectedBeforeManifestProcessing()
+    {
+        var entries = Enumerable.Range(0, FlimgArchiveCodec.MaximumEntries + 1)
+            .Select(index => ($"entries/{index}", Array.Empty<byte>()));
+
+        AssertRejected(FlimgError.SizeLimitExceeded, Archive(entries));
+    }
+
+    [TestMethod]
     public void MalformedZipIsRejected()
     {
         AssertRejected(FlimgError.MalformedArchive, [1, 2, 3, 4]);
@@ -173,19 +225,36 @@ public sealed class FlimgValidationTests
         }).ToList();
     }
 
-    private static byte[] Archive(IEnumerable<(string Path, byte[] Bytes)> entries)
+    private static byte[] Archive(IEnumerable<(string Path, byte[] Bytes)> entries,
+        CompressionLevel compressionLevel = CompressionLevel.Optimal)
     {
         using var output = new MemoryStream();
         using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
             foreach (var item in entries)
             {
-                var entry = archive.CreateEntry(item.Path);
+                var entry = archive.CreateEntry(item.Path, compressionLevel);
                 using var target = entry.Open();
                 target.Write(item.Bytes);
             }
         }
         return output.ToArray();
+    }
+
+    private static void PatchCentralDirectoryLength(byte[] archive, string path, uint length)
+    {
+        for (var index = 0; index <= archive.Length - 46; index++)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(archive.AsSpan(index, 4)) != 0x02014b50)
+                continue;
+            var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(archive.AsSpan(index + 28, 2));
+            if (index + 46 + nameLength > archive.Length) continue;
+            var name = Encoding.UTF8.GetString(archive, index + 46, nameLength);
+            if (name != path) continue;
+            BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(index + 24, 4), length);
+            return;
+        }
+        Assert.Fail($"Central directory entry not found: {path}");
     }
 
     private static void AssertRejected(FlimgError expected, byte[] bytes)

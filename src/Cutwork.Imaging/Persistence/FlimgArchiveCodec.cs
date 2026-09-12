@@ -16,6 +16,7 @@ public sealed class FlimgArchiveCodec
     public const int MaximumEntries = 4_096;
     public const long MaximumEntryBytes = 512L * 1024 * 1024;
     public const long MaximumArchiveBytes = 1024L * 1024 * 1024;
+    public const long MaximumPhysicalArchiveBytes = MaximumArchiveBytes + 64L * 1024 * 1024;
     public const int MaximumManifestBytes = 4 * 1024 * 1024;
     private const string ManifestPath = "manifest.json";
     private const string OriginalPath = "assets/original.png";
@@ -113,16 +114,21 @@ public sealed class FlimgArchiveCodec
     public CutworkDocument Read(Stream input)
     {
         ArgumentNullException.ThrowIfNull(input);
+        MemoryStream? bufferedInput = null;
         try
         {
-            using var archive = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: true,
+            var archiveInput = PrepareArchiveInput(input, out bufferedInput);
+            // ZipArchive only exposes the entry count after central-directory materialization.
+            // Physical preflight plus an immediate count check avoids duplicating its ZIP/ZIP64 parser.
+            using var archive = new ZipArchive(archiveInput, ZipArchiveMode.Read, leaveOpen: true,
                 entryNameEncoding: Encoding.UTF8);
             var entries = ValidateEntries(archive);
+            var readBudget = new ArchiveReadBudget(MaximumArchiveBytes);
             if (!entries.TryGetValue(ManifestPath, out var manifestEntry))
                 throw new FlimgException(FlimgError.MissingManifest);
             if (manifestEntry.Length > MaximumManifestBytes)
                 throw new FlimgException(FlimgError.SizeLimitExceeded);
-            var manifestBytes = ReadEntry(manifestEntry, MaximumManifestBytes);
+            var manifestBytes = ReadEntry(manifestEntry, MaximumManifestBytes, readBudget);
             ValidateNoDuplicateJsonProperties(manifestBytes);
             FlimgManifest manifest;
             try
@@ -135,24 +141,26 @@ public sealed class FlimgArchiveCodec
             {
                 throw new FlimgException(FlimgError.MalformedManifest, exception);
             }
-            return ReadVersion(manifest, entries);
+            return ReadVersion(manifest, entries, readBudget);
         }
         catch (FlimgException) { throw; }
         catch (InvalidDataException exception)
         {
             throw new FlimgException(FlimgError.MalformedArchive, exception);
         }
+        finally { bufferedInput?.Dispose(); }
     }
 
     private static CutworkDocument ReadVersion(FlimgManifest manifest,
-        IReadOnlyDictionary<string, ZipArchiveEntry> entries) => manifest.SchemaVersion switch
+        IReadOnlyDictionary<string, ZipArchiveEntry> entries,
+        ArchiveReadBudget readBudget) => manifest.SchemaVersion switch
     {
-        SchemaVersion => ReadV1(manifest, entries),
+        SchemaVersion => ReadV1(manifest, entries, readBudget),
         _ => throw new FlimgException(FlimgError.UnsupportedVersion),
     };
 
     private static CutworkDocument ReadV1(FlimgManifest manifest,
-        IReadOnlyDictionary<string, ZipArchiveEntry> entries)
+        IReadOnlyDictionary<string, ZipArchiveEntry> entries, ArchiveReadBudget readBudget)
     {
         if (manifest.Format != "flamoris-cutwork" || manifest.Canvas is null
             || manifest.Original is null || manifest.Layers is null)
@@ -166,7 +174,7 @@ public sealed class FlimgArchiveCodec
         if (manifest.Original.Asset != OriginalPath
             || string.IsNullOrWhiteSpace(manifest.Original.SourceName))
             throw new FlimgException(FlimgError.MalformedManifest);
-        var originalPng = ReadRequiredAsset(entries, OriginalPath, manifest.Original.Sha256);
+        var originalPng = ReadRequiredAsset(entries, OriginalPath, manifest.Original.Sha256, readBudget);
         var original = new OriginalAsset(manifest.Original.SourceName, dimensions,
             checked(dimensions.Width * 4), PngAssetCodec.DecodeBgra32(originalPng, dimensions));
 
@@ -194,7 +202,7 @@ public sealed class FlimgArchiveCodec
                         throw new FlimgException(FlimgError.InvalidLayer);
                     var maskPath = RequireAssetPath(layer, id, "mask.png");
                     referenced.Add(maskPath);
-                    var maskPng = ReadRequiredAsset(entries, maskPath, layer.Sha256);
+                    var maskPng = ReadRequiredAsset(entries, maskPath, layer.Sha256, readBudget);
                     restored.Add(new PartLayerRestoreState(id, layer.Name, layer.SemanticName,
                         layer.Visible, bounds, PngAssetCodec.DecodeGray8(maskPng,
                             new(bounds.Width, bounds.Height))));
@@ -208,7 +216,7 @@ public sealed class FlimgArchiveCodec
                     var polygon = layer.SourcePolygon.Select(point => ParsePoint(point, dimensions)).ToArray();
                     if (polygon.Length is > 0 and < 3)
                         throw new FlimgException(FlimgError.InvalidLayer);
-                    var patchPng = ReadRequiredAsset(entries, patchPath, layer.Sha256);
+                    var patchPng = ReadRequiredAsset(entries, patchPath, layer.Sha256, readBudget);
                     var pixels = PngAssetCodec.DecodeBgra32(patchPng,
                         new(bounds.Width, bounds.Height));
                     try
@@ -230,7 +238,7 @@ public sealed class FlimgArchiveCodec
                         throw new FlimgException(FlimgError.InvalidLayer);
                     var repairPath = RequireAssetPath(layer, id, "pixels.png");
                     referenced.Add(repairPath);
-                    var repairPng = ReadRequiredAsset(entries, repairPath, layer.Sha256);
+                    var repairPng = ReadRequiredAsset(entries, repairPath, layer.Sha256, readBudget);
                     restored.Add(new RepairLayerRestoreState(id, layer.Name, layer.SemanticName,
                         layer.Visible, bounds, PngAssetCodec.DecodeBgra32(repairPng,
                             new(bounds.Width, bounds.Height))));
@@ -276,25 +284,74 @@ public sealed class FlimgArchiveCodec
     }
 
     private static byte[] ReadRequiredAsset(IReadOnlyDictionary<string, ZipArchiveEntry> entries,
-        string path, string? expectedHash)
+        string path, string? expectedHash, ArchiveReadBudget readBudget)
     {
         if (!entries.TryGetValue(path, out var entry)) throw new FlimgException(FlimgError.MissingAsset);
-        var bytes = ReadEntry(entry, MaximumEntryBytes);
+        var bytes = ReadEntry(entry, MaximumEntryBytes, readBudget);
         if (!IsHash(expectedHash) || !CryptographicOperations.FixedTimeEquals(
                 Convert.FromHexString(expectedHash!), Convert.FromHexString(Hash(bytes))))
             throw new FlimgException(FlimgError.ChecksumMismatch);
         return bytes;
     }
 
-    private static byte[] ReadEntry(ZipArchiveEntry entry, long limit)
+    private static byte[] ReadEntry(ZipArchiveEntry entry, long limit, ArchiveReadBudget readBudget)
     {
-        if (entry.Length > limit || entry.Length > int.MaxValue)
-            throw new FlimgException(FlimgError.SizeLimitExceeded);
         using var source = entry.Open();
-        using var target = new MemoryStream((int)entry.Length);
-        source.CopyTo(target);
-        if (target.Length != entry.Length) throw new FlimgException(FlimgError.MalformedArchive);
+        return ReadBounded(source, entry.Length, limit, readBudget);
+    }
+
+    internal static byte[] ReadBounded(Stream source, long declaredLength, long limit,
+        ArchiveReadBudget readBudget)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(readBudget);
+        if (declaredLength < 0 || declaredLength > limit || declaredLength > int.MaxValue)
+            throw new FlimgException(FlimgError.SizeLimitExceeded);
+
+        using var target = new MemoryStream((int)Math.Min(declaredLength, 64 * 1024));
+        var buffer = new byte[64 * 1024];
+        var actualLength = 0L;
+        var probeLimit = checked(declaredLength + 1);
+        while (actualLength < probeLimit)
+        {
+            var requested = (int)Math.Min(buffer.Length, probeLimit - actualLength);
+            var read = source.Read(buffer, 0, requested);
+            if (read == 0) break;
+            actualLength += read;
+            if (actualLength > declaredLength)
+                throw new FlimgException(FlimgError.MalformedArchive);
+            readBudget.Consume(read);
+            target.Write(buffer, 0, read);
+        }
+        if (actualLength != declaredLength) throw new FlimgException(FlimgError.MalformedArchive);
         return target.ToArray();
+    }
+
+    private static Stream PrepareArchiveInput(Stream input, out MemoryStream? bufferedInput)
+    {
+        bufferedInput = null;
+        if (input.CanSeek)
+        {
+            if (input.Length > MaximumPhysicalArchiveBytes)
+                throw new FlimgException(FlimgError.SizeLimitExceeded);
+            return input;
+        }
+
+        bufferedInput = new MemoryStream();
+        var buffer = new byte[64 * 1024];
+        long total = 0;
+        while (true)
+        {
+            var requested = (int)Math.Min(buffer.Length, MaximumPhysicalArchiveBytes + 1 - total);
+            var read = input.Read(buffer, 0, requested);
+            if (read == 0) break;
+            total += read;
+            if (total > MaximumPhysicalArchiveBytes)
+                throw new FlimgException(FlimgError.SizeLimitExceeded);
+            bufferedInput.Write(buffer, 0, read);
+        }
+        bufferedInput.Position = 0;
+        return bufferedInput;
     }
 
     private static string RequireAssetPath(FlimgLayer layer, Guid id, string file)
@@ -413,5 +470,19 @@ public sealed class FlimgArchiveCodec
             else if (element.ValueKind == JsonValueKind.Array)
                 foreach (var child in element.EnumerateArray()) Visit(child);
         }
+    }
+}
+
+internal sealed class ArchiveReadBudget(long limit)
+{
+    private long _remaining = limit > 0 ? limit : throw new ArgumentOutOfRangeException(nameof(limit));
+
+    internal long Remaining => _remaining;
+
+    internal void Consume(int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (count > _remaining) throw new FlimgException(FlimgError.SizeLimitExceeded);
+        _remaining -= count;
     }
 }
