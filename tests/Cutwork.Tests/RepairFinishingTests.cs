@@ -109,6 +109,28 @@ public sealed class RepairFinishingTests
     }
 
     [TestMethod]
+    public void SmudgeStrokeIsLocalAndLeavesOriginalAndUnrelatedLayerUntouched()
+    {
+        var (session, repair, tool) = Create(RepairFinishingKind.Smudge);
+        var unrelated = new RepairLayer(new(0, 0, 12, 10), Solid(12, 10, 91));
+        session.Execute(new AddLayer(unrelated));
+        session.Open(session.Document!);
+        session.SelectLayer(repair.Id);
+        tool.SetRadius(1);
+        tool.SetStrength(.75);
+        var original = session.Document!.Original.CopyPixelBytes();
+        var unrelatedBefore = unrelated.CopyPixels(unrelated.Bounds);
+        var outsideBefore = repair.PixelAt(0, 0).ToArray();
+
+        Stroke(tool, new(3.5, 5.5), new(7.5, 5.5));
+
+        CollectionAssert.AreEqual(outsideBefore, repair.PixelAt(0, 0).ToArray());
+        CollectionAssert.AreEqual(unrelatedBefore, unrelated.CopyPixels(unrelated.Bounds));
+        CollectionAssert.AreEqual(original, session.Document.Original.CopyPixelBytes());
+        Assert.AreEqual(1, session.UndoCount);
+    }
+
+    [TestMethod]
     public void RadiusStrengthAndWheelStayWithinDocumentSpaceBounds()
     {
         var (session, _, tool) = Create(RepairFinishingKind.Blur);
