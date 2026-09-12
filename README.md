@@ -28,7 +28,9 @@ Current milestone:
 
 - Phase 0: Python prototype performance baseline complete;
 - Phase 1: Windows foundation and first real-image canvas complete;
-- next: Phase 2, Document / Layer Stack / Compositor / Undo-Redo.
+- Phase 2: Document / Layer Stack / Compositor / Undo-Redo complete;
+- Phase 3: unified Part Tool and Guriguri complete;
+- current: Phase 4, unified Mask Brush and Patch workflow.
 
 ## Design authority
 
@@ -103,6 +105,10 @@ Save/Open and `.flimg` are not implemented yet.
 
 See [Phase 2 editing spine](docs/phase2-editing-spine.md) for pixel, dirty-region,
 history, and memory-budget contracts.
+
+Phase 3 and Phase 4 hands-on behavior is documented in
+[the Part Tool guide](docs/phase3-part-tool.md) and
+[the Mask/Patch guide](docs/phase4-mask-patch.md).
 
 ## Repository layout
 

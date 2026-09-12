@@ -75,6 +75,7 @@ public partial class MainWindow
             LayerKindDescription.Text = selected is null ? "" : text[$"LayerDescription_{selected.Kind}"];
             LayerBoundsText.Text = selected is null ? "" : string.Format(text.Culture, text["Layer_Bounds"],
                 selected.Bounds.X, selected.Bounds.Y, selected.Bounds.Width, selected.Bounds.Height);
+            RefreshToolProperties(selected);
         }
         finally { _refreshingLayers = false; }
     }

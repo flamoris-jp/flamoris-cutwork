@@ -60,7 +60,7 @@
   <data name="Layer_Bounds" xml:space="preserve"><value>範囲：X {0}, Y {1} / {2} × {3} px</value></data>
   <data name="LayerDescription_Base" xml:space="preserve"><value>元画像から生成される固定レイヤーです。移動・削除はできません。パーツを非表示にしても穴は残ります。</value></data>
   <data name="LayerDescription_Part" xml:space="preserve"><value>元画像をマスクで切り出したパーツです。ベースより上の範囲で並べ替えできます。</value></data>
-  <data name="LayerDescription_Patch" xml:space="preserve"><value>局所画像を保持する下塗りパッチです。配置・拡縮・回転の操作は後のフェーズで追加します。</value></data>
+  <data name="LayerDescription_Patch" xml:space="preserve"><value>元画像から凍結した局所画像を保持する下塗りパッチです。配置・拡縮・回転を編集できます。</value></data>
   <data name="LayerDescription_Repair" xml:space="preserve"><value>補修用の下塗り画素レイヤーです。ベースより下の範囲で並べ替えできます。</value></data>
   <data name="Status_UnsavedMarker" xml:space="preserve"><value> — 未保存</value></data>
   <data name="Edit_ErrorTitle" xml:space="preserve"><value>編集できません</value></data>
@@ -72,4 +72,30 @@
   <data name="EditError_InvalidPatch" xml:space="preserve"><value>編集範囲または画素データが無効です。</value></data>
   <data name="EditError_HistoryBudgetExceeded" xml:space="preserve"><value>この操作は履歴のメモリ上限を超えたため取り消しました。</value></data>
   <data name="EditError_TransactionActive" xml:space="preserve"><value>進行中の編集を確定または取り消してください。</value></data>
+  <data name="MaskTool_Name" xml:space="preserve"><value>マスク</value></data>
+  <data name="MaskTool_Tooltip" xml:space="preserve"><value>選択中のパーツマスクを補正</value></data>
+  <data name="MaskTool_Radius" xml:space="preserve"><value>半径（画像px）</value></data>
+  <data name="MaskTool_Add" xml:space="preserve"><value>追加</value></data>
+  <data name="MaskTool_Erase" xml:space="preserve"><value>消去</value></data>
+  <data name="MaskTool_Status_Ready" xml:space="preserve"><value>パーツを選択してドラッグ。Altで一時的に追加／消去を反転します。</value></data>
+  <data name="MaskTool_Status_SelectPart" xml:space="preserve"><value>マスクを編集するパーツレイヤーを選択してください。</value></data>
+  <data name="MaskTool_Status_Painting" xml:space="preserve"><value>マスク編集中。離すと1操作として確定、Escで取り消します。</value></data>
+  <data name="MaskTool_Status_Cancelled" xml:space="preserve"><value>マスク編集を取り消しました。</value></data>
+  <data name="MaskTool_Status_Committed" xml:space="preserve"><value>マスク編集を確定しました。</value></data>
+  <data name="PatchTool_Name" xml:space="preserve"><value>パッチ</value></data>
+  <data name="PatchTool_Tooltip" xml:space="preserve"><value>元画像から補修片を作成して配置</value></data>
+  <data name="PatchTool_Commit" xml:space="preserve"><value>確定</value></data>
+  <data name="PatchTool_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="PatchTool_Position" xml:space="preserve"><value>中心 X / Y（画像px）</value></data>
+  <data name="PatchTool_Scale" xml:space="preserve"><value>拡大率（%・最大1000）</value></data>
+  <data name="PatchTool_Rotation" xml:space="preserve"><value>回転（度）</value></data>
+  <data name="PatchTool_Status_Ready" xml:space="preserve"><value>元画像上で補修元を囲み、Enterまたはダブルクリックで配置へ進みます。</value></data>
+  <data name="PatchTool_Status_DrawingSource" xml:space="preserve"><value>補修元を選択中：{0}点。Enterまたはダブルクリックで確定。</value></data>
+  <data name="PatchTool_Status_NeedsThreePoints" xml:space="preserve"><value>補修元には3点以上必要です（現在{0}点）。</value></data>
+  <data name="PatchTool_Status_InvalidSource" xml:space="preserve"><value>この範囲から補修元を作成できません。</value></data>
+  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>ドラッグで配置。プロパティで拡大率と回転を調整し、確定してください。</value></data>
+  <data name="PatchTool_Status_Cancelled" xml:space="preserve"><value>パッチ作成を取り消しました。</value></data>
+  <data name="PatchTool_Status_Committed" xml:space="preserve"><value>パッチを確定しました。</value></data>
+  <data name="Properties_Apply" xml:space="preserve"><value>適用</value></data>
+  <data name="Tool_InvalidNumber" xml:space="preserve"><value>入力値が範囲外か、数値として読み取れません。パッチは画像内、拡大率は1〜1000%にしてください。</value></data>
 </root>

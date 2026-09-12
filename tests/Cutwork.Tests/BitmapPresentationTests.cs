@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using Flamoris.Cutwork.App.Controls;
 using Flamoris.Cutwork.App.Rendering;
 using Flamoris.Cutwork.Core;
@@ -102,6 +103,55 @@ public sealed class BitmapPresentationTests
             canvas.ActualSize();
             Assert.AreSame(overlayBitmap, overlay.Source);
             Assert.AreEqual(generation, canvas.BitmapGeneration);
+            Assert.AreEqual(0, session.UndoCount);
+        });
+    }
+
+    [TestMethod]
+    public void MaskCursorAndPatchPreviewStayOnOverlayAcrossZoom()
+    {
+        RunSta(() =>
+        {
+            var pixels = Enumerable.Repeat(new byte[] { 30, 60, 90, 255 }, 20 * 20)
+                .SelectMany(pixel => pixel).ToArray();
+            var session = new EditorSession();
+            session.Open(new CutworkDocument(new OriginalAsset("fixture.png", new(20, 20), 80, pixels)));
+            var part = new PartLayer(new(1, 1, 18, 18), new byte[18 * 18]);
+            session.Execute(new AddLayer(part));
+            session.Open(session.Document!);
+            session.SelectLayer(part.Id);
+            var partTool = new PartToolController(session, new GuriguriPartFitter());
+            var maskTool = new MaskBrushController(session); maskTool.SetRadius(3);
+            var patchTool = new PatchToolController(session, new PatchSourceSampler());
+            var router = new CanvasInputRouter(session);
+            var canvas = new DocumentCanvas();
+            canvas.AttachSession(session);
+            canvas.AttachInputRouter(router, partTool, maskTool, patchTool);
+            canvas.Present(session.Document!);
+            canvas.Measure(new Size(800, 600)); canvas.Arrange(new Rect(0, 0, 800, 600));
+            canvas.ActualSize();
+            var generation = canvas.BitmapGeneration;
+            var revision = session.Document!.Revision;
+
+            router.SetActiveTool(maskTool);
+            maskTool.PointerMove(new(10, 10), CanvasModifiers.None);
+            var cursor = (Ellipse)canvas.FindName("BrushCursor");
+            Assert.AreEqual(6, cursor.Width);
+            Assert.AreEqual(Visibility.Visible, cursor.Visibility);
+            canvas.Fit();
+            Assert.AreEqual(maskTool.Radius * 2 * session.Viewport.Projection.ScaleX, cursor.Width, 0.001);
+
+            router.SetActiveTool(patchTool);
+            patchTool.PointerDown(new(2, 2), 1, CanvasModifiers.None);
+            patchTool.PointerDown(new(8, 2), 1, CanvasModifiers.None);
+            patchTool.PointerDown(new(8, 8), 1, CanvasModifiers.None);
+            patchTool.PointerDown(new(2, 8), 1, CanvasModifiers.None);
+            patchTool.FinalizeSource();
+            var patchOverlay = (Image)canvas.FindName("PatchImageOverlay");
+            Assert.AreEqual(Visibility.Visible, patchOverlay.Visibility);
+            Assert.IsInstanceOfType(patchOverlay.Source, typeof(WriteableBitmap));
+            Assert.AreEqual(generation, canvas.BitmapGeneration);
+            Assert.AreEqual(revision, session.Document.Revision);
             Assert.AreEqual(0, session.UndoCount);
         });
     }
