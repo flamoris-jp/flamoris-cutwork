@@ -26,6 +26,23 @@ public sealed class FlimgAtomicSaveTests
     }
 
     [TestMethod]
+    public void SaveWithoutPathReusesSuccessfulSaveAsDestination()
+    {
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.Path, "project.flimg");
+        var session = new EditorSession();
+        session.Open(FlimgRoundTripTests.FullDocument());
+        var workspace = new ProjectWorkspace(session);
+        workspace.Save(path);
+        session.Execute(new RenameLayer(session.Document!.Base.Id, "saved again"));
+
+        workspace.Save();
+
+        Assert.IsFalse(session.IsDirty);
+        Assert.AreEqual("saved again", new FlimgProjectStore().Load(path).Base.Name);
+    }
+
+    [TestMethod]
     public void ReplacementFailurePreservesOldProjectAndDoesNotMarkSaved()
     {
         using var directory = new TemporaryDirectory();
