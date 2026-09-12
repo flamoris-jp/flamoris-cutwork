@@ -21,6 +21,17 @@
   <data name="Menu_Export" xml:space="preserve"><value>Export</value></data>
   <data name="Menu_Help" xml:space="preserve"><value>Help</value></data>
   <data name="Panel_Tools" xml:space="preserve"><value>Tools</value></data>
+  <data name="PartTool_Name" xml:space="preserve"><value>Part</value></data>
+  <data name="PartTool_Tooltip" xml:space="preserve"><value>Fit a part boundary from a rough fence</value></data>
+  <data name="PartTool_Commit" xml:space="preserve"><value>Commit</value></data>
+  <data name="PartTool_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="PartTool_Status_Ready" xml:space="preserve"><value>Part Tool: click a rough fence around the part (Enter or double-click to continue).</value></data>
+  <data name="PartTool_Status_DrawingFence" xml:space="preserve"><value>Fence: {0} points. Press Enter or double-click to start fitting.</value></data>
+  <data name="PartTool_Status_NeedsThreePoints" xml:space="preserve"><value>The fence needs at least three points (currently {0}).</value></data>
+  <data name="PartTool_Status_FenceTooSmall" xml:space="preserve"><value>The fence is too small ({0} px). Draw a slightly larger fence.</value></data>
+  <data name="PartTool_Status_FittingPreview" xml:space="preserve"><value>Fitting step {0}, {1}/{2} px. Wheel forward = inward, backward = restore, Ctrl+wheel = zoom, Enter = commit.</value></data>
+  <data name="PartTool_Status_Cancelled" xml:space="preserve"><value>Cancelled the uncommitted Part.</value></data>
+  <data name="PartTool_Status_Committed" xml:space="preserve"><value>Created the Part. One Undo removes the whole creation.</value></data>
   <data name="Panel_Layers" xml:space="preserve"><value>Layers</value></data>
   <data name="Panel_Properties" xml:space="preserve"><value>Properties</value></data>
   <data name="Canvas_NoDocument" xml:space="preserve"><value>Open an image to begin</value></data>

@@ -11,6 +11,17 @@
                RenderTransformOrigin="0,0"
                RenderOptions.BitmapScalingMode="HighQuality" />
         <Canvas x:Name="OverlaySurface" IsHitTestVisible="False">
+            <Image x:Name="PartMaskOverlay"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   Stretch="Fill"
+                   RenderTransformOrigin="0,0"
+                   Visibility="Collapsed" />
+            <Polyline x:Name="PartFenceLine"
+                      Stroke="#FFF06AAF"
+                      StrokeThickness="1.5"
+                      Fill="#18EB46AA"
+                      Visibility="Collapsed" />
             <Line x:Name="CrosshairHorizontal" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
             <Line x:Name="CrosshairVertical" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
         </Canvas>

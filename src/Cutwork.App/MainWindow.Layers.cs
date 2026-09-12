@@ -111,13 +111,14 @@ public partial class MainWindow
     private void ExecuteEdit(params EditCommand[] commands)
     {
         try { _session.Execute(commands); }
-        catch (EditException exception)
-        {
-            var text = LocalizationService.Current;
-            MessageBox.Show(this, text[$"EditError_{exception.Error}"], text["Edit_ErrorTitle"],
-                MessageBoxButton.OK, MessageBoxImage.Warning);
-            RefreshLayerPanel();
-        }
+        catch (EditException exception) { ShowEditError(exception); }
+    }
+    private void ShowEditError(EditException exception)
+    {
+        var text = LocalizationService.Current;
+        MessageBox.Show(this, text[$"EditError_{exception.Error}"], text["Edit_ErrorTitle"],
+            MessageBoxButton.OK, MessageBoxImage.Warning);
+        RefreshLayerPanel();
     }
 
     // Display projection only. No setters/bindings can mutate an authored Layer.
