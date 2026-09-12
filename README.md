@@ -30,6 +30,12 @@ Current active work is tracked in GitHub Issues:
 - `#2` Clone Paint performance profiling and responsiveness
 - `#3` Cutwork v0.1 standalone UI / architecture / i18n design
 
+## Design authority
+
+- [`docs/decisions/0001-production-stack.md`](docs/decisions/0001-production-stack.md) — production stack decision and evaluated alternatives
+- [`docs/production-architecture.md`](docs/production-architecture.md) — application, document, tools, rendering, persistence, i18n, and migration architecture
+- [`docs/roadmap.md`](docs/roadmap.md) — phased implementation and hands-on acceptance roadmap
+
 ## Production direction
 
 Cutwork should feel like a small conventional Windows graphics application rather than a collection of prototype controls.
