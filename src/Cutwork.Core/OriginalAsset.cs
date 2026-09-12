@@ -7,6 +7,8 @@ public sealed class OriginalAsset
     public OriginalAsset(string sourceName, PixelSize dimensions, int stride, ReadOnlySpan<byte> pixels)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceName);
+        ArgumentOutOfRangeException.ThrowIfLessThan(dimensions.Width, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(dimensions.Height, 1);
         if (stride < checked(dimensions.Width * 4))
         {
             throw new ArgumentOutOfRangeException(nameof(stride));
@@ -33,6 +35,8 @@ public sealed class OriginalAsset
     public int ByteLength => _straightBgra32.Length;
 
     public byte[] CopyPixelBytes() => (byte[])_straightBgra32.Clone();
+
+    public ReadOnlySpan<byte> PixelAt(int x, int y) => _straightBgra32.AsSpan(checked(y * Stride + x * 4), 4);
 
     public void CopyPixelBytesTo(Span<byte> destination)
     {
