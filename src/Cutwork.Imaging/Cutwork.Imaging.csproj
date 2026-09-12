@@ -1,8 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <UseWPF Condition="'$(TargetFramework)' == 'net10.0-windows'">true</UseWPF>
   </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Compile Remove="ImageImportService.cs" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
   </ItemGroup>

@@ -29,7 +29,10 @@ public sealed class LocalizationService
 
     public static IReadOnlySet<string> GetKeys(CultureInfo culture)
     {
-        var resources = ResourceManager.GetResourceSet(culture, createIfNotExists: true, tryParents: true)
+        // Inspect actual catalogs, not a fallback that could hide a missing English satellite.
+        var catalogCulture = culture.Name.StartsWith("en", StringComparison.OrdinalIgnoreCase)
+            ? new CultureInfo("en") : CultureInfo.InvariantCulture;
+        var resources = ResourceManager.GetResourceSet(catalogCulture, createIfNotExists: true, tryParents: false)
             ?? throw new MissingManifestResourceException($"Missing UI resource catalog: {culture.Name}");
         return resources.Cast<DictionaryEntry>()
             .Select(entry => (string)entry.Key)
