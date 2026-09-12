@@ -231,6 +231,7 @@ public sealed class FlimgValidationTests
 
         Assert.AreEqual(FlimgError.SizeLimitExceeded, exception.Error);
         Assert.AreEqual(2, budget.Remaining);
+        Assert.AreEqual(3, second.Position);
     }
 
     [TestMethod]
@@ -341,10 +342,16 @@ public sealed class FlimgValidationTests
         var stride = checked((size.Width * format.BitsPerPixel + 7) / 8);
         var pixels = new byte[checked(stride * size.Height)];
         if (format == PixelFormats.Rgb24)
-            (pixels[0], pixels[1], pixels[2]) = (10, 80, 190);
+        {
+            pixels[0] = 10;
+            pixels[1] = 80;
+            pixels[2] = 190;
+        }
         if (format == PixelFormats.Bgra32)
         {
-            (pixels[0], pixels[1], pixels[2]) = (10, 80, 190);
+            pixels[0] = 10;
+            pixels[1] = 80;
+            pixels[2] = 190;
             for (var index = 3; index < pixels.Length; index += 4) pixels[index] = 255;
         }
         if (format == PixelFormats.Indexed8) pixels[0] = 1;

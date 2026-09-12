@@ -291,6 +291,8 @@ public sealed class FlimgArchiveCodec
 
     private static byte[] ReadEntry(ZipArchiveEntry entry, long limit, ArchiveReadBudget readBudget)
     {
+        if (entry.Length < 0 || entry.Length > limit || entry.Length > int.MaxValue)
+            throw new FlimgException(FlimgError.SizeLimitExceeded);
         using var source = entry.Open();
         return ReadBounded(source, entry.Length, limit, readBudget);
     }
@@ -309,7 +311,8 @@ public sealed class FlimgArchiveCodec
         var probeLimit = checked(declaredLength + 1);
         while (actualLength < probeLimit)
         {
-            var requested = (int)Math.Min(buffer.Length, probeLimit - actualLength);
+            var requested = (int)Math.Min(buffer.Length,
+                Math.Min(probeLimit - actualLength, readBudget.Remaining + 1));
             var read = source.Read(buffer, 0, requested);
             if (read == 0) break;
             actualLength += read;
