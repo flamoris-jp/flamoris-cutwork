@@ -28,11 +28,13 @@ $projectVersion = [string]$projectXml.Project.PropertyGroup.VersionPrefix
 $profileRuntime = [string]$profileXml.Project.PropertyGroup.RuntimeIdentifier
 $profileSelfContained = [string]$profileXml.Project.PropertyGroup.SelfContained
 $profileConfiguration = [string]$profileXml.Project.PropertyGroup.Configuration
+$profileCopySymbols = [string]$profileXml.Project.PropertyGroup.CopyOutputSymbolsToPublishDirectory
 if ($projectVersion -cne $Version) {
     throw "Package version $Version does not match project VersionPrefix $projectVersion."
 }
-if ($profileRuntime -cne $RuntimeIdentifier -or $profileSelfContained -cne "true" -or $profileConfiguration -cne $Configuration) {
-    throw "Publish profile must remain Release, win-x64, and self-contained."
+if ($profileRuntime -cne $RuntimeIdentifier -or $profileSelfContained -cne "true" -or
+    $profileConfiguration -cne $Configuration -or $profileCopySymbols -cne "false") {
+    throw "Publish profile must remain Release, win-x64, self-contained, and free of debug symbols."
 }
 
 function Remove-ExactPath {
