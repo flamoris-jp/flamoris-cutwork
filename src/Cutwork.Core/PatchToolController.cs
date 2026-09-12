@@ -170,7 +170,7 @@ public sealed class PatchToolController : ICanvasToolInput
         }
         catch (EditException) { return false; }
         if (!DocumentRect.FromSize(document.Dimensions).Contains(bounds)) return false;
-        if (_transform == transform) return false;
+        if (_transform == transform) return true;
         _transform = transform;
         State = PatchToolState.Transforming;
         Status = new(PatchToolMessage.Placing);

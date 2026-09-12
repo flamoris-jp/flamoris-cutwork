@@ -168,7 +168,14 @@ public sealed class MaskBrushController : ICanvasToolInput
                     + (centerY - sample.Y) * (centerY - sample.Y) <= radiusSquared)) continue;
             after[(y - region.Y) * region.Width + x - region.X] = value;
         }
-        _transaction.Apply(new MaskPatch(_part.Id, region, after));
+        try { _transaction.Apply(new MaskPatch(_part.Id, region, after)); }
+        catch
+        {
+            ClearStroke();
+            Status = new(MaskBrushMessage.Cancelled);
+            NotifyChanged();
+            throw;
+        }
     }
 
     private DocumentRect DabBounds(DocumentPoint point)
