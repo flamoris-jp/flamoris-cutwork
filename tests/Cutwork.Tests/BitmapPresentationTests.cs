@@ -98,6 +98,9 @@ public sealed class BitmapPresentationTests
             var overlay = (Image)canvas.FindName("PartMaskOverlay");
             Assert.AreEqual(Visibility.Visible, overlay.Visibility);
             Assert.IsInstanceOfType(overlay.Source, typeof(WriteableBitmap));
+            var overlayBitmap = overlay.Source;
+            canvas.ActualSize();
+            Assert.AreSame(overlayBitmap, overlay.Source);
             Assert.AreEqual(generation, canvas.BitmapGeneration);
             Assert.AreEqual(0, session.UndoCount);
         });

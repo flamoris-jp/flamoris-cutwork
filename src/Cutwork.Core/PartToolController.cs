@@ -25,7 +25,8 @@ public sealed record PartToolSnapshot(
     IReadOnlyList<DocumentPoint> Fence,
     DocumentPoint? HoverPoint,
     DocumentRect MaskBounds,
-    byte[]? Mask,
+    ReadOnlyMemory<byte> Mask,
+    long MaskRevision,
     int Step,
     int RemainingPixels,
     int FencePixels,
@@ -60,6 +61,7 @@ public sealed class PartToolController : ICanvasToolInput
     private IPartFittingSession? _fitting;
     private byte[]? _mask;
     private DocumentPoint? _hover;
+    private long _maskRevision;
 
     public PartToolController(EditorSession session, IPartBoundaryFitter fitterFactory)
     {
@@ -122,7 +124,11 @@ public sealed class PartToolController : ICanvasToolInput
         _mask = _fitting.Adjust(steps);
         Status = new(PartToolMessage.FittingPreview, _fitting.Step,
             _fitting.CurrentKeepPixels);
-        if (_fitting.Step != previousStep) NotifyChanged();
+        if (_fitting.Step != previousStep)
+        {
+            _maskRevision++;
+            NotifyChanged();
+        }
         return CanvasInputEffects.Handled
             | (_fitting.Step != previousStep ? CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None);
     }
@@ -159,7 +165,14 @@ public sealed class PartToolController : ICanvasToolInput
         }
 
         var document = _session.Document ?? throw new EditException(EditError.NoDocument);
-        var fitting = _fitterFactory.Create(document.Original, _fence.ToArray());
+        IPartFittingSession fitting;
+        try { fitting = _fitterFactory.Create(document.Original, _fence.ToArray()); }
+        catch (ArgumentException)
+        {
+            Status = new(PartToolMessage.FenceTooSmall);
+            NotifyChanged();
+            return false;
+        }
         if (fitting.PolygonPixelCount < MinimumFencePixels)
         {
             Status = new(PartToolMessage.FenceTooSmall, fitting.PolygonPixelCount);
@@ -169,6 +182,7 @@ public sealed class PartToolController : ICanvasToolInput
 
         _fitting = fitting;
         _mask = fitting.CopyCurrentMask();
+        _maskRevision++;
         _hover = null;
         State = PartToolState.FittingPreview;
         Status = new(PartToolMessage.FittingPreview, fitting.Step, fitting.CurrentKeepPixels);
@@ -202,7 +216,8 @@ public sealed class PartToolController : ICanvasToolInput
         _fence.ToArray(),
         _hover,
         _fitting?.Bounds ?? default,
-        _mask?.ToArray(),
+        _mask ?? ReadOnlyMemory<byte>.Empty,
+        _maskRevision,
         _fitting?.Step ?? 0,
         _fitting?.CurrentKeepPixels ?? 0,
         _fitting?.PolygonPixelCount ?? 0,
@@ -212,6 +227,7 @@ public sealed class PartToolController : ICanvasToolInput
     {
         _fence.Clear();
         _fitting = null;
+        if (_mask is not null) _maskRevision++;
         _mask = null;
         _hover = null;
         State = PartToolState.Idle;

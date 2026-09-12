@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         CanvasView.AttachInputRouter(_inputRouter, _partTool);
         CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
         CanvasView.ViewportChanged += (_, _) => UpdateStatus();
+        CanvasView.EditRejected += (_, e) => ShowEditError(e.Exception);
         _partTool.Changed += (_, _) =>
         {
             UpdatePartToolUi();

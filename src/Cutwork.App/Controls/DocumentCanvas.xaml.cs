@@ -22,6 +22,7 @@ public partial class DocumentCanvas : UserControl
     private CanvasInputRouter? _inputRouter;
     private PartToolController? _partTool;
     private readonly List<Ellipse> _partFencePoints = [];
+    private long _presentedPartMaskRevision = -1;
     private bool _autoFit = true;
 
     public DocumentCanvas()
@@ -41,6 +42,8 @@ public partial class DocumentCanvas : UserControl
     public event EventHandler<DocumentPointerEventArgs>? PointerDocumentPositionChanged;
 
     public event EventHandler? ViewportChanged;
+
+    public event EventHandler<CanvasEditRejectedEventArgs>? EditRejected;
 
     public string EmptyText
     {
@@ -220,7 +223,13 @@ public partial class DocumentCanvas : UserControl
             _ => (CanvasToolKey?)null,
         };
         if (key is null) return;
-        var effects = _inputRouter?.KeyDown(key.Value, CurrentModifiers()) ?? CanvasInputEffects.None;
+        CanvasInputEffects effects;
+        try { effects = _inputRouter?.KeyDown(key.Value, CurrentModifiers()) ?? CanvasInputEffects.None; }
+        catch (EditException exception)
+        {
+            EditRejected?.Invoke(this, new CanvasEditRejectedEventArgs(exception));
+            effects = CanvasInputEffects.Handled;
+        }
         ApplyInputEffects(effects);
         e.Handled = effects.HasFlag(CanvasInputEffects.Handled);
     }
@@ -242,7 +251,6 @@ public partial class DocumentCanvas : UserControl
             if (IsMouseCaptured) ReleaseMouseCapture();
             Mouse.OverrideCursor = null;
         }
-        if (effects.HasFlag(CanvasInputEffects.ToolOverlayChanged)) RenderPartOverlay();
     }
 
     private void ApplyViewport()
@@ -307,25 +315,34 @@ public partial class DocumentCanvas : UserControl
             PartFenceLine.Visibility = Visibility.Visible;
         }
 
-        if (snapshot.State != PartToolState.FittingPreview || snapshot.Mask is null || snapshot.MaskBounds.IsEmpty)
-            return;
-        var overlayPixels = new byte[checked(snapshot.Mask.Length * 4)];
-        for (var index = 0; index < snapshot.Mask.Length; index++)
+        if (snapshot.State != PartToolState.FittingPreview || snapshot.Mask.IsEmpty || snapshot.MaskBounds.IsEmpty)
         {
-            var alpha = (byte)(snapshot.Mask[index] * 88 / 255);
-            overlayPixels[index * 4] = (byte)(170 * alpha / 255);
-            overlayPixels[index * 4 + 1] = (byte)(70 * alpha / 255);
-            overlayPixels[index * 4 + 2] = (byte)(235 * alpha / 255);
-            overlayPixels[index * 4 + 3] = alpha;
+            PartMaskOverlay.Source = null;
+            _presentedPartMaskRevision = -1;
+            return;
         }
-        var bitmap = new WriteableBitmap(snapshot.MaskBounds.Width, snapshot.MaskBounds.Height, 96, 96,
-            PixelFormats.Pbgra32, null);
-        bitmap.WritePixels(new Int32Rect(0, 0, snapshot.MaskBounds.Width, snapshot.MaskBounds.Height),
-            overlayPixels, snapshot.MaskBounds.Width * 4, 0);
-        bitmap.Freeze();
-        PartMaskOverlay.Source = bitmap;
-        PartMaskOverlay.Width = snapshot.MaskBounds.Width;
-        PartMaskOverlay.Height = snapshot.MaskBounds.Height;
+        if (_presentedPartMaskRevision != snapshot.MaskRevision)
+        {
+            var mask = snapshot.Mask.Span;
+            var overlayPixels = new byte[checked(mask.Length * 4)];
+            for (var index = 0; index < mask.Length; index++)
+            {
+                var alpha = (byte)(mask[index] * 88 / 255);
+                overlayPixels[index * 4] = (byte)(170 * alpha / 255);
+                overlayPixels[index * 4 + 1] = (byte)(70 * alpha / 255);
+                overlayPixels[index * 4 + 2] = (byte)(235 * alpha / 255);
+                overlayPixels[index * 4 + 3] = alpha;
+            }
+            var bitmap = new WriteableBitmap(snapshot.MaskBounds.Width, snapshot.MaskBounds.Height, 96, 96,
+                PixelFormats.Pbgra32, null);
+            bitmap.WritePixels(new Int32Rect(0, 0, snapshot.MaskBounds.Width, snapshot.MaskBounds.Height),
+                overlayPixels, snapshot.MaskBounds.Width * 4, 0);
+            bitmap.Freeze();
+            PartMaskOverlay.Source = bitmap;
+            PartMaskOverlay.Width = snapshot.MaskBounds.Width;
+            PartMaskOverlay.Height = snapshot.MaskBounds.Height;
+            _presentedPartMaskRevision = snapshot.MaskRevision;
+        }
         var projection = _session.Viewport.Projection;
         PartMaskOverlay.RenderTransform = new MatrixTransform(
             projection.ScaleX, 0, 0, projection.ScaleY,
@@ -403,4 +420,9 @@ public partial class DocumentCanvas : UserControl
 public sealed class DocumentPointerEventArgs(DocumentPoint? position) : EventArgs
 {
     public DocumentPoint? Position { get; } = position;
+}
+
+public sealed class CanvasEditRejectedEventArgs(EditException exception) : EventArgs
+{
+    public EditException Exception { get; } = exception;
 }

@@ -64,7 +64,7 @@ public sealed class PartToolTests
         Assert.AreEqual(0, session.UndoCount);
         Assert.IsFalse(session.IsDirty);
         Assert.AreEqual(0, tool.Snapshot().Fence.Count);
-        Assert.IsNull(tool.Snapshot().Mask);
+        Assert.IsTrue(tool.Snapshot().Mask.IsEmpty);
     }
 
     [TestMethod]
@@ -95,21 +95,40 @@ public sealed class PartToolTests
         router.PointerDown(new(new(10, 2), CanvasPointerButton.Left, 1, CanvasModifiers.None));
         router.PointerDown(new(new(10, 10), CanvasPointerButton.Left, 2, CanvasModifiers.None));
         Assert.AreEqual(PartToolState.FittingPreview, tool.State);
-        var maskBefore = tool.Snapshot().Mask!;
+        var maskBefore = tool.Snapshot().Mask.ToArray();
         var zoomBefore = session.Viewport.Zoom;
 
         router.Wheel(new(5, 5), 120, CanvasModifiers.None);
         Assert.AreEqual(1, tool.Snapshot().Step);
-        Assert.IsTrue(tool.Snapshot().Mask!.Count(value => value != 0)
+        Assert.IsTrue(tool.Snapshot().Mask.ToArray().Count(value => value != 0)
             < maskBefore.Count(value => value != 0));
         router.Wheel(new(5, 5), -120, CanvasModifiers.None);
-        CollectionAssert.AreEqual(maskBefore, tool.Snapshot().Mask);
+        CollectionAssert.AreEqual(maskBefore, tool.Snapshot().Mask.ToArray());
         router.Wheel(new(5, 5), 120, CanvasModifiers.Control);
         Assert.IsTrue(session.Viewport.Zoom > zoomBefore);
 
         router.KeyDown(CanvasToolKey.Escape, CanvasModifiers.None);
         Assert.AreEqual(PartToolState.Idle, tool.State);
         Assert.AreEqual(0, session.UndoCount);
+    }
+
+    [TestMethod]
+    public void EnterFinalizesFenceAndThenCommitsOnePart()
+    {
+        var (session, tool) = CreateTool();
+        var router = new CanvasInputRouter(session);
+        router.SetActiveTool(tool);
+        router.PointerDown(new(new(2, 2), CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        router.PointerDown(new(new(10, 2), CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        router.PointerDown(new(new(10, 10), CanvasPointerButton.Left, 1, CanvasModifiers.None));
+
+        router.KeyDown(CanvasToolKey.Enter, CanvasModifiers.None);
+        Assert.AreEqual(PartToolState.FittingPreview, tool.State);
+        router.KeyDown(CanvasToolKey.Enter, CanvasModifiers.None);
+
+        Assert.AreEqual(PartToolState.Idle, tool.State);
+        Assert.AreEqual(1, session.Document!.Layers.OfType<PartLayer>().Count());
+        Assert.AreEqual(1, session.UndoCount);
     }
 
     [TestMethod]
