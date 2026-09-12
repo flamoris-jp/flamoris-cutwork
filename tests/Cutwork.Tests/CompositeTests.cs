@@ -57,7 +57,7 @@ public sealed class CompositeTests
         var s = OpenOpaque(); var roi = new DocumentRect(0, 0, 1, 1);
         var a = new PartLayer(roi, new byte[] { 128 }); var b = new PartLayer(roi, new byte[] { 64 });
         s.Execute(new AddLayer(a), new AddLayer(b), new SetLayerVisibility(a.Id, false), new SetLayerVisibility(b.Id, false));
-        using var cache = new CompositeCache(s.Document); cache.RenderPending();
+        using var cache = new CompositeCache(s.Document!); cache.RenderPending();
         CollectionAssert.AreEqual(new byte[] { 5, 10, 15, 127, 50, 60, 70, 255 }, cache.CopyPixels());
     }
 
