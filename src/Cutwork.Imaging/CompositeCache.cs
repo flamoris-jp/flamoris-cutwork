@@ -75,6 +75,10 @@ public sealed class CompositeCache : IDisposable
                     case PartLayer part:
                         SourceOver(destination, _document.Original.PixelAt(x, y), part.MaskAt(x, y));
                         break;
+                    case PatchLayer patch:
+                        var transformed = patch.SampleAt(x, y);
+                        if (!transformed.IsEmpty) SourceOver(destination, transformed, 255);
+                        break;
                     case RasterLayer raster:
                         SourceOver(destination, raster.PixelAt(x, y), 255);
                         break;

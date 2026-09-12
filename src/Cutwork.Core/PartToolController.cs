@@ -153,6 +153,8 @@ public sealed class PartToolController : ICanvasToolInput
         return CanvasInputEffects.None;
     }
 
+    public CanvasInputEffects LostPointerCapture() => CanvasInputEffects.None;
+
     public bool FinalizeFence()
     {
         if (State != PartToolState.DrawingFence) return false;

@@ -93,13 +93,26 @@ public sealed class MaskPatch : EditCommand
     internal override AppliedEdit? Apply(CutworkDocument document)
     {
         if (document.GetLayer(_layerId) is not PartLayer layer) throw new EditException(EditError.InvalidPatch);
-        var before = layer.CopyMask(_region);
+        if (!document.Contains(_region)) throw new EditException(EditError.InvalidPatch);
+        var beforeBounds = layer.Bounds;
+        var afterBounds = beforeBounds.Union(_region);
+        var before = layer.CopyMaskWithTransparentOutside(_region);
         if (before.Length != _after.Length) throw new EditException(EditError.InvalidPatch);
-        if (before.AsSpan().SequenceEqual(_after)) return null;
+        if (before.AsSpan().SequenceEqual(_after) && beforeBounds == afterBounds) return null;
         var after = _after;
         var region = _region;
+        layer.ResizeMask(afterBounds);
         layer.WriteMask(region, after);
-        return new(() => layer.WriteMask(region, before), () => layer.WriteMask(region, after),
+        return new(() =>
+            {
+                layer.WriteMask(region, before);
+                layer.ResizeMask(beforeBounds);
+            },
+            () =>
+            {
+                layer.ResizeMask(afterBounds);
+                layer.WriteMask(region, after);
+            },
             layer, region, region, 128L + before.LongLength + after.LongLength);
     }
 }
@@ -124,5 +137,29 @@ public sealed class RasterPatch : EditCommand
         layer.WritePixels(region, after);
         return new(() => layer.WritePixels(region, before), () => layer.WritePixels(region, after),
             layer, region, default, 128L + before.LongLength + after.LongLength);
+    }
+}
+
+public sealed class SetPatchTransform(Guid layerId, PatchTransform transform) : EditCommand
+{
+    internal override AppliedEdit? Apply(CutworkDocument document)
+    {
+        if (document.GetLayer(layerId) is not PatchLayer layer) throw new EditException(EditError.InvalidLayer);
+        var before = layer.Transform;
+        if (before == transform) return null;
+        var beforeBounds = layer.Bounds;
+        try
+        {
+            layer.SetTransform(transform);
+            if (!document.Contains(layer.Bounds)) throw new EditException(EditError.InvalidLayer);
+        }
+        catch
+        {
+            layer.SetTransform(before);
+            throw;
+        }
+        var dirty = beforeBounds.Union(layer.Bounds);
+        return new(() => layer.SetTransform(before), () => layer.SetTransform(transform),
+            layer, dirty, default, 192);
     }
 }

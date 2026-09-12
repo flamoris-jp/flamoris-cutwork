@@ -183,7 +183,7 @@ public sealed class EditHistoryTests
     {
         var s = Open(); var part = Part(); s.Execute(new AddLayer(part));
         var before = part.CopyMask(part.Bounds); var revision = s.Document!.Revision;
-        Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, new DocumentRect(3, 2, 1, 1), new byte[] { 1 })));
+        Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, new DocumentRect(4, 2, 1, 1), new byte[] { 1 })));
         Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, part.Bounds, new byte[] { 1 })));
         CollectionAssert.AreEqual(before, part.CopyMask(part.Bounds));
         Assert.AreEqual(revision, s.Document.Revision);
@@ -207,5 +207,26 @@ public sealed class EditHistoryTests
         var before = s.HistoryBytes;
         s.Execute(new RasterPatch(repair.Id, new DocumentRect(2, 1, 1, 1), new byte[] { 1, 2, 3, 4 }));
         Assert.AreEqual(128L + 8, s.HistoryBytes - before);
+    }
+
+    [TestMethod]
+    public void PartMaskExpansionHistoryRetainsOnlyTouchedRoiBytes()
+    {
+        var s = Open();
+        var part = Part();
+        s.Execute(new AddLayer(part));
+        s.Open(s.Document!);
+        var beforeBounds = part.Bounds;
+        var region = new DocumentRect(1, 1, 2, 2);
+
+        s.Execute(new MaskPatch(part.Id, region, new byte[] { 10, 20, 30, 40 }));
+
+        Assert.AreEqual(128L + region.Width * region.Height * 2L, s.HistoryBytes);
+        Assert.AreEqual(new DocumentRect(0, 0, 3, 3), part.Bounds);
+        s.Undo();
+        Assert.AreEqual(beforeBounds, part.Bounds);
+        s.Redo();
+        Assert.AreEqual(new DocumentRect(0, 0, 3, 3), part.Bounds);
+        CollectionAssert.AreEqual(new byte[] { 10, 20, 30, 40 }, part.CopyMask(region));
     }
 }

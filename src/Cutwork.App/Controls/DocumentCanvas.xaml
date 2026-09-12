@@ -17,11 +17,28 @@
                    Stretch="Fill"
                    RenderTransformOrigin="0,0"
                    Visibility="Collapsed" />
+            <Image x:Name="PatchImageOverlay"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   Stretch="Fill"
+                   Opacity="0.78"
+                   RenderTransformOrigin="0,0"
+                   Visibility="Collapsed" />
             <Polyline x:Name="PartFenceLine"
                       Stroke="#FFF06AAF"
                       StrokeThickness="1.5"
                       Fill="#18EB46AA"
                       Visibility="Collapsed" />
+            <Polyline x:Name="PatchFenceLine"
+                      Stroke="#FF58D6C7"
+                      StrokeThickness="1.5"
+                      Fill="#1858D6C7"
+                      Visibility="Collapsed" />
+            <Ellipse x:Name="BrushCursor"
+                     StrokeThickness="1.25"
+                     Fill="#10FFFFFF"
+                     IsHitTestVisible="False"
+                     Visibility="Collapsed" />
             <Line x:Name="CrosshairHorizontal" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
             <Line x:Name="CrosshairVertical" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
         </Canvas>

@@ -81,9 +81,12 @@ public sealed class CanvasInputRouter
 
     public CanvasInputEffects LostPointerCapture()
     {
-        if (!IsPanning) return CanvasInputEffects.None;
-        _panButton = CanvasPointerButton.None;
-        return CanvasInputEffects.ReleasePointer;
+        if (IsPanning)
+        {
+            _panButton = CanvasPointerButton.None;
+            return CanvasInputEffects.ReleasePointer;
+        }
+        return _activeTool?.LostPointerCapture() ?? CanvasInputEffects.None;
     }
 
     public CanvasInputEffects Wheel(ViewportPoint position, int delta, CanvasModifiers modifiers)
