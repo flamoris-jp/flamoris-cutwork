@@ -29,6 +29,40 @@ public sealed class FlimgValidationTests
     }
 
     [TestMethod]
+    public void FutureVersionDispatchDoesNotRequireV1Shape()
+    {
+        AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":2,"future":{"mode":"new"}}"""));
+        AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":2}"""));
+        AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":0,"legacyShape":true}"""));
+    }
+
+    [TestMethod]
+    public void MalformedOrDuplicateSchemaEnvelopeIsRejected()
+    {
+        AssertRejected(FlimgError.MalformedManifest, ManifestOnly(
+            """{"schemaVersion":2}"""));
+        AssertRejected(FlimgError.MalformedManifest, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":"2"}"""));
+        AssertRejected(FlimgError.MalformedManifest, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":1,"schemaVersion":2}"""));
+    }
+
+    [TestMethod]
+    public void ValidV1StillUsesStrictV1Deserializer()
+    {
+        var valid = FlimgRoundTripTests.Write(FlimgRoundTripTests.FullDocument());
+        var restored = FlimgRoundTripTests.Read(valid);
+        Assert.AreEqual(FlimgArchiveCodec.SchemaVersion, 1);
+        Assert.AreEqual(FlimgRoundTripTests.FullDocument().Dimensions, restored.Dimensions);
+
+        AssertRejected(FlimgError.MalformedManifest, MutateManifest(root =>
+            root["unknownV1Property"] = true));
+    }
+
+    [TestMethod]
     public void MissingAssetAndChecksumMismatchAreRejected()
     {
         var valid = Entries(FlimgRoundTripTests.Write(FlimgRoundTripTests.FullDocument()));
@@ -191,6 +225,9 @@ public sealed class FlimgValidationTests
         return Archive(Replace(valid, "manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString(
             new JsonSerializerOptions { WriteIndented = true }))));
     }
+
+    private static byte[] ManifestOnly(string json) =>
+        Archive([("manifest.json", Encoding.UTF8.GetBytes(json))]);
 
     private static byte[] ReplaceAssetAndHash(string path, byte[] bytes) => MutateArchive(entries =>
     {

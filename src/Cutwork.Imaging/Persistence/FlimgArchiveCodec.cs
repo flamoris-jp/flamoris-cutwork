@@ -130,6 +130,9 @@ public sealed class FlimgArchiveCodec
                 throw new FlimgException(FlimgError.SizeLimitExceeded);
             var manifestBytes = ReadEntry(manifestEntry, MaximumManifestBytes, readBudget);
             ValidateNoDuplicateJsonProperties(manifestBytes);
+            var schemaVersion = ReadEnvelope(manifestBytes);
+            if (schemaVersion != SchemaVersion)
+                throw new FlimgException(FlimgError.UnsupportedVersion);
             FlimgManifest manifest;
             try
             {
@@ -141,7 +144,7 @@ public sealed class FlimgArchiveCodec
             {
                 throw new FlimgException(FlimgError.MalformedManifest, exception);
             }
-            return ReadVersion(manifest, entries, readBudget);
+            return ReadV1(manifest, entries, readBudget);
         }
         catch (FlimgException) { throw; }
         catch (InvalidDataException exception)
@@ -150,14 +153,6 @@ public sealed class FlimgArchiveCodec
         }
         finally { bufferedInput?.Dispose(); }
     }
-
-    private static CutworkDocument ReadVersion(FlimgManifest manifest,
-        IReadOnlyDictionary<string, ZipArchiveEntry> entries,
-        ArchiveReadBudget readBudget) => manifest.SchemaVersion switch
-    {
-        SchemaVersion => ReadV1(manifest, entries, readBudget),
-        _ => throw new FlimgException(FlimgError.UnsupportedVersion),
-    };
 
     private static CutworkDocument ReadV1(FlimgManifest manifest,
         IReadOnlyDictionary<string, ZipArchiveEntry> entries, ArchiveReadBudget readBudget)
@@ -469,6 +464,29 @@ public sealed class FlimgArchiveCodec
             }
             else if (element.ValueKind == JsonValueKind.Array)
                 foreach (var child in element.EnumerateArray()) Visit(child);
+        }
+    }
+
+    private static int ReadEnvelope(ReadOnlySpan<byte> json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json.ToArray());
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("format", out var format)
+                || format.ValueKind != JsonValueKind.String
+                || format.GetString() != "flamoris-cutwork"
+                || !root.TryGetProperty("schemaVersion", out var schemaVersion)
+                || schemaVersion.ValueKind != JsonValueKind.Number
+                || !schemaVersion.TryGetInt32(out var version))
+                throw new FlimgException(FlimgError.MalformedManifest);
+            return version;
+        }
+        catch (FlimgException) { throw; }
+        catch (JsonException exception)
+        {
+            throw new FlimgException(FlimgError.MalformedManifest, exception);
         }
     }
 }
