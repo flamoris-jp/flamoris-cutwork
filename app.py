@@ -22,6 +22,7 @@ from image_ops import (
 )
 from layer_panel import LayerPanel
 from model import EditorState
+from prototype_benchmark import PrototypeBenchmark, StageTimer
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -53,6 +54,7 @@ class CutoutSpikeApp:
         self._checker_cache_rgb: np.ndarray | None = None
         self._refresh_job: str | None = None
         self._transform_job: str | None = None
+        self.benchmark = PrototypeBenchmark.from_environment()
         self._build_ui()
         self._bind_events()
 
@@ -562,7 +564,9 @@ class CutoutSpikeApp:
             self.state.viewport.offset_y = (canvas_h - image_h * zoom) / 2
             self.state.viewport.fit_pending = False
         canvas_w, canvas_h = max(1, self.canvas.winfo_width()), max(1, self.canvas.winfo_height())
+        timing = StageTimer(self.benchmark.enabled)
         preview = self._composite_preview().copy()
+        composite_ms = timing.mark_ms()
         if self.state.pending_part_mask is not None:
             selected = self.state.pending_part_mask > 0
             preview[selected] = (preview[selected] * 0.72 + np.array([70, 220, 130]) * 0.28).astype(np.uint8)
@@ -571,13 +575,25 @@ class CutoutSpikeApp:
             mask_alpha = active_mask(original, self.state.layers, active) if active.kind == "base" else self._render_cached(active)[:, :, 3]
             mask = mask_alpha > 0
             preview[mask] = (preview[mask] * 0.72 + np.array([235, 70, 170]) * 0.28).astype(np.uint8)
+        overlay_ms = timing.mark_ms()
         viewport = self.state.viewport
         inverse = (1.0 / viewport.zoom, 0.0, -viewport.offset_x / viewport.zoom, 0.0, 1.0 / viewport.zoom, -viewport.offset_y / viewport.zoom)
         displayed = Image.fromarray(preview).transform((canvas_w, canvas_h), Image.Transform.AFFINE, inverse, resample=Image.Resampling.BILINEAR, fillcolor=(32, 32, 32))
+        viewport_transform_ms = timing.mark_ms()
         self.preview_photo = ImageTk.PhotoImage(displayed)
+        photo_image_ms = timing.mark_ms()
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.preview_photo, tags="image")
         self._draw_polygon_preview()
+        canvas_update_ms = timing.mark_ms()
+        self.benchmark.record_visible_refresh(
+            composite_ms=composite_ms,
+            overlay_ms=overlay_ms,
+            viewport_transform_ms=viewport_transform_ms,
+            photo_image_ms=photo_image_ms,
+            canvas_update_ms=canvas_update_ms,
+            total_ms=timing.total_ms(),
+        )
 
     def _draw_polygon_preview(self) -> None:
         if not self.polygon_points:

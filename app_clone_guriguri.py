@@ -7,8 +7,9 @@ import numpy as np
 from PIL import Image, ImageTk
 
 from app_polygon_guriguri import PolygonGuriguriApp
-from clone_brush import normalize_rect, paint_aligned_clone, rect_center
+from clone_brush import clone_segment_geometry, normalize_rect, paint_aligned_clone, rect_center
 from image_ops import union_part_masks
+from prototype_benchmark import StageTimer
 
 
 class CloneGuriguriApp(PolygonGuriguriApp):
@@ -32,6 +33,7 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_undo_stack: list[tuple[str, np.ndarray]] = []
         self.clone_stroke_hole_mask: np.ndarray | None = None
         self.clone_stroke_touched = 0
+        self.clone_pointer_interval_ms: float | None = None
         self.clone_hole_only = tk.BooleanVar(master=root, value=True)
         self.show_original_preview = tk.BooleanVar(master=root, value=False)
         super().__init__(root)
@@ -128,8 +130,20 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             self.status.set("Choose Clone Source and drag a source rectangle first.")
             return
 
+        original = self.state.original_rgb
+        height, width = original.shape[:2]
+        radius = max(1, self.brush_size.get() // 2)
+        self.benchmark.begin_clone_stroke(
+            document_width=width,
+            document_height=height,
+            brush_radius=radius,
+            hole_only=self.clone_hole_only.get(),
+        )
+        setup_timing = StageTimer(self.benchmark.enabled)
+        self.clone_pointer_interval_ms = self.benchmark.record_pointer_sample()
         repair = self._ensure_repair_layer()
         if repair.paint_rgba is None:
+            self.benchmark.cancel_stroke()
             return
         self.clone_undo_stack.append((repair.id, repair.paint_rgba.copy()))
         if len(self.clone_undo_stack) > 20:
@@ -154,6 +168,7 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_destination_anchor = point
         self.clone_last_destination = point
         self.clone_source_cursor = self.clone_source_anchor
+        self.benchmark.record_setup(setup_timing.total_ms())
         self._paint_clone_segment(point, point)
 
     def on_pointer_drag(self, event: tk.Event) -> None:
@@ -173,6 +188,7 @@ class CloneGuriguriApp(PolygonGuriguriApp):
                 self.refresh_preview()
             return
 
+        self.clone_pointer_interval_ms = self.benchmark.record_pointer_sample()
         if self.clone_last_destination is None or self.clone_destination_anchor is None or self.clone_source_anchor is None:
             return
         self._paint_clone_segment(self.clone_last_destination, point)
@@ -220,6 +236,7 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             f"Clone stroke ready: copied {touched:,} destination px. Paint another direction, choose a new source patch, Blur/Smudge, or Undo Clone Stroke."
         )
         self.refresh_preview()
+        self.benchmark.end_stroke()
 
     def _ensure_repair_layer(self):
         active = self.state.active_layer
@@ -248,6 +265,12 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         ):
             return
 
+        radius = max(1, self.brush_size.get() // 2)
+        geometry = None
+        if self.benchmark.enabled:
+            height, width = original.shape[:2]
+            geometry = clone_segment_geometry(start, end, radius, width, height)
+        timing = StageTimer(self.benchmark.enabled)
         touched = paint_aligned_clone(
             active.paint_rgba,
             original,
@@ -256,9 +279,10 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             self.clone_destination_anchor,
             start,
             end,
-            max(1, self.brush_size.get() // 2),
+            radius,
             hole_mask=self.clone_stroke_hole_mask,
         )
+        kernel_ms = timing.mark_ms()
         self.clone_stroke_touched += touched
 
         if active.local_edits:
@@ -269,12 +293,28 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             # same RGBA buffer in place, so only the final composite is stale.
             self._layer_cache[active.id] = active.paint_rgba
             self._composite_cache_rgb = None
+        image_update_ms = timing.mark_ms()
 
         # Full Tk/PIL preview composition is much more expensive than the local
         # clone kernel. Cap redraw requests around 30 fps and let multiple motion
         # events accumulate between frames; line interpolation still connects the
         # last and current image-space points so no stroke gaps are introduced.
         self._schedule_refresh(delay_ms=33)
+        scheduling_ms = timing.mark_ms()
+        if geometry is not None:
+            (x0, y0, x1, y1), point_count = geometry
+            self.benchmark.record_clone_segment(
+                pointer_interval_ms=self.clone_pointer_interval_ms,
+                interpolated_point_count=point_count,
+                roi_width=max(0, x1 - x0),
+                roi_height=max(0, y1 - y0),
+                touched_pixels=touched,
+                kernel_ms=kernel_ms,
+                image_update_ms=image_update_ms,
+                scheduling_ms=scheduling_ms,
+                total_ms=timing.total_ms(),
+            )
+        self.clone_pointer_interval_ms = None
 
     def undo_clone_stroke(self) -> None:
         if not self.clone_undo_stack:
@@ -302,7 +342,9 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_source_cursor = None
         self.clone_stroke_hole_mask = None
         self.clone_stroke_touched = 0
+        self.clone_pointer_interval_ms = None
         self.clone_undo_stack.clear()
+        self.benchmark.cancel_stroke()
 
     def _refresh_original_preview(self) -> None:
         original = self.state.original_rgb
