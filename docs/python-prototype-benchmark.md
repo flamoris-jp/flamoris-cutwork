@@ -2,6 +2,8 @@
 
 Issue #6 records a short Phase 0 baseline before the production migration. The goal is to locate time in the existing Clone / repair-paint path, not to optimize or redesign the Python prototype.
 
+The preserved Python/Tkinter implementation now lives under `experiments/python-tkinter/`. Commands below are written from the repository root unless otherwise stated.
+
 ## Environment
 
 Measurements were taken on 2026-09-12 in the available headless development environment.
@@ -20,7 +22,7 @@ These values are a repository baseline from one virtual environment, not a Windo
 
 ## Measured path
 
-The interactive application now has opt-in instrumentation around its existing path:
+The interactive application has opt-in instrumentation around its existing path:
 
 1. Tk pointer samples and their arrival interval.
 2. Clone-stroke setup, including the current undo snapshot and optional Hole Only mask union.
@@ -36,12 +38,13 @@ Because the benchmark host has no display, the checked-in headless runner exerci
 Run the repeatable headless measurement with:
 
 ```text
-python benchmark_python_prototype.py
+python experiments/python-tkinter/benchmark_python_prototype.py
 ```
 
-For a manual Windows/Tk run, enable the in-application collector before launching the Clone spike:
+For a manual Windows/Tk run, either `cd experiments\python-tkinter` first or invoke the launcher by path. Example:
 
 ```powershell
+cd experiments\python-tkinter
 $env:CUTWORK_BENCHMARK = "1"
 $env:CUTWORK_BENCHMARK_OUTPUT = "clone-benchmark.jsonl"
 python app_clone_guriguri.py
@@ -74,7 +77,7 @@ Times are milliseconds. Values are average with observed minimum–maximum in pa
 - The existing full-frame composite scales with document size: about 35 ms at 720p, 74 ms at 1080p, and 330 ms at 4K.
 - Transforming the preview into a 1280×720 viewport adds about 22–27 ms. This stays comparatively flat because the output viewport size is fixed.
 - Even before Tk image creation and Canvas replacement, every measured display preparation exceeds a 30 fps frame budget of 33.3 ms. Full-frame preview work is therefore the likely primary bottleneck, while the local Clone kernel is not.
-- The result supports the accepted production direction—ROI editing, dirty-region composition, and separate overlays—but does not by itself justify making GPU rendering a Phase 1 requirement.
+- The result supports the accepted production direction, ROI editing, dirty-region composition, and separate overlays, but does not by itself justify making GPU rendering a Phase 1 requirement.
 
 ## Limitations
 
@@ -83,7 +86,7 @@ Times are milliseconds. Values are average with observed minimum–maximum in pa
 - Four measured strokes are enough for a directional baseline, not statistical performance qualification.
 - The benchmark retains the prototype's current rectangle source and Hole Only behavior. It makes no production UX recommendation.
 - Stage timings add small observer overhead when explicitly enabled. Normal operation remains opt-in and avoids clock reads and benchmark metadata collection.
-- Results describe the current Python/Tk/PIL experiment only. They are not acceptance thresholds for the WPF implementation.
+- Results describe the preserved Python/Tk/PIL experiment only. They are not acceptance thresholds for the WPF implementation.
 
 ## Re-measure after the WPF foundation
 
@@ -98,4 +101,4 @@ Use the same conceptual boundaries on representative Windows hardware:
 - Full-quality settle refresh after the stroke ends.
 - Memory use and responsiveness at 720p, 1080p, and 4K with realistic layer counts.
 
-Phase 1 is not blocked on obtaining a Windows number for the legacy Tk display. The important Phase 0 finding is already clear: keep local editing local, and do not reproduce the prototype's per-refresh full-document composite path in the production canvas.
+Phase 1 was not blocked on obtaining a Windows number for the legacy Tk display. The important Phase 0 finding remains clear: keep local editing local, and do not reproduce the prototype's per-refresh full-document composite path in the production canvas.
