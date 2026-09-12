@@ -60,7 +60,7 @@
   <data name="Layer_Bounds" xml:space="preserve"><value>Bounds: X {0}, Y {1} / {2} × {3} px</value></data>
   <data name="LayerDescription_Base" xml:space="preserve"><value>Fixed layer derived from Original. Cannot be moved or deleted. Hiding a Part does not close its hole.</value></data>
   <data name="LayerDescription_Part" xml:space="preserve"><value>Original pixels through an authored mask. Reorder within the band above Base.</value></data>
-  <data name="LayerDescription_Patch" xml:space="preserve"><value>Underpaint holding local image pixels. Placement, scale, and rotation authoring arrive in a later phase.</value></data>
+  <data name="LayerDescription_Patch" xml:space="preserve"><value>Underpaint holding local pixels frozen from Original. Placement, scale, and rotation are editable.</value></data>
   <data name="LayerDescription_Repair" xml:space="preserve"><value>Underpaint pixel layer for repairs. Reorder within the band below Base.</value></data>
   <data name="Status_UnsavedMarker" xml:space="preserve"><value> — Unsaved</value></data>
   <data name="Edit_ErrorTitle" xml:space="preserve"><value>Cannot Edit</value></data>
@@ -72,4 +72,30 @@
   <data name="EditError_InvalidPatch" xml:space="preserve"><value>The edit region or pixel data is invalid.</value></data>
   <data name="EditError_HistoryBudgetExceeded" xml:space="preserve"><value>This action was cancelled because it exceeded the history memory budget.</value></data>
   <data name="EditError_TransactionActive" xml:space="preserve"><value>Finish or cancel the current edit first.</value></data>
+  <data name="MaskTool_Name" xml:space="preserve"><value>Mask</value></data>
+  <data name="MaskTool_Tooltip" xml:space="preserve"><value>Correct the selected Part mask</value></data>
+  <data name="MaskTool_Radius" xml:space="preserve"><value>Radius (image px)</value></data>
+  <data name="MaskTool_Add" xml:space="preserve"><value>Add</value></data>
+  <data name="MaskTool_Erase" xml:space="preserve"><value>Erase</value></data>
+  <data name="MaskTool_Status_Ready" xml:space="preserve"><value>Select a Part and drag. Hold Alt to temporarily invert add/erase.</value></data>
+  <data name="MaskTool_Status_SelectPart" xml:space="preserve"><value>Select the Part layer whose mask you want to edit.</value></data>
+  <data name="MaskTool_Status_Painting" xml:space="preserve"><value>Editing mask. Release to commit one action; Esc cancels it.</value></data>
+  <data name="MaskTool_Status_Cancelled" xml:space="preserve"><value>Mask edit cancelled.</value></data>
+  <data name="MaskTool_Status_Committed" xml:space="preserve"><value>Mask edit committed.</value></data>
+  <data name="PatchTool_Name" xml:space="preserve"><value>Patch</value></data>
+  <data name="PatchTool_Tooltip" xml:space="preserve"><value>Create and place a repair fragment from Original</value></data>
+  <data name="PatchTool_Commit" xml:space="preserve"><value>Commit</value></data>
+  <data name="PatchTool_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="PatchTool_Position" xml:space="preserve"><value>Center X / Y (image px)</value></data>
+  <data name="PatchTool_Scale" xml:space="preserve"><value>Scale (%; max 1000)</value></data>
+  <data name="PatchTool_Rotation" xml:space="preserve"><value>Rotation (degrees)</value></data>
+  <data name="PatchTool_Status_Ready" xml:space="preserve"><value>Fence a source on Original, then press Enter or double-click to place it.</value></data>
+  <data name="PatchTool_Status_DrawingSource" xml:space="preserve"><value>Choosing source: {0} points. Press Enter or double-click to finish.</value></data>
+  <data name="PatchTool_Status_NeedsThreePoints" xml:space="preserve"><value>A source needs at least 3 points ({0} now).</value></data>
+  <data name="PatchTool_Status_InvalidSource" xml:space="preserve"><value>A patch source cannot be made from this region.</value></data>
+  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>Drag to place. Adjust scale and rotation in Properties, then commit.</value></data>
+  <data name="PatchTool_Status_Cancelled" xml:space="preserve"><value>Patch creation cancelled.</value></data>
+  <data name="PatchTool_Status_Committed" xml:space="preserve"><value>Patch committed.</value></data>
+  <data name="Properties_Apply" xml:space="preserve"><value>Apply</value></data>
+  <data name="Tool_InvalidNumber" xml:space="preserve"><value>The value is invalid or outside its range. Keep the patch inside the image and scale between 1–1000%.</value></data>
 </root>

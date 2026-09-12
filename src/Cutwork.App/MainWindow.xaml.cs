@@ -13,6 +13,8 @@ public partial class MainWindow : Window
     private readonly EditorSession _session = new();
     private readonly ImageImportService _imageImporter = new();
     private readonly PartToolController _partTool;
+    private readonly MaskBrushController _maskTool;
+    private readonly PatchToolController _patchTool;
     private readonly CanvasInputRouter _inputRouter;
     private DocumentPoint? _pointerPosition;
 
@@ -20,16 +22,28 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _partTool = new PartToolController(_session, new GuriguriPartFitter());
+        _maskTool = new MaskBrushController(_session);
+        _patchTool = new PatchToolController(_session, new PatchSourceSampler());
         _inputRouter = new CanvasInputRouter(_session);
         InitializeLayerEditing();
         CanvasView.AttachSession(_session);
-        CanvasView.AttachInputRouter(_inputRouter, _partTool);
+        CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool);
         CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
         CanvasView.ViewportChanged += (_, _) => UpdateStatus();
         CanvasView.EditRejected += (_, e) => ShowEditError(e.Exception);
         _partTool.Changed += (_, _) =>
         {
             UpdatePartToolUi();
+            UpdateStatus();
+        };
+        _maskTool.Changed += (_, _) =>
+        {
+            UpdatePhase4ToolUi();
+            UpdateStatus();
+        };
+        _patchTool.Changed += (_, _) =>
+        {
+            UpdatePhase4ToolUi();
             UpdateStatus();
         };
         ApplyLocalization();
@@ -59,6 +73,7 @@ public partial class MainWindow : Window
         PartToolButton.ToolTip = text["PartTool_Tooltip"];
         PartCommitButton.Content = text["PartTool_Commit"];
         PartCancelButton.Content = text["PartTool_Cancel"];
+        LocalizePhase4Tools();
         LayersGroup.Header = text["Panel_Layers"];
         PropertiesGroup.Header = text["Panel_Properties"];
         CanvasView.EmptyText = text["Canvas_NoDocument"];
@@ -99,6 +114,8 @@ public partial class MainWindow : Window
         OriginalMenuItem.IsEnabled = true;
         CompositeMenuItem.IsEnabled = true;
         PartToolButton.IsEnabled = true;
+        MaskToolButton.IsEnabled = true;
+        PatchToolButton.IsEnabled = true;
         UpdatePreviewChecks();
         ApplyLocalization();
     }
@@ -144,6 +161,11 @@ public partial class MainWindow : Window
         var document = _session.Document;
         Title = $"{text["AppTitle"]} — {document.Original.SourceName}";
         if (_session.IsDirty) Title += text["Status_UnsavedMarker"];
+        if (TryGetPhase4Status(out var phase4Status))
+        {
+            StatusText.Text = phase4Status;
+            return;
+        }
         if (_partTool.IsActive)
         {
             var snapshot = _partTool.Snapshot();
@@ -236,6 +258,7 @@ public partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         PartCancelButton.Visibility = _partTool.State != PartToolState.Idle
             ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePhase4ToolUi();
     }
 
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e) => Close();

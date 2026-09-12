@@ -60,6 +60,18 @@
                                   Padding="3"
                                   IsEnabled="False"
                                   Click="PartTool_Click" />
+                    <ToggleButton x:Name="MaskToolButton"
+                                  MinHeight="42"
+                                  Margin="0,4,0,0"
+                                  Padding="3"
+                                  IsEnabled="False"
+                                  Click="MaskTool_Click" />
+                    <ToggleButton x:Name="PatchToolButton"
+                                  MinHeight="42"
+                                  Margin="0,4,0,0"
+                                  Padding="3"
+                                  IsEnabled="False"
+                                  Click="PatchTool_Click" />
                     <Button x:Name="PartCommitButton"
                             Margin="0,10,0,0"
                             Padding="3"
@@ -70,6 +82,16 @@
                             Padding="3"
                             Visibility="Collapsed"
                             Click="PartCancel_Click" />
+                    <Button x:Name="PatchCommitButton"
+                            Margin="0,10,0,0"
+                            Padding="3"
+                            Visibility="Collapsed"
+                            Click="PatchCommit_Click" />
+                    <Button x:Name="PatchCancelButton"
+                            Margin="0,4,0,0"
+                            Padding="3"
+                            Visibility="Collapsed"
+                            Click="PatchCancel_Click" />
                 </StackPanel>
             </Border>
 
@@ -110,6 +132,33 @@
                             <Button x:Name="LayerRenameButton" HorizontalAlignment="Left" Padding="8,3" Click="LayerRename_Click" />
                             <TextBlock x:Name="LayerBoundsText" Margin="0,12,0,8" TextWrapping="Wrap" />
                             <TextBlock x:Name="LayerKindDescription" TextWrapping="Wrap" />
+                            <StackPanel x:Name="MaskPropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
+                                <Separator />
+                                <TextBlock x:Name="MaskRadiusLabel" Margin="0,8,0,0" />
+                                <TextBox x:Name="MaskRadiusEditor" Margin="0,4,0,6" />
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="MaskAddRadio" GroupName="MaskPolarity"
+                                                 Margin="0,0,12,0" Checked="MaskPolarity_Checked" />
+                                    <RadioButton x:Name="MaskEraseRadio" GroupName="MaskPolarity"
+                                                 Checked="MaskPolarity_Checked" />
+                                </StackPanel>
+                                <Button x:Name="MaskApplyButton" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                        Padding="8,3" Click="MaskApply_Click" />
+                            </StackPanel>
+                            <StackPanel x:Name="PatchPropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
+                                <Separator />
+                                <TextBlock x:Name="PatchPositionLabel" Margin="0,8,0,0" />
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
+                                    <TextBox x:Name="PatchXEditor" Width="82" Margin="0,0,6,0" />
+                                    <TextBox x:Name="PatchYEditor" Width="82" />
+                                </StackPanel>
+                                <TextBlock x:Name="PatchScaleLabel" />
+                                <TextBox x:Name="PatchScaleEditor" Margin="0,4,0,6" />
+                                <TextBlock x:Name="PatchRotationLabel" />
+                                <TextBox x:Name="PatchRotationEditor" Margin="0,4,0,6" />
+                                <Button x:Name="PatchApplyButton" HorizontalAlignment="Left" Padding="8,3"
+                                        Click="PatchApply_Click" />
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </GroupBox>
