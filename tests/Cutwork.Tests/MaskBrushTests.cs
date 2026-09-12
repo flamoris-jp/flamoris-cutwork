@@ -82,9 +82,11 @@ public sealed class MaskBrushTests
         var (session, part, tool) = Create(maskValue: 0);
         var before = part.CopyMask(part.Bounds);
         session.MarkSaved();
+        tool.SetRadius(1);
 
         tool.PointerDown(new(4, 4), 1, CanvasModifiers.None);
-        tool.PointerMove(new(8, 4), CanvasModifiers.None);
+        tool.PointerMove(new(10, 4), CanvasModifiers.None);
+        Assert.IsTrue(tool.HasPendingWork);
         tool.LostPointerCapture();
 
         CollectionAssert.AreEqual(before, part.CopyMask(part.Bounds));
@@ -212,6 +214,9 @@ public sealed class MaskBrushTests
         sparse.Tool.PointerDown(new(4.5, 4.5), 1, CanvasModifiers.None);
         sparse.Tool.PointerMove(new(123.5, 123.5), CanvasModifiers.None);
         sparse.Tool.PointerUp(new(123.5, 123.5), CanvasPointerButton.Left, CanvasModifiers.None);
+        Assert.AreEqual(MaskBrushState.Painting, sparse.Tool.State);
+        Assert.AreEqual(0, sparse.Session.UndoCount);
+        DrainPending(sparse.Tool);
 
         dense.Tool.PointerDown(new(4.5, 4.5), 1, CanvasModifiers.None);
         for (var coordinate = 8.5; coordinate < 123.5; coordinate += 4)
@@ -231,6 +236,16 @@ public sealed class MaskBrushTests
     {
         tool.PointerDown(point, 1, modifiers);
         tool.PointerUp(point, CanvasPointerButton.Left, modifiers);
+    }
+
+    private static void DrainPending(ICanvasDeferredWork tool)
+    {
+        var slices = 0;
+        while (tool.HasPendingWork)
+        {
+            tool.ProcessPendingWork();
+            Assert.IsTrue(++slices < 10_000, "Deferred tool work did not converge.");
+        }
     }
 
     private static (EditorSession Session, PartLayer Part, MaskBrushController Tool) Create(byte maskValue)

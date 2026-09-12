@@ -264,7 +264,15 @@ public sealed class CloneRepairTests
         tool.PointerDown(new(12.5, 12.5), 1, CanvasModifiers.None);
         kernel.BatchSizes.Clear();
         tool.PointerMove(new(243.5, 243.5), CanvasModifiers.None);
+        Assert.AreEqual(1, kernel.BatchSizes.Count);
         tool.PointerUp(new(243.5, 243.5), CanvasPointerButton.Left, CanvasModifiers.None);
+        Assert.AreEqual(2, kernel.BatchSizes.Count);
+        while (tool.HasPendingWork)
+        {
+            var before = kernel.BatchSizes.Count;
+            tool.ProcessPendingWork();
+            Assert.IsTrue(kernel.BatchSizes.Count - before <= 1);
+        }
 
         Assert.IsTrue(kernel.BatchSizes.Count > 1);
         Assert.IsTrue(kernel.BatchSizes.All(size => size is > 0
@@ -285,6 +293,7 @@ public sealed class CloneRepairTests
         sparse.Tool.PointerDown(new(12.5, 12.5), 1, CanvasModifiers.None);
         sparse.Tool.PointerMove(new(52.5, 52.5), CanvasModifiers.None);
         sparse.Tool.PointerUp(new(52.5, 52.5), CanvasPointerButton.Left, CanvasModifiers.None);
+        DrainPending(sparse.Tool);
 
         dense.Tool.PointerDown(new(12.5, 12.5), 1, CanvasModifiers.None);
         for (var coordinate = 16.5; coordinate < 52.5; coordinate += 4)
@@ -300,6 +309,16 @@ public sealed class CloneRepairTests
         Assert.AreEqual(1, dense.Session.UndoCount);
     }
 
+    private static void DrainPending(ICanvasDeferredWork tool)
+    {
+        var slices = 0;
+        while (tool.HasPendingWork)
+        {
+            tool.ProcessPendingWork();
+            Assert.IsTrue(++slices < 10_000, "Deferred tool work did not converge.");
+        }
+    }
+
     private static void VerifyCancellation(Func<CloneRepairController, CanvasInputEffects> cancel)
     {
         var session = OpenSession(30, 20);
@@ -312,10 +331,11 @@ public sealed class CloneRepairTests
         var history = session.UndoCount;
         var tool = new CloneRepairController(session, new CloneRepairKernel());
         tool.Activate();
-        tool.SetRadius(3);
+        tool.SetRadius(1);
         tool.PointerDown(new(3, 3), 1, CanvasModifiers.Alt);
         tool.PointerDown(new(10.5, 8.5), 1, CanvasModifiers.None);
         tool.PointerMove(new(17.5, 8.5), CanvasModifiers.None);
+        Assert.IsTrue(tool.HasPendingWork);
         cancel(tool);
 
         Assert.AreEqual(CloneRepairState.Idle, tool.State);

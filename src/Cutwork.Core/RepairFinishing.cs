@@ -26,7 +26,7 @@ public sealed record RepairFinishingSnapshot(
     RepairFinishingMessage Message);
 
 /// <summary>Shared Blur/Smudge gesture authority over selected Repair pixels.</summary>
-public sealed class RepairFinishingController : ICanvasToolInput
+public sealed class RepairFinishingController : ICanvasToolInput, ICanvasDeferredWork
 {
     public const double MinimumRadius = 0.5;
     public const double MaximumRadius = 512;
@@ -41,6 +41,8 @@ public sealed class RepairFinishingController : ICanvasToolInput
     private StrokeSampler? _sampler;
     private DocumentPoint? _lastSample;
     private DocumentPoint? _hover;
+    private bool _finishPending;
+    private DocumentPoint? _finishPoint;
 
     public RepairFinishingController(EditorSession session, IRepairFinishingKernel kernel,
         RepairFinishingKind kind)
@@ -57,6 +59,8 @@ public sealed class RepairFinishingController : ICanvasToolInput
     public double Radius { get; private set; } = 12;
     public double Strength { get; private set; } = 0.5;
     public RepairFinishingMessage Message { get; private set; } = RepairFinishingMessage.Ready;
+    public bool HasPendingWork => State == RepairFinishingState.Painting
+        && (_finishPending || _sampler is { HasPendingSamples: true });
     public event EventHandler? Changed;
 
     public void SetRadius(double radius)
@@ -121,7 +125,8 @@ public sealed class RepairFinishingController : ICanvasToolInput
     {
         var changed = _hover != point;
         _hover = point;
-        if (State == RepairFinishingState.Painting && point is { } current && _sampler is not null)
+        if (State == RepairFinishingState.Painting && !_finishPending
+            && point is { } current && _sampler is not null)
             ApplySamples(_sampler.Add(current));
         if (changed) NotifyChanged();
         return changed ? CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None;
@@ -134,9 +139,32 @@ public sealed class RepairFinishingController : ICanvasToolInput
         if (point is { } current && _sampler is not null)
         {
             ApplySamples(_sampler.Add(current));
-            if (_lastSample is { } last && DistanceSquared(last, current) > 1e-12)
-                ApplySamples([current]);
         }
+        if (_sampler is { HasPendingSamples: true })
+        {
+            _finishPending = true;
+            _finishPoint = point;
+            return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
+        }
+        return CompletePointerUp(point);
+    }
+
+    public CanvasInputEffects ProcessPendingWork()
+    {
+        if (!HasPendingWork || _sampler is null) return CanvasInputEffects.None;
+        if (_sampler.HasPendingSamples)
+        {
+            ApplySamples(_sampler.TakePendingBatch());
+            return CanvasInputEffects.Handled;
+        }
+        return _finishPending ? CompletePointerUp(_finishPoint) : CanvasInputEffects.Handled;
+    }
+
+    private CanvasInputEffects CompletePointerUp(DocumentPoint? point)
+    {
+        if (point is { } current && _lastSample is { } last
+            && DistanceSquared(last, current) > 1e-12)
+            ApplySamples([current]);
         _transaction!.Commit(_target!.Id);
         ClearStroke();
         _hover = point;
@@ -182,30 +210,29 @@ public sealed class RepairFinishingController : ICanvasToolInput
 
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples)
     {
+        if (samples.Count > StrokeSampler.MaximumBatchSamples)
+            throw new ArgumentOutOfRangeException(nameof(samples));
         if (samples.Count == 0 || _target is null || _transaction is null
             || _session.Document is not { } document) return;
         var target = _target;
         var transaction = _transaction;
         try
         {
-            foreach (var batch in StrokeSampler.Batch(samples))
+            transaction.ApplyBatch(() =>
             {
-                transaction.ApplyBatch(() =>
+                for (var index = 0; index < samples.Count; index++)
                 {
-                    for (var index = 0; index < batch.Count; index++)
-                    {
-                        var sample = batch[index];
-                        var patch = Kind == RepairFinishingKind.Blur
-                            ? _kernel.Blur(target, sample, Radius, Strength, document.Dimensions)
-                            : _kernel.Smudge(target, _lastSample!.Value, sample,
-                                Radius, Strength, document.Dimensions);
-                        _lastSample = sample;
-                        if (!patch.Region.IsEmpty && patch.HasChanges)
-                            transaction.Apply(new RasterPatch(target.Id, patch.Region,
-                                patch.StraightBgra.Span));
-                    }
-                });
-            }
+                    var sample = samples[index];
+                    var patch = Kind == RepairFinishingKind.Blur
+                        ? _kernel.Blur(target, sample, Radius, Strength, document.Dimensions)
+                        : _kernel.Smudge(target, _lastSample!.Value, sample,
+                            Radius, Strength, document.Dimensions);
+                    _lastSample = sample;
+                    if (!patch.Region.IsEmpty && patch.HasChanges)
+                        transaction.Apply(new RasterPatch(target.Id, patch.Region,
+                            patch.StraightBgra.Span));
+                }
+            });
         }
         catch
         {
@@ -223,6 +250,8 @@ public sealed class RepairFinishingController : ICanvasToolInput
         _target = null;
         _sampler = null;
         _lastSample = null;
+        _finishPending = false;
+        _finishPoint = null;
         State = RepairFinishingState.Idle;
     }
 

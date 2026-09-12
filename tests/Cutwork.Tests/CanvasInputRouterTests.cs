@@ -56,6 +56,20 @@ public sealed class CanvasInputRouterTests
         Assert.AreEqual(1, tool.WheelCount);
     }
 
+    [TestMethod]
+    public void DeferredToolWorkIsPumpedOneSliceThroughTheRouter()
+    {
+        var (_, router, tool) = CreateRouter();
+        tool.PendingSlices = 2;
+
+        var first = router.ProcessPendingToolWork();
+
+        Assert.IsTrue(first.HasFlag(CanvasInputEffects.Handled));
+        Assert.AreEqual(1, tool.PendingSlices);
+        Assert.AreEqual(1, tool.ProcessPendingCount);
+        Assert.IsTrue(router.HasPendingToolWork);
+    }
+
     private static (EditorSession Session, CanvasInputRouter Router, RecordingTool Tool) CreateRouter()
     {
         var session = new EditorSession();
@@ -67,13 +81,16 @@ public sealed class CanvasInputRouterTests
         return (session, router, tool);
     }
 
-    private sealed class RecordingTool : ICanvasToolInput
+    private sealed class RecordingTool : ICanvasToolInput, ICanvasDeferredWork
     {
         public bool HandleWheel { get; set; }
         public int PointerDownCount { get; private set; }
         public int WheelCount { get; private set; }
         public int LastWheelSteps { get; private set; }
         public DocumentPoint? LastPoint { get; private set; }
+        public int PendingSlices { get; set; }
+        public int ProcessPendingCount { get; private set; }
+        public bool HasPendingWork => PendingSlices > 0;
         public void Activate() { }
         public void Deactivate() { }
         public CanvasInputEffects PointerDown(DocumentPoint point, int clickCount, CanvasModifiers modifiers)
@@ -92,6 +109,12 @@ public sealed class CanvasInputRouterTests
         }
         public CanvasInputEffects KeyDown(CanvasToolKey key, CanvasModifiers modifiers) => CanvasInputEffects.None;
         public CanvasInputEffects LostPointerCapture() => CanvasInputEffects.None;
+        public CanvasInputEffects ProcessPendingWork()
+        {
+            ProcessPendingCount++;
+            PendingSlices--;
+            return CanvasInputEffects.Handled;
+        }
         public void Cancel() { }
     }
 }

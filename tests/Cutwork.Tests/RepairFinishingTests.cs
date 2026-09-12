@@ -248,7 +248,15 @@ public sealed class RepairFinishingTests
         session.Document!.Changed += (_, _) => publications++;
 
         tool.PointerMove(new(123.5, 123.5), CanvasModifiers.None);
+        Assert.AreEqual(StrokeSampler.MaximumBatchSamples, kernel.CallCount);
         tool.PointerUp(new(123.5, 123.5), CanvasPointerButton.Left, CanvasModifiers.None);
+        Assert.AreEqual(StrokeSampler.MaximumBatchSamples * 2, kernel.CallCount);
+        while (tool.HasPendingWork)
+        {
+            var before = kernel.CallCount;
+            tool.ProcessPendingWork();
+            Assert.IsTrue(kernel.CallCount - before <= StrokeSampler.MaximumBatchSamples);
+        }
 
         Assert.IsTrue(kernel.CallCount > StrokeSampler.MaximumBatchSamples);
         Assert.IsTrue(publications < kernel.CallCount,
@@ -265,7 +273,8 @@ public sealed class RepairFinishingTests
         var before = repair.CopyPixels(repair.Bounds);
         session.MarkSaved();
         tool.PointerDown(new(.5, 4.5), 1, CanvasModifiers.None);
-        tool.PointerMove(new(4.5, 4.5), CanvasModifiers.None);
+        tool.PointerMove(new(10.5, 4.5), CanvasModifiers.None);
+        Assert.IsTrue(tool.HasPendingWork);
         Assert.IsTrue(session.IsDirty);
         cancel(tool);
 
@@ -280,6 +289,17 @@ public sealed class RepairFinishingTests
         tool.PointerDown(from, 1, CanvasModifiers.None);
         tool.PointerMove(to, CanvasModifiers.None);
         tool.PointerUp(to, CanvasPointerButton.Left, CanvasModifiers.None);
+        DrainPending(tool);
+    }
+
+    private static void DrainPending(ICanvasDeferredWork tool)
+    {
+        var slices = 0;
+        while (tool.HasPendingWork)
+        {
+            tool.ProcessPendingWork();
+            Assert.IsTrue(++slices < 10_000, "Deferred tool work did not converge.");
+        }
     }
 
     private static void AssertOutOfRange(Action action)
