@@ -36,7 +36,12 @@ public sealed class OriginalAsset
 
     public byte[] CopyPixelBytes() => (byte[])_straightBgra32.Clone();
 
-    public ReadOnlySpan<byte> PixelAt(int x, int y) => _straightBgra32.AsSpan(checked(y * Stride + x * 4), 4);
+    public ReadOnlySpan<byte> PixelAt(int x, int y)
+    {
+        if ((uint)x >= (uint)Dimensions.Width || (uint)y >= (uint)Dimensions.Height)
+            throw new ArgumentOutOfRangeException(nameof(x));
+        return _straightBgra32.AsSpan(checked(y * Stride + x * 4), 4);
+    }
 
     public void CopyPixelBytesTo(Span<byte> destination)
     {

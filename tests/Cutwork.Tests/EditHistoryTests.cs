@@ -166,4 +166,46 @@ public sealed class EditHistoryTests
         Assert.AreEqual(revision, s.Document.Revision); Assert.AreEqual(state, s.CurrentRevision);
         Assert.AreEqual(undo, s.UndoCount); Assert.IsFalse(s.IsDirty);
     }
+
+    [TestMethod]
+    public void NoOpDoesNotDirtyAdvanceRevisionOrClearRedo()
+    {
+        var s = Open(); var b = s.Document!.Base;
+        s.Execute(new RenameLayer(b.Id, "redo")); s.Undo();
+        var revision = s.Document.Revision;
+        s.Execute(new RenameLayer(b.Id, ""), new SetLayerVisibility(b.Id, true));
+        Assert.AreEqual(revision, s.Document.Revision);
+        Assert.IsFalse(s.IsDirty); Assert.IsTrue(s.CanRedo);
+    }
+
+    [TestMethod]
+    public void InvalidPatchRejectsWithoutModifyingTarget()
+    {
+        var s = Open(); var part = Part(); s.Execute(new AddLayer(part));
+        var before = part.CopyMask(part.Bounds); var revision = s.Document!.Revision;
+        Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, new DocumentRect(3, 2, 1, 1), new byte[] { 1 })));
+        Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, part.Bounds, new byte[] { 1 })));
+        CollectionAssert.AreEqual(before, part.CopyMask(part.Bounds));
+        Assert.AreEqual(revision, s.Document.Revision);
+    }
+
+    [TestMethod]
+    public void DocumentAndLayerCannotHaveParallelEditingOwners()
+    {
+        var s = Open(); var other = Open(); var layer = Part();
+        s.Execute(new AddLayer(layer));
+        Reject(EditError.InvalidLayer, () => other.Open(s.Document!));
+        Reject(EditError.InvalidLayer, () => other.Execute(new AddLayer(layer)));
+        Reject(EditError.InvalidLayer, () => s.Execute(new AddLayer(layer)));
+        Assert.AreEqual(2, s.Document!.Layers.Count); Assert.AreEqual(1, other.Document!.Layers.Count);
+    }
+
+    [TestMethod]
+    public void OnePixelHistoryCostIsIndependentOfSurfaceSize()
+    {
+        var s = Open(); var repair = Repair(); s.Execute(new AddLayer(repair));
+        var before = s.HistoryBytes;
+        s.Execute(new RasterPatch(repair.Id, new DocumentRect(2, 1, 1, 1), new byte[] { 1, 2, 3, 4 }));
+        Assert.AreEqual(128L + 8, s.HistoryBytes - before);
+    }
 }

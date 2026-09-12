@@ -53,8 +53,12 @@ public abstract class RasterLayer : Layer
             throw new ArgumentException("Raster size mismatch.", nameof(bgra));
         _pixels = bgra.ToArray();
     }
-    public ReadOnlySpan<byte> PixelAt(int x, int y) =>
-        _pixels.AsSpan(checked(((y - Bounds.Y) * Bounds.Width + x - Bounds.X) * 4), 4);
+    public ReadOnlySpan<byte> PixelAt(int x, int y)
+    {
+        if (x < Bounds.X || y < Bounds.Y || x >= Bounds.Right || y >= Bounds.Bottom)
+            throw new ArgumentOutOfRangeException(nameof(x));
+        return _pixels.AsSpan(checked(((y - Bounds.Y) * Bounds.Width + x - Bounds.X) * 4), 4);
+    }
     public byte[] CopyPixels(DocumentRect region) => PixelRegion.Copy(_pixels, Bounds, region, 4);
     internal void WritePixels(DocumentRect region, byte[] bytes) => PixelRegion.Write(_pixels, Bounds, region, bytes, 4);
     internal override long RetainedBytes => base.RetainedBytes + _pixels.LongLength;

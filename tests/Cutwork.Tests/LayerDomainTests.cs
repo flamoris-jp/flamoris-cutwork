@@ -38,4 +38,15 @@ public sealed class LayerDomainTests
         Assert.AreEqual(new DocumentRect(5, 6, 1, 2), a.Intersect(b));
         Assert.IsTrue(a.Intersect(new DocumentRect(6, 3, 2, 2)).IsEmpty);
     }
+
+    [TestMethod]
+    public void PixelReadsRejectRowWrappingAtTheRightEdge()
+    {
+        var original = new OriginalAsset("image", new PixelSize(2, 2), 8, new byte[16]);
+        var raster = new RepairLayer(new DocumentRect(1, 1, 2, 2), new byte[16]);
+        try { original.PixelAt(2, 0); Assert.Fail("Expected bounds rejection."); }
+        catch (ArgumentOutOfRangeException) { }
+        try { raster.PixelAt(3, 1); Assert.Fail("Expected bounds rejection."); }
+        catch (ArgumentOutOfRangeException) { }
+    }
 }

@@ -18,9 +18,9 @@ public sealed class EditTransaction : IDisposable
     public void Apply(EditCommand command)
     {
         if (_finished) throw new ObjectDisposedException(nameof(EditTransaction));
-        ArgumentNullException.ThrowIfNull(command);
         try
         {
+            ArgumentNullException.ThrowIfNull(command);
             var edit = command.Apply(Document);
             if (edit is null) return;
             Edits.Add(edit);

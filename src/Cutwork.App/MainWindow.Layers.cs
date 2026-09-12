@@ -9,6 +9,8 @@ namespace Flamoris.Cutwork.App;
 public partial class MainWindow
 {
     private bool _refreshingLayers;
+    private Guid? _displayedLayerId;
+    private string? _displayedLayerName;
     private static readonly RoutedCommand UndoEdit = new(nameof(UndoEdit), typeof(MainWindow),
         new InputGestureCollection { new KeyGesture(Key.Z, ModifierKeys.Control) });
     private static readonly RoutedCommand RedoEdit = new(nameof(RedoEdit), typeof(MainWindow),
@@ -53,8 +55,9 @@ public partial class MainWindow
             var rows = document?.Layers.Select(layer => new LayerRow(layer.Id,
                 string.IsNullOrEmpty(layer.Name) ? text[$"LayerKind_{layer.Kind}"] : layer.Name,
                 text[$"LayerKind_{layer.Kind}"], layer.Visible, text["Layer_Visible"])).ToArray() ?? [];
-            LayerList.ItemsSource = rows;
-            LayerList.SelectedItem = rows.FirstOrDefault(row => row.Id == _session.SelectedLayerId);
+            // Pixel-only/preview/session changes must not rebuild rows or erase in-progress typing.
+            if (!LayerList.Items.OfType<LayerRow>().SequenceEqual(rows)) LayerList.ItemsSource = rows;
+            LayerList.SelectedItem = LayerList.Items.OfType<LayerRow>().FirstOrDefault(row => row.Id == _session.SelectedLayerId);
             var selected = document?.Layers.FirstOrDefault(layer => layer.Id == _session.SelectedLayerId);
             var index = selected is null ? -1 : document!.Layers.ToList().IndexOf(selected);
             LayerUpButton.IsEnabled = selected is not null && document!.CanReorder(selected.Id, index - 1);
@@ -62,7 +65,12 @@ public partial class MainWindow
             LayerDeleteButton.IsEnabled = selected is not null && document!.CanDelete(selected.Id);
             LayerNameEditor.IsEnabled = LayerRenameButton.IsEnabled = selected is not null;
             DeveloperFixtureMenuItem.IsEnabled = document is not null;
-            LayerNameEditor.Text = selected?.Name ?? "";
+            if (_displayedLayerId != selected?.Id || _displayedLayerName != selected?.Name)
+            {
+                LayerNameEditor.Text = selected?.Name ?? "";
+                _displayedLayerId = selected?.Id;
+                _displayedLayerName = selected?.Name;
+            }
             SelectedKindText.Text = selected is null ? text["Properties_NoSelection"] : text[$"LayerKind_{selected.Kind}"];
             LayerKindDescription.Text = selected is null ? "" : text[$"LayerDescription_{selected.Kind}"];
             LayerBoundsText.Text = selected is null ? "" : string.Format(text.Culture, text["Layer_Bounds"],
