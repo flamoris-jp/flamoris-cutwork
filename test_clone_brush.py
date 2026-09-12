@@ -4,10 +4,15 @@ import unittest
 
 import numpy as np
 
-from clone_brush import normalize_rect, paint_aligned_clone, rect_center
+from clone_brush import clone_segment_geometry, normalize_rect, paint_aligned_clone, rect_center
 
 
 class CloneBrushTests(unittest.TestCase):
+    def test_segment_geometry_matches_kernel_roi_and_estimates_centerline_points(self) -> None:
+        roi, point_count = clone_segment_geometry((10, 10), (14, 12), 2, 100, 100)
+        self.assertEqual(roi, (6, 6, 19, 17))
+        self.assertEqual(point_count, 5)
+
     def test_normalize_rect_is_half_open_and_direction_independent(self) -> None:
         self.assertEqual(normalize_rect((8, 7), (3, 2), 20, 20), (3, 2, 9, 8))
         self.assertEqual(rect_center((3, 2, 9, 8)), (5, 4))
