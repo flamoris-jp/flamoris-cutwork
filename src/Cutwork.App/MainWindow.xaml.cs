@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using Flamoris.Cutwork.Core;
+using Flamoris.Cutwork.App.Controls;
 using Flamoris.Cutwork.Imaging;
 using Microsoft.Win32;
 
@@ -11,10 +12,14 @@ public partial class MainWindow : Window
 {
     private readonly EditorSession _session = new();
     private readonly ImageImportService _imageImporter = new();
+    private DocumentPoint? _pointerPosition;
 
     public MainWindow()
     {
         InitializeComponent();
+        CanvasView.AttachSession(_session);
+        CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
+        CanvasView.ViewportChanged += (_, _) => UpdateStatus();
         ApplyLocalization();
     }
 
@@ -69,10 +74,22 @@ public partial class MainWindow : Window
         var document = new CutworkDocument(result.Original!);
         _session.Open(document);
         CanvasView.Present(document);
+        FitMenuItem.IsEnabled = true;
+        ActualSizeMenuItem.IsEnabled = true;
         OriginalMenuItem.IsEnabled = true;
         CompositeMenuItem.IsEnabled = true;
         UpdatePreviewChecks();
         ApplyLocalization();
+    }
+
+    private void FitMenuItem_Click(object sender, RoutedEventArgs e) => CanvasView.Fit();
+
+    private void ActualSizeMenuItem_Click(object sender, RoutedEventArgs e) => CanvasView.ActualSize();
+
+    private void CanvasView_PointerDocumentPositionChanged(object? sender, DocumentPointerEventArgs e)
+    {
+        _pointerPosition = e.Position;
+        UpdateStatus();
     }
 
     private void OriginalMenuItem_Click(object sender, RoutedEventArgs e)
@@ -105,12 +122,20 @@ public partial class MainWindow : Window
 
         var document = _session.Document;
         Title = $"{text["AppTitle"]} — {document.Original.SourceName}";
-        StatusText.Text = string.Format(
-            text.Culture,
-            text["Status_ImageOpened"],
-            document.Original.SourceName,
-            document.Dimensions.Width,
-            document.Dimensions.Height);
+        StatusText.Text = _pointerPosition is { } point
+            ? string.Format(
+                text.Culture,
+                text["Status_CanvasPosition"],
+                point.X,
+                point.Y,
+                CanvasView.Zoom * 100.0)
+            : string.Format(
+                text.Culture,
+                text["Status_ImageOpened"],
+                document.Original.SourceName,
+                document.Dimensions.Width,
+                document.Dimensions.Height,
+                CanvasView.Zoom * 100.0);
     }
 
     private void ShowImportError(ImageImportError error)

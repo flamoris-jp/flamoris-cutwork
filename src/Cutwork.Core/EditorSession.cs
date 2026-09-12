@@ -8,6 +8,8 @@ public enum PreviewSource
 
 public sealed class EditorSession
 {
+    public ViewportTransform Viewport { get; } = new();
+
     public CutworkDocument? Document { get; private set; }
 
     public PreviewSource PreviewSource { get; private set; } = PreviewSource.Composite;
@@ -16,6 +18,7 @@ public sealed class EditorSession
     {
         Document = document ?? throw new ArgumentNullException(nameof(document));
         PreviewSource = PreviewSource.Composite;
+        Viewport.Reset();
     }
 
     public void SetPreviewSource(PreviewSource source) => PreviewSource = source;

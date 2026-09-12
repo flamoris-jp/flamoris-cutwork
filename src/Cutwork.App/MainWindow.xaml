@@ -16,8 +16,8 @@
             </MenuItem>
             <MenuItem x:Name="EditMenu" />
             <MenuItem x:Name="ViewMenu">
-                <MenuItem x:Name="FitMenuItem" IsEnabled="False" />
-                <MenuItem x:Name="ActualSizeMenuItem" IsEnabled="False" />
+                <MenuItem x:Name="FitMenuItem" IsEnabled="False" Click="FitMenuItem_Click" />
+                <MenuItem x:Name="ActualSizeMenuItem" IsEnabled="False" Click="ActualSizeMenuItem_Click" />
                 <Separator />
                 <MenuItem x:Name="OriginalMenuItem" IsCheckable="True" IsEnabled="False" Click="OriginalMenuItem_Click" />
                 <MenuItem x:Name="CompositeMenuItem" IsCheckable="True" IsEnabled="False" Click="CompositeMenuItem_Click" />

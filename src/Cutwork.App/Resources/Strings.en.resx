@@ -25,7 +25,8 @@
   <data name="Panel_Properties" xml:space="preserve"><value>Properties</value></data>
   <data name="Canvas_NoDocument" xml:space="preserve"><value>Open an image to begin</value></data>
   <data name="Status_Ready" xml:space="preserve"><value>Ready</value></data>
-  <data name="Status_ImageOpened" xml:space="preserve"><value>{0} — {1}×{2} px</value></data>
+  <data name="Status_ImageOpened" xml:space="preserve"><value>{0} — {1}×{2} px — {3:F0}%</value></data>
+  <data name="Status_CanvasPosition" xml:space="preserve"><value>X: {0:F1}  Y: {1:F1} — {2:F0}%</value></data>
   <data name="Dialog_ImageFilter" xml:space="preserve"><value>Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|PNG (*.png)|*.png|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg</value></data>
   <data name="Error_Title" xml:space="preserve"><value>Cannot Open Image</value></data>
   <data name="Error_UnsupportedFormat" xml:space="preserve"><value>Select a PNG or JPEG file.</value></data>
