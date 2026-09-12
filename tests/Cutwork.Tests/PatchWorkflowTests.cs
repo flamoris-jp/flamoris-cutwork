@@ -47,7 +47,10 @@ public sealed class PatchWorkflowTests
     public void ScaleIsClampedToAcceptedMaximum()
     {
         Assert.AreEqual(10, new PatchTransform(10, 10, 10).Scale);
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => new PatchTransform(10, 10, 10.01));
+        var rejected = false;
+        try { _ = new PatchTransform(10, 10, 10.01); }
+        catch (ArgumentOutOfRangeException) { rejected = true; }
+        Assert.IsTrue(rejected);
     }
 
     [TestMethod]
@@ -132,8 +135,9 @@ public sealed class PatchWorkflowTests
 
         CollectionAssert.AreEqual(patchPixel,
             cache.CopyPixels().AsSpan((6 * 12 + 6) * 4, 4).ToArray());
-        Assert.IsTrue(session.Document.Layers.ToList().IndexOf(patch)
-            > session.Document.Layers.ToList().IndexOf(session.Document.Base));
+        var document = session.Document!;
+        Assert.IsTrue(document.Layers.ToList().IndexOf(patch)
+            > document.Layers.ToList().IndexOf(document.Base));
     }
 
     [TestMethod]
