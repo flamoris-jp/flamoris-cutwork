@@ -47,7 +47,7 @@ public sealed class FlimgValidationTests
             Archive(valid.Append(("MANIFEST.JSON", "{}"u8.ToArray()))));
     }
 
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("../evil.png")]
     [DataRow("/absolute.png")]
     [DataRow("C:/absolute.png")]
