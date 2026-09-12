@@ -68,6 +68,41 @@ public sealed class BitmapPresentationTests
         });
     }
 
+    [TestMethod]
+    public void PartPreviewUsesOverlayWithoutRebuildingAuthoredBitmap()
+    {
+        RunSta(() =>
+        {
+            var pixels = Enumerable.Repeat(new byte[] { 50, 80, 110, 255 }, 20 * 20)
+                .SelectMany(pixel => pixel).ToArray();
+            var session = new EditorSession();
+            session.Open(new CutworkDocument(new OriginalAsset("fixture.png", new(20, 20), 80, pixels)));
+            var tool = new PartToolController(session, new GuriguriPartFitter());
+            var router = new CanvasInputRouter(session);
+            var canvas = new DocumentCanvas();
+            canvas.AttachSession(session);
+            canvas.AttachInputRouter(router, tool);
+            canvas.Present(session.Document!);
+            canvas.Measure(new Size(800, 600));
+            canvas.Arrange(new Rect(0, 0, 800, 600));
+            var generation = canvas.BitmapGeneration;
+            router.SetActiveTool(tool);
+
+            tool.PointerDown(new(2, 2), 1, CanvasModifiers.None);
+            tool.PointerDown(new(12, 2), 1, CanvasModifiers.None);
+            tool.PointerDown(new(12, 12), 1, CanvasModifiers.None);
+            tool.PointerDown(new(2, 12), 1, CanvasModifiers.None);
+            tool.FinalizeFence();
+            tool.Wheel(1, CanvasModifiers.None);
+
+            var overlay = (Image)canvas.FindName("PartMaskOverlay");
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility);
+            Assert.IsInstanceOfType(overlay.Source, typeof(WriteableBitmap));
+            Assert.AreEqual(generation, canvas.BitmapGeneration);
+            Assert.AreEqual(0, session.UndoCount);
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? failure = null;
