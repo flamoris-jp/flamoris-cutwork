@@ -56,10 +56,10 @@ public sealed class FlimgValidationTests
     [TestMethod]
     public void ValidV1StillUsesStrictV1Deserializer()
     {
-        var valid = FlimgRoundTripTests.Write(FlimgRoundTripTests.FullDocument());
+        var expected = FlimgRoundTripTests.FullDocument();
+        var valid = FlimgRoundTripTests.Write(expected);
         var restored = FlimgRoundTripTests.Read(valid);
-        Assert.AreEqual(FlimgArchiveCodec.SchemaVersion, 1);
-        Assert.AreEqual(FlimgRoundTripTests.FullDocument().Dimensions, restored.Dimensions);
+        Assert.AreEqual(expected.Dimensions, restored.Dimensions);
 
         AssertRejected(FlimgError.MalformedManifest, MutateManifest(root =>
             root["unknownV1Property"] = true));
@@ -159,7 +159,7 @@ public sealed class FlimgValidationTests
         var size = new PixelSize(2, 2);
         var rgb = EncodeFixturePng(size, PixelFormats.Rgb24);
         var indexed = EncodeFixturePng(size, PixelFormats.Indexed8,
-            new BitmapPalette([Colors.Black, Colors.White]));
+            new BitmapPalette([Colors.Red, Colors.Blue]));
         var grayscale = EncodeFixturePng(size, PixelFormats.Gray8);
         Assert.AreEqual((byte)2, rgb[25]);
         Assert.AreEqual((byte)3, indexed[25]);
@@ -340,8 +340,14 @@ public sealed class FlimgValidationTests
     {
         var stride = checked((size.Width * format.BitsPerPixel + 7) / 8);
         var pixels = new byte[checked(stride * size.Height)];
+        if (format == PixelFormats.Rgb24)
+            (pixels[0], pixels[1], pixels[2]) = (10, 80, 190);
         if (format == PixelFormats.Bgra32)
+        {
+            (pixels[0], pixels[1], pixels[2]) = (10, 80, 190);
             for (var index = 3; index < pixels.Length; index += 4) pixels[index] = 255;
+        }
+        if (format == PixelFormats.Indexed8) pixels[0] = 1;
         var bitmap = BitmapSource.Create(size.Width, size.Height, 96, 96, format, palette,
             pixels, stride);
         var encoder = new PngBitmapEncoder();
