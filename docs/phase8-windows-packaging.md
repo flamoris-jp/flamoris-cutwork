@@ -63,6 +63,8 @@ packaging scriptは、必須app/runtime filesとWPF native runtime、`Cutwork.ex
 Cutwork product launcherであること、ZIPの可読性、required noticesを検査します。
 source、tests、experiments、
 build intermediates、PDB、Python/Tkinter/OpenCV由来ファイルが混入した場合は失敗します。
+参照projectからSDKがpublishしたPDBは、専用publish directory内からpackage staging前に
+除去し、続くforbidden-content検査で残存がないことを確認します。
 
 Production projectの外部runtime dependencyはありません。OpenCVやPython packageは
 production projectから参照されていません。配布物中のnative filesはself-contained

@@ -61,6 +61,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
 
+# Referenced projects can still contribute PDBs even when the app publish profile
+# disables symbol copying. They are not required to run the portable release.
+Get-ChildItem -LiteralPath $publishPath -Filter "*.pdb" -File -Recurse |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+
 $requiredPublishFiles = @(
     "Cutwork.exe",
     "Cutwork.dll",
