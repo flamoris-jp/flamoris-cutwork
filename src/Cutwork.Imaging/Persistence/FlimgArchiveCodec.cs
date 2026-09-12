@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -118,8 +119,7 @@ public sealed class FlimgArchiveCodec
         try
         {
             var archiveInput = PrepareArchiveInput(input, out bufferedInput);
-            // ZipArchive only exposes the entry count after central-directory materialization.
-            // Physical preflight plus an immediate count check avoids duplicating its ZIP/ZIP64 parser.
+            PreflightArchive(archiveInput);
             using var archive = new ZipArchive(archiveInput, ZipArchiveMode.Read, leaveOpen: true,
                 entryNameEncoding: Encoding.UTF8);
             var entries = ValidateEntries(archive);
@@ -350,6 +350,132 @@ public sealed class FlimgArchiveCodec
         }
         bufferedInput.Position = 0;
         return bufferedInput;
+    }
+
+    internal static int PreflightArchive(Stream input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (!input.CanSeek) throw new ArgumentException("Archive preflight requires a seekable stream.",
+            nameof(input));
+        var originalPosition = input.Position;
+        try
+        {
+            var length = input.Length;
+            const int endRecordLength = 22;
+            if (length < endRecordLength) throw new FlimgException(FlimgError.MalformedArchive);
+            var tailLength = (int)Math.Min(length, endRecordLength + ushort.MaxValue);
+            var tail = new byte[tailLength];
+            input.Position = length - tailLength;
+            ReadExactly(input, tail);
+
+            var endIndex = -1;
+            for (var index = tailLength - endRecordLength; index >= 0; index--)
+            {
+                if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(index, 4)) != 0x06054b50)
+                    continue;
+                var commentLength = BinaryPrimitives.ReadUInt16LittleEndian(
+                    tail.AsSpan(index + 20, 2));
+                if (index + endRecordLength + commentLength != tailLength) continue;
+                endIndex = index;
+                break;
+            }
+            if (endIndex < 0) throw new FlimgException(FlimgError.MalformedArchive);
+
+            var end = tail.AsSpan(endIndex, endRecordLength);
+            var endOffset = length - tailLength + endIndex;
+            var diskNumber = BinaryPrimitives.ReadUInt16LittleEndian(end.Slice(4, 2));
+            var directoryDisk = BinaryPrimitives.ReadUInt16LittleEndian(end.Slice(6, 2));
+            ulong entriesOnDisk = BinaryPrimitives.ReadUInt16LittleEndian(end.Slice(8, 2));
+            ulong entryCount = BinaryPrimitives.ReadUInt16LittleEndian(end.Slice(10, 2));
+            ulong directorySize = BinaryPrimitives.ReadUInt32LittleEndian(end.Slice(12, 4));
+            ulong directoryOffset = BinaryPrimitives.ReadUInt32LittleEndian(end.Slice(16, 4));
+            var needsZip64 = diskNumber == ushort.MaxValue || directoryDisk == ushort.MaxValue
+                || entriesOnDisk == ushort.MaxValue || entryCount == ushort.MaxValue
+                || directorySize == uint.MaxValue || directoryOffset == uint.MaxValue;
+            var directoryBoundary = endOffset;
+
+            if (needsZip64)
+            {
+                const int locatorLength = 20;
+                var locatorOffset = endOffset - locatorLength;
+                if (locatorOffset < 0) throw new FlimgException(FlimgError.MalformedArchive);
+                var locator = new byte[locatorLength];
+                input.Position = locatorOffset;
+                ReadExactly(input, locator);
+                if (BinaryPrimitives.ReadUInt32LittleEndian(locator) != 0x07064b50
+                    || BinaryPrimitives.ReadUInt32LittleEndian(locator.AsSpan(4, 4)) != 0
+                    || BinaryPrimitives.ReadUInt32LittleEndian(locator.AsSpan(16, 4)) != 1)
+                    throw new FlimgException(FlimgError.MalformedArchive);
+                var zip64Offset = BinaryPrimitives.ReadUInt64LittleEndian(locator.AsSpan(8, 8));
+                if (locatorOffset < 56 || zip64Offset > (ulong)(locatorOffset - 56))
+                    throw new FlimgException(FlimgError.MalformedArchive);
+                var zip64 = new byte[56];
+                input.Position = (long)zip64Offset;
+                ReadExactly(input, zip64);
+                var zip64Size = BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(4, 8));
+                if (BinaryPrimitives.ReadUInt32LittleEndian(zip64) != 0x06064b50
+                    || zip64Size < 44 || zip64Size > long.MaxValue
+                    || (ulong)locatorOffset != zip64Offset + 12 + zip64Size
+                    || BinaryPrimitives.ReadUInt32LittleEndian(zip64.AsSpan(16, 4)) != 0
+                    || BinaryPrimitives.ReadUInt32LittleEndian(zip64.AsSpan(20, 4)) != 0)
+                    throw new FlimgException(FlimgError.MalformedArchive);
+                entriesOnDisk = BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(24, 8));
+                entryCount = BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(32, 8));
+                directorySize = BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(40, 8));
+                directoryOffset = BinaryPrimitives.ReadUInt64LittleEndian(zip64.AsSpan(48, 8));
+                directoryBoundary = (long)zip64Offset;
+            }
+            else if (diskNumber != 0 || directoryDisk != 0)
+                throw new FlimgException(FlimgError.MalformedArchive);
+
+            if (entriesOnDisk != entryCount) throw new FlimgException(FlimgError.MalformedArchive);
+            if (entryCount > MaximumEntries) throw new FlimgException(FlimgError.SizeLimitExceeded);
+            if (directoryOffset > long.MaxValue || directorySize > long.MaxValue)
+                throw new FlimgException(FlimgError.MalformedArchive);
+            var directoryStart = (long)directoryOffset;
+            long directoryEnd;
+            try { directoryEnd = checked(directoryStart + (long)directorySize); }
+            catch (OverflowException exception)
+            {
+                throw new FlimgException(FlimgError.MalformedArchive, exception);
+            }
+            if (directoryStart < 0 || directoryEnd > directoryBoundary)
+                throw new FlimgException(FlimgError.MalformedArchive);
+
+            var header = new byte[46];
+            var cursor = directoryStart;
+            input.Position = cursor;
+            for (ulong index = 0; index < entryCount; index++)
+            {
+                if (directoryEnd - cursor < header.Length)
+                    throw new FlimgException(FlimgError.MalformedArchive);
+                ReadExactly(input, header);
+                if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x02014b50)
+                    throw new FlimgException(FlimgError.MalformedArchive);
+                var variableLength = (long)BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28, 2))
+                    + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(30, 2))
+                    + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(32, 2));
+                var recordLength = header.Length + variableLength;
+                if (recordLength > directoryEnd - cursor)
+                    throw new FlimgException(FlimgError.MalformedArchive);
+                input.Seek(variableLength, SeekOrigin.Current);
+                cursor += recordLength;
+            }
+            if (cursor != directoryEnd) throw new FlimgException(FlimgError.MalformedArchive);
+            return (int)entryCount;
+        }
+        finally { input.Position = originalPosition; }
+    }
+
+    private static void ReadExactly(Stream input, Span<byte> destination)
+    {
+        var total = 0;
+        while (total < destination.Length)
+        {
+            var read = input.Read(destination[total..]);
+            if (read == 0) throw new FlimgException(FlimgError.MalformedArchive);
+            total += read;
+        }
     }
 
     private static string RequireAssetPath(FlimgLayer layer, Guid id, string file)

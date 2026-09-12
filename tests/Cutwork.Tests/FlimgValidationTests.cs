@@ -249,8 +249,25 @@ public sealed class FlimgValidationTests
     {
         var entries = Enumerable.Range(0, FlimgArchiveCodec.MaximumEntries + 1)
             .Select(index => ($"entries/{index}", Array.Empty<byte>()));
+        var bytes = Archive(entries);
 
-        AssertRejected(FlimgError.SizeLimitExceeded, Archive(entries));
+        using var input = new MemoryStream(bytes);
+        var exception = Assert.ThrowsExactly<FlimgException>(() =>
+            FlimgArchiveCodec.PreflightArchive(input));
+        Assert.AreEqual(FlimgError.SizeLimitExceeded, exception.Error);
+        AssertRejected(FlimgError.SizeLimitExceeded, bytes);
+    }
+
+    [TestMethod]
+    public void CentralDirectoryPreflightRejectsForgedEntryCountBeforeMaterialization()
+    {
+        var bytes = Archive([("manifest.json", "{}"u8.ToArray()), ("asset.bin", new byte[] { 1 })]);
+        PatchEndRecordEntryCount(bytes, 1);
+
+        using var input = new MemoryStream(bytes);
+        var exception = Assert.ThrowsExactly<FlimgException>(() =>
+            FlimgArchiveCodec.PreflightArchive(input));
+        Assert.AreEqual(FlimgError.MalformedArchive, exception.Error);
     }
 
     [TestMethod]
@@ -334,6 +351,19 @@ public sealed class FlimgValidationTests
             return;
         }
         Assert.Fail($"Central directory entry not found: {path}");
+    }
+
+    private static void PatchEndRecordEntryCount(byte[] archive, ushort count)
+    {
+        for (var index = archive.Length - 22; index >= 0; index--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(archive.AsSpan(index, 4)) != 0x06054b50)
+                continue;
+            BinaryPrimitives.WriteUInt16LittleEndian(archive.AsSpan(index + 8, 2), count);
+            BinaryPrimitives.WriteUInt16LittleEndian(archive.AsSpan(index + 10, 2), count);
+            return;
+        }
+        Assert.Fail("End of central directory record not found.");
     }
 
     private static byte[] EncodeFixturePng(PixelSize size, PixelFormat format,
