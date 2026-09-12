@@ -4,6 +4,67 @@
         Width="1200"
         Height="760"
         MinWidth="800"
-        MinHeight="520">
-    <Grid />
+        MinHeight="520"
+        Background="#202124">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem x:Name="FileMenu">
+                <MenuItem x:Name="OpenMenuItem" IsEnabled="False" InputGestureText="Ctrl+O" />
+                <Separator />
+                <MenuItem x:Name="ExitMenuItem" Click="ExitMenuItem_Click" />
+            </MenuItem>
+            <MenuItem x:Name="EditMenu" />
+            <MenuItem x:Name="ViewMenu">
+                <MenuItem x:Name="FitMenuItem" IsEnabled="False" />
+                <MenuItem x:Name="ActualSizeMenuItem" IsEnabled="False" />
+                <Separator />
+                <MenuItem x:Name="OriginalMenuItem" IsCheckable="True" IsEnabled="False" />
+                <MenuItem x:Name="CompositeMenuItem" IsCheckable="True" IsEnabled="False" />
+                <Separator />
+                <MenuItem x:Name="LanguageMenu">
+                    <MenuItem x:Name="JapaneseMenuItem" IsCheckable="True" Click="JapaneseMenuItem_Click" />
+                    <MenuItem x:Name="EnglishMenuItem" IsCheckable="True" Click="EnglishMenuItem_Click" />
+                </MenuItem>
+            </MenuItem>
+            <MenuItem x:Name="LayerMenu" />
+            <MenuItem x:Name="ExportMenu" />
+            <MenuItem x:Name="HelpMenu" />
+        </Menu>
+
+        <Border DockPanel.Dock="Bottom" Background="#292B2F" Padding="8,5">
+            <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="260" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="#2B2D31" BorderBrush="#45474D" BorderThickness="0,0,1,0">
+                <TextBlock x:Name="ToolRailLabel"
+                           Margin="4,12"
+                           Foreground="#B8BBC2"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap" />
+            </Border>
+
+            <Border Grid.Column="1" Background="#17181A">
+                <TextBlock x:Name="CanvasPlaceholderText"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="#989BA2" />
+            </Border>
+
+            <Grid Grid.Column="2" Background="#2B2D31">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <GroupBox x:Name="LayersGroup" Margin="8,8,8,4" Foreground="#E7E7E7" />
+                <GroupBox x:Name="PropertiesGroup" Grid.Row="1" Margin="8,4,8,8" Foreground="#E7E7E7" />
+            </Grid>
+        </Grid>
+    </DockPanel>
 </Window>

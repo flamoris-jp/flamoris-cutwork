@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="AppTitle" xml:space="preserve"><value>FLAMORIS Cutwork</value></data>
+  <data name="Menu_File" xml:space="preserve"><value>ファイル</value></data>
+  <data name="Menu_File_Open" xml:space="preserve"><value>画像を開く...</value></data>
+  <data name="Menu_File_Exit" xml:space="preserve"><value>終了</value></data>
+  <data name="Menu_Edit" xml:space="preserve"><value>編集</value></data>
+  <data name="Menu_View" xml:space="preserve"><value>表示</value></data>
+  <data name="Menu_View_Fit" xml:space="preserve"><value>全体を表示</value></data>
+  <data name="Menu_View_ActualSize" xml:space="preserve"><value>実寸 / 100%</value></data>
+  <data name="Menu_View_Original" xml:space="preserve"><value>オリジナル</value></data>
+  <data name="Menu_View_Composite" xml:space="preserve"><value>コンポジット</value></data>
+  <data name="Menu_View_Language" xml:space="preserve"><value>言語</value></data>
+  <data name="Language_Japanese" xml:space="preserve"><value>日本語</value></data>
+  <data name="Language_English" xml:space="preserve"><value>English</value></data>
+  <data name="Menu_Layer" xml:space="preserve"><value>レイヤー</value></data>
+  <data name="Menu_Export" xml:space="preserve"><value>書き出し</value></data>
+  <data name="Menu_Help" xml:space="preserve"><value>ヘルプ</value></data>
+  <data name="Panel_Tools" xml:space="preserve"><value>ツール</value></data>
+  <data name="Panel_Layers" xml:space="preserve"><value>レイヤー</value></data>
+  <data name="Panel_Properties" xml:space="preserve"><value>プロパティ</value></data>
+  <data name="Canvas_NoDocument" xml:space="preserve"><value>画像を開いてください</value></data>
+  <data name="Status_Ready" xml:space="preserve"><value>準備完了</value></data>
+</root>
