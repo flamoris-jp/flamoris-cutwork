@@ -25,4 +25,10 @@
   <data name="Panel_Properties" xml:space="preserve"><value>プロパティ</value></data>
   <data name="Canvas_NoDocument" xml:space="preserve"><value>画像を開いてください</value></data>
   <data name="Status_Ready" xml:space="preserve"><value>準備完了</value></data>
+  <data name="Status_ImageOpened" xml:space="preserve"><value>{0} — {1}×{2} px</value></data>
+  <data name="Dialog_ImageFilter" xml:space="preserve"><value>画像ファイル (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|PNG (*.png)|*.png|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg</value></data>
+  <data name="Error_Title" xml:space="preserve"><value>画像を開けません</value></data>
+  <data name="Error_UnsupportedFormat" xml:space="preserve"><value>PNGまたはJPEGファイルを選択してください。</value></data>
+  <data name="Error_InvalidImage" xml:space="preserve"><value>画像ファイルが壊れているか、読み取れません。</value></data>
+  <data name="Error_IoFailure" xml:space="preserve"><value>画像ファイルへアクセスできません。</value></data>
 </root>

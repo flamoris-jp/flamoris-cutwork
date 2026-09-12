@@ -1,10 +1,17 @@
 using System.Globalization;
+using System.IO;
 using System.Windows;
+using Flamoris.Cutwork.Core;
+using Flamoris.Cutwork.Imaging;
+using Microsoft.Win32;
 
 namespace Flamoris.Cutwork.App;
 
 public partial class MainWindow : Window
 {
+    private readonly EditorSession _session = new();
+    private readonly ImageImportService _imageImporter = new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -33,10 +40,93 @@ public partial class MainWindow : Window
         ToolRailLabel.Text = text["Panel_Tools"];
         LayersGroup.Header = text["Panel_Layers"];
         PropertiesGroup.Header = text["Panel_Properties"];
-        CanvasPlaceholderText.Text = text["Canvas_NoDocument"];
-        StatusText.Text = text["Status_Ready"];
+        CanvasView.EmptyText = text["Canvas_NoDocument"];
+        UpdateStatus();
         JapaneseMenuItem.IsChecked = text.Culture.Name == "ja-JP";
         EnglishMenuItem.IsChecked = text.Culture.Name == "en-US";
+    }
+
+    private void OpenMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = LocalizationService.Current["Dialog_ImageFilter"],
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var result = _imageImporter.Import(dialog.FileName);
+        if (!result.IsSuccess)
+        {
+            ShowImportError(result.Error ?? ImageImportError.InvalidImage);
+            return;
+        }
+
+        var document = new CutworkDocument(result.Original!);
+        _session.Open(document);
+        CanvasView.Present(document);
+        OriginalMenuItem.IsEnabled = true;
+        CompositeMenuItem.IsEnabled = true;
+        UpdatePreviewChecks();
+        ApplyLocalization();
+    }
+
+    private void OriginalMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _session.SetPreviewSource(PreviewSource.Original);
+        UpdatePreviewChecks();
+    }
+
+    private void CompositeMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        _session.SetPreviewSource(PreviewSource.Composite);
+        UpdatePreviewChecks();
+    }
+
+    private void UpdatePreviewChecks()
+    {
+        OriginalMenuItem.IsChecked = _session.PreviewSource == PreviewSource.Original;
+        CompositeMenuItem.IsChecked = _session.PreviewSource == PreviewSource.Composite;
+    }
+
+    private void UpdateStatus()
+    {
+        var text = LocalizationService.Current;
+        if (_session.Document is null)
+        {
+            Title = text["AppTitle"];
+            StatusText.Text = text["Status_Ready"];
+            return;
+        }
+
+        var document = _session.Document;
+        Title = $"{text["AppTitle"]} — {document.Original.SourceName}";
+        StatusText.Text = string.Format(
+            text.Culture,
+            text["Status_ImageOpened"],
+            document.Original.SourceName,
+            document.Dimensions.Width,
+            document.Dimensions.Height);
+    }
+
+    private void ShowImportError(ImageImportError error)
+    {
+        var key = error switch
+        {
+            ImageImportError.UnsupportedFormat => "Error_UnsupportedFormat",
+            ImageImportError.IoFailure => "Error_IoFailure",
+            _ => "Error_InvalidImage",
+        };
+        MessageBox.Show(
+            this,
+            LocalizationService.Current[key],
+            LocalizationService.Current["Error_Title"],
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     private void JapaneseMenuItem_Click(object sender, RoutedEventArgs e)
