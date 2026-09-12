@@ -29,6 +29,7 @@ public partial class MainWindow
         _session.Changed += (_, _) =>
         {
             RefreshLayerPanel(); UpdatePreviewChecks(); UpdateStatus();
+            UpdateFileCommandState();
             CommandManager.InvalidateRequerySuggested();
         };
     }

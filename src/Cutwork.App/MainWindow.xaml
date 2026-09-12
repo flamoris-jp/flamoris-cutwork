@@ -6,11 +6,16 @@
         Height="760"
         MinWidth="800"
         MinHeight="520"
+        Closing="MainWindow_Closing"
         Background="#202124">
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem x:Name="FileMenu">
                 <MenuItem x:Name="OpenMenuItem" Click="OpenMenuItem_Click" />
+                <MenuItem x:Name="OpenProjectMenuItem" Click="OpenProjectMenuItem_Click" />
+                <Separator />
+                <MenuItem x:Name="SaveMenuItem" IsEnabled="False" Click="SaveMenuItem_Click" />
+                <MenuItem x:Name="SaveAsMenuItem" IsEnabled="False" Click="SaveAsMenuItem_Click" />
                 <Separator />
                 <MenuItem x:Name="ExitMenuItem" Click="ExitMenuItem_Click" />
             </MenuItem>
@@ -31,7 +36,12 @@
                 </MenuItem>
             </MenuItem>
             <MenuItem x:Name="LayerMenu" />
-            <MenuItem x:Name="ExportMenu" />
+            <MenuItem x:Name="ExportMenu">
+                <MenuItem x:Name="ExportCompositeMenuItem" IsEnabled="False"
+                          Click="ExportCompositeMenuItem_Click" />
+                <MenuItem x:Name="ExportHandoffMenuItem" IsEnabled="False"
+                          Click="ExportHandoffMenuItem_Click" />
+            </MenuItem>
             <MenuItem x:Name="HelpMenu">
                 <MenuItem x:Name="DeveloperFixtureMenuItem" Visibility="Collapsed" IsEnabled="False" Click="DeveloperFixture_Click" />
             </MenuItem>

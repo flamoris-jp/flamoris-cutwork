@@ -6,13 +6,51 @@ public sealed class CutworkDocument
     private object? _sessionOwner;
 
     public CutworkDocument(OriginalAsset original)
+        : this(original, Guid.NewGuid(), Guid.NewGuid())
+    {
+    }
+
+    private CutworkDocument(OriginalAsset original, Guid id, Guid baseId)
     {
         Original = original ?? throw new ArgumentNullException(nameof(original));
-        Id = Guid.NewGuid();
+        if (id == Guid.Empty || baseId == Guid.Empty) throw new EditException(EditError.InvalidLayer);
+        Id = id;
         Dimensions = original.Dimensions;
-        Base = new BaseLayer(Dimensions) { OwnerDocumentId = Id };
+        Base = new BaseLayer(baseId, Dimensions) { OwnerDocumentId = Id };
         _layers.Add(Base);
         Layers = _layers.AsReadOnly();
+    }
+
+    public static CutworkDocument Restore(Guid id, OriginalAsset original,
+        IReadOnlyList<LayerRestoreState> layers)
+    {
+        ArgumentNullException.ThrowIfNull(original);
+        ArgumentNullException.ThrowIfNull(layers);
+        if (id == Guid.Empty || layers.Count == 0) throw new EditException(EditError.InvalidLayer);
+        var baseStates = layers.OfType<BaseLayerRestoreState>().ToArray();
+        if (baseStates.Length != 1) throw new EditException(EditError.InvalidLayer);
+        var baseIndex = layers.ToList().IndexOf(baseStates[0]);
+        if (layers.Take(baseIndex).Any(layer => layer is not PartLayerRestoreState)
+            || layers.Skip(baseIndex + 1).Any(layer => layer is not PatchLayerRestoreState
+                && layer is not RepairLayerRestoreState))
+            throw new EditException(EditError.BandCrossing);
+        if (layers.Any(layer => layer.Id == Guid.Empty || layer.Id == id)
+            || layers.Select(layer => layer.Id).Distinct().Count() != layers.Count)
+            throw new EditException(EditError.InvalidLayer);
+
+        var document = new CutworkDocument(original, id, baseStates[0].Id);
+        document._layers.Clear();
+        foreach (var state in layers)
+        {
+            var layer = document.CreateRestoredLayer(state);
+            if (!document.Contains(layer.Bounds)) throw new EditException(EditError.InvalidLayer);
+            layer.Name = state.Name ?? throw new EditException(EditError.InvalidLayer);
+            layer.SemanticName = state.SemanticName;
+            layer.Visible = state.Visible;
+            layer.OwnerDocumentId = id;
+            document._layers.Add(layer);
+        }
+        return document;
     }
 
     public Guid Id { get; }
@@ -80,6 +118,17 @@ public sealed class CutworkDocument
     {
         if (ReferenceEquals(_sessionOwner, session)) _sessionOwner = null;
     }
+
+    private Layer CreateRestoredLayer(LayerRestoreState state) => state switch
+    {
+        BaseLayerRestoreState baseState when baseState.Id == Base.Id => Base,
+        PartLayerRestoreState part => new PartLayer(part.Id, part.Bounds, part.Mask.Span, part.Name),
+        PatchLayerRestoreState patch => new PatchLayer(patch.Id, patch.SourceBounds,
+            patch.Pixels.Span, patch.Transform, patch.SourcePolygon, patch.Name),
+        RepairLayerRestoreState repair => new RepairLayer(repair.Id, repair.Bounds,
+            repair.Pixels.Span, repair.Name),
+        _ => throw new EditException(EditError.InvalidLayer),
+    };
 }
 
 public sealed class DocumentChange(long revision, DocumentRect dirtyRegion, DocumentRect holeRegion) : EventArgs

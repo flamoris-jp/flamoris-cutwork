@@ -6,10 +6,11 @@ public abstract class Layer
 {
     private readonly DocumentRect _bounds;
 
-    private protected Layer(LayerKind kind, DocumentRect bounds, string name)
+    private protected Layer(LayerKind kind, DocumentRect bounds, string name, Guid id)
     {
         if (bounds.IsEmpty) throw new ArgumentException("Empty layer bounds.", nameof(bounds));
-        Id = Guid.NewGuid(); Kind = kind; _bounds = bounds;
+        if (id == Guid.Empty) throw new ArgumentException("Empty layer identity.", nameof(id));
+        Id = id; Kind = kind; _bounds = bounds;
         Name = name ?? throw new ArgumentNullException(nameof(name));
     }
     public Guid Id { get; }
@@ -25,7 +26,8 @@ public abstract class Layer
 
 public sealed class BaseLayer : Layer
 {
-    internal BaseLayer(PixelSize dimensions) : base(LayerKind.Base, DocumentRect.FromSize(dimensions), "") { }
+    internal BaseLayer(Guid id, PixelSize dimensions)
+        : base(LayerKind.Base, DocumentRect.FromSize(dimensions), "", id) { }
 }
 
 public sealed class PartLayer : Layer
@@ -33,7 +35,11 @@ public sealed class PartLayer : Layer
     private byte[] _mask;
     private DocumentRect _maskBounds;
     public PartLayer(DocumentRect bounds, ReadOnlySpan<byte> mask, string name = "")
-        : base(LayerKind.Part, bounds, name)
+        : this(Guid.NewGuid(), bounds, mask, name)
+    {
+    }
+    internal PartLayer(Guid id, DocumentRect bounds, ReadOnlySpan<byte> mask, string name = "")
+        : base(LayerKind.Part, bounds, name, id)
     {
         if (mask.Length != checked(bounds.Width * bounds.Height))
             throw new ArgumentException("Mask size mismatch.", nameof(mask));
@@ -79,8 +85,9 @@ public abstract class RasterLayer : Layer
 {
     private byte[] _pixels;
     private DocumentRect _pixelBounds;
-    private protected RasterLayer(LayerKind kind, DocumentRect bounds, ReadOnlySpan<byte> bgra, string name)
-        : base(kind, bounds, name)
+    private protected RasterLayer(LayerKind kind, DocumentRect bounds, ReadOnlySpan<byte> bgra,
+        string name, Guid id)
+        : base(kind, bounds, name, id)
     {
         if (bgra.Length != checked(bounds.Width * bounds.Height * 4))
             throw new ArgumentException("Raster size mismatch.", nameof(bgra));
@@ -169,7 +176,13 @@ public sealed class PatchLayer : RasterLayer
 
     public PatchLayer(DocumentRect sourceBounds, ReadOnlySpan<byte> bgra, PatchTransform transform,
         IReadOnlyList<DocumentPoint>? sourcePolygon = null, string name = "")
-        : base(LayerKind.Patch, sourceBounds, bgra, name)
+        : this(Guid.NewGuid(), sourceBounds, bgra, transform, sourcePolygon, name)
+    {
+    }
+
+    internal PatchLayer(Guid id, DocumentRect sourceBounds, ReadOnlySpan<byte> bgra,
+        PatchTransform transform, IReadOnlyList<DocumentPoint>? sourcePolygon = null, string name = "")
+        : base(LayerKind.Patch, sourceBounds, bgra, name, id)
     {
         _transform = transform;
         _sourcePolygon = sourcePolygon?.ToArray() ?? [];
@@ -177,6 +190,7 @@ public sealed class PatchLayer : RasterLayer
     }
 
     public PixelSize SourceSize => new(PixelBounds.Width, PixelBounds.Height);
+    public DocumentRect SourceBounds => PixelBounds;
     public PatchTransform Transform => _transform;
     public IReadOnlyList<DocumentPoint> SourcePolygon => Array.AsReadOnly(_sourcePolygon);
     public override DocumentRect Bounds => CalculateBounds(SourceSize, _transform);
@@ -230,9 +244,12 @@ public sealed class PatchLayer : RasterLayer
     internal override long RetainedBytes => base.RetainedBytes + _sourcePolygon.LongLength * 16L + 64;
 }
 
-public sealed class RepairLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
-    : RasterLayer(LayerKind.Repair, bounds, bgra, name)
+public sealed class RepairLayer : RasterLayer
 {
+    public RepairLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
+        : this(Guid.NewGuid(), bounds, bgra, name) { }
+    internal RepairLayer(Guid id, DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
+        : base(LayerKind.Repair, bounds, bgra, name, id) { }
     public override DocumentRect Bounds => PixelBounds;
 }
 
