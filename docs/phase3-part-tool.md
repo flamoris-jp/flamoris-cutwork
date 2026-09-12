@@ -45,7 +45,7 @@ It has no WPF, Python runtime, OpenCV runtime, GPU, or AI dependency.
 
 - In `FittingPreview`, a physical forward wheel rotation moves inward (shrinks)
   and a physical backward rotation restores outward toward the rough fence.
-  WPF reports those directions as negative and positive wheel deltas,
+  WPF reports those directions as positive and negative wheel deltas,
   respectively; the conversion is centralized before the tool receives steps.
 - `Ctrl+wheel` always zooms the viewport.
 - Outside fitting preview, ordinary wheel retains normal viewport zoom.

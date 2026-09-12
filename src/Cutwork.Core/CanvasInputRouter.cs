@@ -95,10 +95,9 @@ public sealed class CanvasInputRouter
         // plain wheel; otherwise plain wheel retains normal canvas zoom.
         if (!modifiers.HasFlag(CanvasModifiers.Control) && _activeTool is not null)
         {
-            // WPF reports the physical forward wheel rotation as a negative
-            // delta. Fitting steps grow inward, so reverse the platform delta
-            // only for tool adjustment: forward shrinks; backward restores.
-            var result = _activeTool.Wheel(-wheelNotches, modifiers);
+            // WPF reports physical forward wheel rotation as a positive delta.
+            // Fitting steps grow inward: forward shrinks; backward restores.
+            var result = _activeTool.Wheel(wheelNotches, modifiers);
             if (result.HasFlag(CanvasInputEffects.Handled)) return result;
         }
 

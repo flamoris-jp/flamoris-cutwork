@@ -43,8 +43,8 @@ public sealed class CanvasInputRouterTests
         var (session, router, tool) = CreateRouter();
         tool.HandleWheel = true;
 
-        // WPF reports the physical forward rotation as a negative delta.
-        var plain = router.Wheel(new ViewportPoint(50, 50), -120, CanvasModifiers.None);
+        // WPF reports the physical forward rotation as a positive delta.
+        var plain = router.Wheel(new ViewportPoint(50, 50), 120, CanvasModifiers.None);
         var zoomBefore = session.Viewport.Zoom;
         var control = router.Wheel(new ViewportPoint(50, 50), 120, CanvasModifiers.Control);
 
