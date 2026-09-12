@@ -126,3 +126,27 @@ public sealed class RasterPatch : EditCommand
             layer, region, default, 128L + before.LongLength + after.LongLength);
     }
 }
+
+public sealed class SetPatchTransform(Guid layerId, PatchTransform transform) : EditCommand
+{
+    internal override AppliedEdit? Apply(CutworkDocument document)
+    {
+        if (document.GetLayer(layerId) is not PatchLayer layer) throw new EditException(EditError.InvalidLayer);
+        var before = layer.Transform;
+        if (before == transform) return null;
+        var beforeBounds = layer.Bounds;
+        try
+        {
+            layer.SetTransform(transform);
+            if (!document.Contains(layer.Bounds)) throw new EditException(EditError.InvalidLayer);
+        }
+        catch
+        {
+            layer.SetTransform(before);
+            throw;
+        }
+        var dirty = beforeBounds.Union(layer.Bounds);
+        return new(() => layer.SetTransform(before), () => layer.SetTransform(transform),
+            layer, dirty, default, 192);
+    }
+}

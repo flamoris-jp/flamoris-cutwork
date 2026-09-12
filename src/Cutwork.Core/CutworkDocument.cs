@@ -38,12 +38,13 @@ public sealed class CutworkDocument
     }
 
     internal int IndexOf(Layer layer) => _layers.IndexOf(layer);
+    internal bool Contains(DocumentRect bounds) => DocumentRect.FromSize(Dimensions).Contains(bounds);
     internal void Insert(Layer layer, int index)
     {
         if (layer is BaseLayer) throw new EditException(EditError.BaseFixed);
         if (_layers.Any(item => item.Id == layer.Id) ||
             (layer.OwnerDocumentId is { } owner && owner != Id) ||
-            !DocumentRect.FromSize(Dimensions).Contains(layer.Bounds)) throw new EditException(EditError.InvalidLayer);
+            !Contains(layer.Bounds)) throw new EditException(EditError.InvalidLayer);
         var divider = _layers.IndexOf(Base);
         if (index < 0 || index > _layers.Count ||
             (layer.Kind == LayerKind.Part ? index > divider : index <= divider))

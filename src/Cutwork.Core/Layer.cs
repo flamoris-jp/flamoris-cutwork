@@ -4,15 +4,17 @@ public enum LayerKind { Base, Part, Patch, Repair }
 
 public abstract class Layer
 {
+    private readonly DocumentRect _bounds;
+
     private protected Layer(LayerKind kind, DocumentRect bounds, string name)
     {
         if (bounds.IsEmpty) throw new ArgumentException("Empty layer bounds.", nameof(bounds));
-        Id = Guid.NewGuid(); Kind = kind; Bounds = bounds;
+        Id = Guid.NewGuid(); Kind = kind; _bounds = bounds;
         Name = name ?? throw new ArgumentNullException(nameof(name));
     }
     public Guid Id { get; }
     public LayerKind Kind { get; }
-    public DocumentRect Bounds { get; }
+    public virtual DocumentRect Bounds => _bounds;
     public string Name { get; internal set; }
     public string? SemanticName { get; internal set; }
     public bool Visible { get; internal set; } = true;
@@ -52,20 +54,121 @@ public abstract class RasterLayer : Layer
         if (bgra.Length != checked(bounds.Width * bounds.Height * 4))
             throw new ArgumentException("Raster size mismatch.", nameof(bgra));
         _pixels = bgra.ToArray();
+        PixelBounds = bounds;
     }
-    public ReadOnlySpan<byte> PixelAt(int x, int y)
+    protected DocumentRect PixelBounds { get; }
+    public ReadOnlySpan<byte> PixelAt(int x, int y) => PixelAtRaster(x, y);
+    protected ReadOnlySpan<byte> PixelAtRaster(int x, int y)
     {
-        if (x < Bounds.X || y < Bounds.Y || x >= Bounds.Right || y >= Bounds.Bottom)
+        if (x < PixelBounds.X || y < PixelBounds.Y || x >= PixelBounds.Right || y >= PixelBounds.Bottom)
             throw new ArgumentOutOfRangeException(nameof(x));
-        return _pixels.AsSpan(checked(((y - Bounds.Y) * Bounds.Width + x - Bounds.X) * 4), 4);
+        return _pixels.AsSpan(checked(((y - PixelBounds.Y) * PixelBounds.Width + x - PixelBounds.X) * 4), 4);
     }
-    public byte[] CopyPixels(DocumentRect region) => PixelRegion.Copy(_pixels, Bounds, region, 4);
-    internal void WritePixels(DocumentRect region, byte[] bytes) => PixelRegion.Write(_pixels, Bounds, region, bytes, 4);
+    public byte[] CopyPixels(DocumentRect region) => PixelRegion.Copy(_pixels, PixelBounds, region, 4);
+    internal void WritePixels(DocumentRect region, byte[] bytes) => PixelRegion.Write(_pixels, PixelBounds, region, bytes, 4);
     internal override long RetainedBytes => base.RetainedBytes + _pixels.LongLength;
 }
 
-public sealed class PatchLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
-    : RasterLayer(LayerKind.Patch, bounds, bgra, name);
+public readonly record struct PatchTransform
+{
+    public const double MinimumScale = 0.01;
+    public const double MaximumScale = 10.0;
+
+    public PatchTransform(double centerX, double centerY, double scale = 1, double rotationDegrees = 0)
+    {
+        if (!double.IsFinite(centerX) || !double.IsFinite(centerY)
+            || !double.IsFinite(scale) || scale < MinimumScale || scale > MaximumScale
+            || !double.IsFinite(rotationDegrees)) throw new ArgumentOutOfRangeException(nameof(scale));
+        CenterX = centerX;
+        CenterY = centerY;
+        Scale = scale;
+        RotationDegrees = NormalizeDegrees(rotationDegrees);
+    }
+
+    public double CenterX { get; }
+    public double CenterY { get; }
+    public double Scale { get; }
+    public double RotationDegrees { get; }
+
+    private static double NormalizeDegrees(double value)
+    {
+        value %= 360;
+        return value <= -180 ? value + 360 : value > 180 ? value - 360 : value;
+    }
+}
+
+public sealed class PatchLayer : RasterLayer
+{
+    private readonly DocumentPoint[] _sourcePolygon;
+    private PatchTransform _transform;
+
+    public PatchLayer(DocumentRect sourceBounds, ReadOnlySpan<byte> bgra, string name = "")
+        : this(sourceBounds, bgra,
+            new PatchTransform(sourceBounds.X + sourceBounds.Width / 2.0,
+                sourceBounds.Y + sourceBounds.Height / 2.0), [], name) { }
+
+    public PatchLayer(DocumentRect sourceBounds, ReadOnlySpan<byte> bgra, PatchTransform transform,
+        IReadOnlyList<DocumentPoint>? sourcePolygon = null, string name = "")
+        : base(LayerKind.Patch, sourceBounds, bgra, name)
+    {
+        _transform = transform;
+        _sourcePolygon = sourcePolygon?.ToArray() ?? [];
+        _ = Bounds;
+    }
+
+    public PixelSize SourceSize => new(PixelBounds.Width, PixelBounds.Height);
+    public PatchTransform Transform => _transform;
+    public IReadOnlyList<DocumentPoint> SourcePolygon => Array.AsReadOnly(_sourcePolygon);
+    public override DocumentRect Bounds => CalculateBounds(SourceSize, _transform);
+    public byte[] CopySourcePixels() => CopyPixels(PixelBounds);
+
+    public ReadOnlySpan<byte> SampleAt(int documentX, int documentY)
+    {
+        var radians = _transform.RotationDegrees * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var dx = documentX + 0.5 - _transform.CenterX;
+        var dy = documentY + 0.5 - _transform.CenterY;
+        var localX = (cos * dx + sin * dy) / _transform.Scale + SourceSize.Width / 2.0;
+        var localY = (-sin * dx + cos * dy) / _transform.Scale + SourceSize.Height / 2.0;
+        var x = (int)Math.Floor(localX);
+        var y = (int)Math.Floor(localY);
+        return x < 0 || y < 0 || x >= SourceSize.Width || y >= SourceSize.Height
+            ? ReadOnlySpan<byte>.Empty
+            : PixelAtRaster(PixelBounds.X + x, PixelBounds.Y + y);
+    }
+
+    internal void SetTransform(PatchTransform transform)
+    {
+        _transform = transform;
+        _ = Bounds;
+    }
+
+    public static DocumentRect CalculateBounds(PixelSize size, PatchTransform transform)
+    {
+        var radians = transform.RotationDegrees * Math.PI / 180.0;
+        var cos = Math.Cos(radians) * transform.Scale;
+        var sin = Math.Sin(radians) * transform.Scale;
+        var halfWidth = size.Width / 2.0;
+        var halfHeight = size.Height / 2.0;
+        var corners = new[]
+        {
+            (-halfWidth, -halfHeight), (halfWidth, -halfHeight),
+            (halfWidth, halfHeight), (-halfWidth, halfHeight),
+        };
+        var xs = corners.Select(point => transform.CenterX + point.Item1 * cos - point.Item2 * sin).ToArray();
+        var ys = corners.Select(point => transform.CenterY + point.Item1 * sin + point.Item2 * cos).ToArray();
+        var left = (int)Math.Floor(xs.Min());
+        var top = (int)Math.Floor(ys.Min());
+        var right = (int)Math.Ceiling(xs.Max());
+        var bottom = (int)Math.Ceiling(ys.Max());
+        if (left < 0 || top < 0 || right <= left || bottom <= top)
+            throw new EditException(EditError.InvalidLayer);
+        return new(left, top, right - left, bottom - top);
+    }
+
+    internal override long RetainedBytes => base.RetainedBytes + _sourcePolygon.LongLength * 16L + 64;
+}
 
 public sealed class RepairLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
     : RasterLayer(LayerKind.Repair, bounds, bgra, name);
