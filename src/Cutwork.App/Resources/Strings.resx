@@ -21,6 +21,17 @@
   <data name="Menu_Export" xml:space="preserve"><value>書き出し</value></data>
   <data name="Menu_Help" xml:space="preserve"><value>ヘルプ</value></data>
   <data name="Panel_Tools" xml:space="preserve"><value>ツール</value></data>
+  <data name="PartTool_Name" xml:space="preserve"><value>パーツ</value></data>
+  <data name="PartTool_Tooltip" xml:space="preserve"><value>ラフな囲いからパーツ境界を合わせます</value></data>
+  <data name="PartTool_Commit" xml:space="preserve"><value>確定</value></data>
+  <data name="PartTool_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="PartTool_Status_Ready" xml:space="preserve"><value>パーツツール：対象をラフにクリックで囲みます（Enter／ダブルクリックで次へ）</value></data>
+  <data name="PartTool_Status_DrawingFence" xml:space="preserve"><value>囲い：{0}点。Enterまたはダブルクリックで境界合わせへ進みます。</value></data>
+  <data name="PartTool_Status_NeedsThreePoints" xml:space="preserve"><value>囲いには3点以上必要です（現在{0}点）。</value></data>
+  <data name="PartTool_Status_FenceTooSmall" xml:space="preserve"><value>囲いが小さすぎます（{0} px）。少し広く囲んでください。</value></data>
+  <data name="PartTool_Status_FittingPreview" xml:space="preserve"><value>境界合わせ：段階 {0}、{1}/{2} px。ホイール前回転＝内側、後ろ回転＝戻す、Ctrl+ホイール＝ズーム、Enter＝確定。</value></data>
+  <data name="PartTool_Status_Cancelled" xml:space="preserve"><value>未確定のパーツを取り消しました。</value></data>
+  <data name="PartTool_Status_Committed" xml:space="preserve"><value>パーツを作成しました。元に戻す1回で作成全体を取り消せます。</value></data>
   <data name="Panel_Layers" xml:space="preserve"><value>レイヤー</value></data>
   <data name="Panel_Properties" xml:space="preserve"><value>プロパティ</value></data>
   <data name="Canvas_NoDocument" xml:space="preserve"><value>画像を開いてください</value></data>
