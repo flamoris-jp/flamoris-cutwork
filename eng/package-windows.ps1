@@ -77,10 +77,19 @@ foreach ($requiredFile in $requiredPublishFiles) {
     }
 }
 
-$publishExecutables = @(Get-ChildItem -LiteralPath $publishPath -Filter "*.exe" -File -Recurse)
-if ($publishExecutables.Count -ne 1 -or $publishExecutables[0].Name -cne "Cutwork.exe") {
-    $names = ($publishExecutables | ForEach-Object Name) -join ", "
-    throw "Expected exactly one executable named Cutwork.exe; found: $names"
+$wpfNativeFiles = @(Get-ChildItem -LiteralPath $publishPath -File | Where-Object {
+    $_.Name -match '^(PresentationNative|wpfgfx).*\.dll$'
+})
+if ($wpfNativeFiles.Count -lt 2) {
+    throw "Expected self-contained WPF native runtime files were not published."
+}
+
+$productLaunchers = @(Get-ChildItem -LiteralPath $publishPath -Filter "*.exe" -File -Recurse | Where-Object {
+    $_.Name -match '(?i)(cutwork|flamoris)'
+})
+if ($productLaunchers.Count -ne 1 -or $productLaunchers[0].Name -cne "Cutwork.exe") {
+    $names = ($productLaunchers | ForEach-Object Name) -join ", "
+    throw "Expected exactly one Cutwork product launcher named Cutwork.exe; found: $names"
 }
 
 $forbiddenPublishFiles = @(Get-ChildItem -LiteralPath $publishPath -File -Recurse | Where-Object {
@@ -132,9 +141,11 @@ try {
         }
     }
 
-    $zipExecutables = @($entryNames | Where-Object { $_ -match '(?i)\.exe$' })
-    if ($zipExecutables.Count -ne 1 -or $zipExecutables[0] -cne "Cutwork.exe") {
-        throw "ZIP must expose exactly one executable launcher named Cutwork.exe."
+    $zipProductLaunchers = @($entryNames | Where-Object {
+        $_ -match '(?i)[^/]*(cutwork|flamoris)[^/]*\.exe$'
+    })
+    if ($zipProductLaunchers.Count -ne 1 -or $zipProductLaunchers[0] -cne "Cutwork.exe") {
+        throw "ZIP must expose exactly one Cutwork product launcher named Cutwork.exe."
     }
 
     $forbiddenEntries = @($entryNames | Where-Object {

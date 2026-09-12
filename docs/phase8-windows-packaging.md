@@ -59,8 +59,9 @@ ZIP rootには次を含みます。
 - `DOTNET-LICENSE.txt`
 - `THIRD-PARTY-NOTICES.txt`
 
-packaging scriptは、必須app/runtime files、`Cutwork.exe`が唯一のexecutableである
-こと、ZIPの可読性、required noticesを検査します。source、tests、experiments、
+packaging scriptは、必須app/runtime filesとWPF native runtime、`Cutwork.exe`が唯一の
+Cutwork product launcherであること、ZIPの可読性、required noticesを検査します。
+source、tests、experiments、
 build intermediates、PDB、Python/Tkinter/OpenCV由来ファイルが混入した場合は失敗します。
 
 Production projectの外部runtime dependencyはありません。OpenCVやPython packageは
@@ -113,4 +114,3 @@ desktopで実施していない項目をCI結果だけで「確認済み」と�
 既存のWindows `Production` workflowだけを使用します。Release restore/build/testの後、
 同じpackaging scriptを実行してartifact inventoryとZIPを検査し、ZIPとinventoryを
 workflow artifactとしてuploadします。GitHub Releaseの自動作成は行いません。
-
