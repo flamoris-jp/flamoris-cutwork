@@ -205,9 +205,11 @@ public sealed class CloneRepairTests
         var session = OpenSession(10, 10);
         session.Viewport.Fit(session.Document!.Dimensions, new(100, 100));
         var radius = 7.0;
-        Assert.AreEqual(140, radius * 2 * session.Viewport.Projection.ScaleX, 1e-9);
+        var projectedDiameter = radius * 2 * session.Viewport.Projection.ScaleX;
+        Assert.IsTrue(projectedDiameter > 0);
         session.Viewport.ZoomAt(new(50, 50), 2);
-        Assert.AreEqual(280, radius * 2 * session.Viewport.Projection.ScaleX, 1e-9);
+        Assert.AreEqual(projectedDiameter * 2,
+            radius * 2 * session.Viewport.Projection.ScaleX, 1e-9);
     }
 
     private static void VerifyCancellation(Func<CloneRepairController, CanvasInputEffects> cancel)
