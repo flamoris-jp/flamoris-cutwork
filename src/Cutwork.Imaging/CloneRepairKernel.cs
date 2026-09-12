@@ -20,6 +20,7 @@ public sealed class CloneRepairKernel : ICloneRepairKernel
         if (region.IsEmpty) return default;
         var pixels = target.CopyPixelsWithTransparentOutside(region);
         var radiusSquared = radius * radius;
+        var changed = false;
 
         for (var y = region.Y; y < region.Bottom; y++)
         for (var x = region.X; x < region.Right; x++)
@@ -44,11 +45,15 @@ public sealed class CloneRepairKernel : ICloneRepairKernel
             var sourceY = (int)Math.Floor(centerY + offset.Y);
             if ((uint)sourceX >= (uint)original.Dimensions.Width
                 || (uint)sourceY >= (uint)original.Dimensions.Height) continue;
-            original.PixelAt(sourceX, sourceY).CopyTo(pixels.AsSpan(
-                checked(((y - region.Y) * region.Width + x - region.X) * 4), 4));
+            var destination = pixels.AsSpan(
+                checked(((y - region.Y) * region.Width + x - region.X) * 4), 4);
+            var source = original.PixelAt(sourceX, sourceY);
+            if (source.SequenceEqual(destination)) continue;
+            source.CopyTo(destination);
+            changed = true;
         }
 
-        return new(region, pixels);
+        return new(region, pixels, changed);
     }
 
     private static DocumentRect DestinationBounds(IReadOnlyList<DocumentPoint> samples,

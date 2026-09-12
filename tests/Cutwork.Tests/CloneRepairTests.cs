@@ -25,6 +25,19 @@ public sealed class CloneRepairTests
     }
 
     [TestMethod]
+    public void SourceDoesNotCrossDocumentBoundary()
+    {
+        var (session, tool) = CreateTool(12, 10);
+        tool.PointerDown(new(2, 3), 1, CanvasModifiers.Alt);
+        session.Open(new CutworkDocument(Original(8, 8)));
+
+        Assert.IsNull(tool.Snapshot().SourceAnchor);
+        tool.PointerDown(new(4, 4), 1, CanvasModifiers.None);
+        Assert.AreEqual(CloneRepairMessage.SourceRequired, tool.Status.Message);
+        Assert.AreEqual(0, session.Document!.Layers.OfType<RepairLayer>().Count());
+    }
+
+    [TestMethod]
     public void StrokeOffsetIsFixedAndSecondStrokeRecomputesIt()
     {
         var session = OpenSession(20, 20);
@@ -163,6 +176,20 @@ public sealed class CloneRepairTests
         Assert.AreEqual(0, session.Document!.Layers.OfType<RepairLayer>().Count());
         Assert.AreEqual(0, session.UndoCount);
         Assert.AreEqual(session.SavedRevision, session.CurrentRevision);
+        Assert.IsFalse(session.IsDirty);
+    }
+
+    [TestMethod]
+    public void EmptyMinimumRadiusDabDoesNotCreateBlankRepairLayer()
+    {
+        var (session, tool) = CreateTool(10, 10);
+        tool.SetRadius(CloneRepairController.MinimumRadius);
+        tool.PointerDown(new(1, 1), 1, CanvasModifiers.Alt);
+        tool.PointerDown(new(5, 5), 1, CanvasModifiers.None);
+        tool.PointerUp(new(5, 5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        Assert.AreEqual(0, session.Document!.Layers.OfType<RepairLayer>().Count());
+        Assert.AreEqual(0, session.UndoCount);
         Assert.IsFalse(session.IsDirty);
     }
 

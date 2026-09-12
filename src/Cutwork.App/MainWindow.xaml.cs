@@ -112,6 +112,7 @@ public partial class MainWindow : Window
         }
 
         _inputRouter.CancelActiveTool();
+        _cloneTool.ResetSource();
         var document = new CutworkDocument(result.Original!);
         _session.Open(document);
         _pointerPosition = null;

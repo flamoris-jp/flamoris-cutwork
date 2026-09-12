@@ -28,8 +28,11 @@ public sealed class CloneRepairController : ICanvasToolInput
     private StrokeSampler? _sampler;
     private DocumentPoint? _hover;
     private DocumentPoint? _sourceAnchor;
+    private Guid? _sourceDocumentId;
     private DocumentPoint? _destinationAnchor;
     private DocumentPoint? _strokeOffset;
+    private bool _createdRepair;
+    private bool _hasRasterChange;
 
     public CloneRepairController(EditorSession session, ICloneRepairKernel kernel)
     {
@@ -55,7 +58,7 @@ public sealed class CloneRepairController : ICanvasToolInput
     public void Activate()
     {
         IsActive = true;
-        Status = new(_sourceAnchor is null ? CloneRepairMessage.Ready : CloneRepairMessage.SourceSet);
+        Status = new(CurrentSource is null ? CloneRepairMessage.Ready : CloneRepairMessage.SourceSet);
         NotifyChanged();
     }
 
@@ -75,11 +78,12 @@ public sealed class CloneRepairController : ICanvasToolInput
         if (modifiers.HasFlag(CanvasModifiers.Alt))
         {
             _sourceAnchor = point;
+            _sourceDocumentId = document.Id;
             Status = new(CloneRepairMessage.SourceSet);
             NotifyChanged();
             return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
         }
-        if (_sourceAnchor is not { } source)
+        if (CurrentSource is not { } source)
         {
             Status = new(CloneRepairMessage.SourceRequired);
             NotifyChanged();
@@ -94,6 +98,7 @@ public sealed class CloneRepairController : ICanvasToolInput
             var x = Math.Clamp((int)Math.Floor(point.X), 0, document.Dimensions.Width - 1);
             var y = Math.Clamp((int)Math.Floor(point.Y), 0, document.Dimensions.Height - 1);
             _repair = new RepairLayer(new DocumentRect(x, y, 1, 1), new byte[4]);
+            _createdRepair = true;
             _transaction.Apply(new AddLayer(_repair));
         }
 
@@ -123,7 +128,8 @@ public sealed class CloneRepairController : ICanvasToolInput
         if (State != CloneRepairState.Painting || button != CanvasPointerButton.Left)
             return CanvasInputEffects.None;
         if (point is { } current && _sampler is not null) ApplySamples(_sampler.Add(current));
-        _transaction!.Commit(_repair!.Id);
+        if (_createdRepair && !_hasRasterChange) _transaction!.Cancel();
+        else _transaction!.Commit(_repair!.Id);
         ClearStroke();
         _hover = point;
         Status = new(CloneRepairMessage.Committed);
@@ -163,7 +169,16 @@ public sealed class CloneRepairController : ICanvasToolInput
         NotifyChanged();
     }
 
-    public CloneRepairSnapshot Snapshot() => new(State, _hover, _sourceAnchor,
+    public void ResetSource()
+    {
+        if (State != CloneRepairState.Idle) Cancel();
+        _sourceAnchor = null;
+        _sourceDocumentId = null;
+        Status = new(CloneRepairMessage.Ready);
+        NotifyChanged();
+    }
+
+    public CloneRepairSnapshot Snapshot() => new(State, _hover, CurrentSource,
         _destinationAnchor, _strokeOffset, Radius, Status);
 
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples)
@@ -173,8 +188,11 @@ public sealed class CloneRepairController : ICanvasToolInput
         try
         {
             var patch = _kernel.CreatePatch(_session.Document!.Original, _repair, samples, offset, Radius);
-            if (!patch.Region.IsEmpty)
+            if (!patch.Region.IsEmpty && patch.HasChanges)
+            {
                 _transaction.Apply(new RasterPatch(_repair.Id, patch.Region, patch.StraightBgra.Span));
+                _hasRasterChange = true;
+            }
         }
         catch
         {
@@ -193,8 +211,13 @@ public sealed class CloneRepairController : ICanvasToolInput
         _sampler = null;
         _destinationAnchor = null;
         _strokeOffset = null;
+        _createdRepair = false;
+        _hasRasterChange = false;
         State = CloneRepairState.Idle;
     }
+
+    private DocumentPoint? CurrentSource => _session.Document?.Id == _sourceDocumentId
+        ? _sourceAnchor : null;
 
     private void NotifyChanged() => Changed?.Invoke(this, EventArgs.Empty);
 }
