@@ -1,0 +1,24 @@
+name: Production
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "*.sln"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".github/workflows/production.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore Cutwork.sln
+      - run: dotnet build Cutwork.sln --configuration Release --no-restore
+      - run: dotnet test Cutwork.sln --configuration Release --no-build
