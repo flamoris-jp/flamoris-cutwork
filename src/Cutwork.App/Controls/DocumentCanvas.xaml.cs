@@ -2,14 +2,20 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Flamoris.Cutwork.App.Rendering;
 using Flamoris.Cutwork.Core;
+using Flamoris.Cutwork.Imaging;
 
 namespace Flamoris.Cutwork.App.Controls;
 
 public partial class DocumentCanvas : UserControl
 {
     private readonly WriteableBitmapSurface _bitmapSurface = new();
+    private readonly WriteableBitmapSurface _originalSurface = new();
+    private CompositeCache? _composite;
+    private CutworkDocument? _presentedDocument;
+    private bool _refreshQueued;
     private EditorSession? _session;
     private ViewportPoint _lastPanPoint;
     private bool _isPanning;
@@ -42,14 +48,49 @@ public partial class DocumentCanvas : UserControl
 
     public double Zoom => _session?.Viewport.Zoom ?? 1.0;
 
-    public void AttachSession(EditorSession session) =>
+    public void AttachSession(EditorSession session)
+    {
+        if (_session is not null) _session.Changed -= SessionChanged;
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        _session.Changed += SessionChanged;
+    }
+
+    private void SessionChanged(object? sender, EventArgs e)
+    {
+        if (_refreshQueued) return;
+        _refreshQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+        {
+            _refreshQueued = false;
+            RefreshPreview();
+        }));
+    }
+
+    public void RefreshPreview()
+    {
+        if (_session?.Document is null || !ReferenceEquals(_session.Document, _presentedDocument)) return;
+        if (_session.PreviewSource == PreviewSource.Original)
+        {
+            if (_originalSurface.Bitmap is null) _originalSurface.PresentOriginal(_presentedDocument.Original);
+            ImageSurface.Source = _originalSurface.Bitmap;
+        }
+        else
+        {
+            var update = _composite?.RenderPending();
+            if (update is not null) _bitmapSurface.Apply(update);
+            ImageSurface.Source = _bitmapSurface.Bitmap;
+        }
+    }
 
     public void Present(CutworkDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        _bitmapSurface.PresentOriginal(document.Original);
-        ImageSurface.Source = _bitmapSurface.Bitmap;
+        _composite?.Dispose();
+        _presentedDocument = document;
+        _composite = new CompositeCache(document);
+        _originalSurface.Clear();
+        _bitmapSurface.Initialize(document.Dimensions);
+        RefreshPreview();
         ImageSurface.Width = document.Dimensions.Width;
         ImageSurface.Height = document.Dimensions.Height;
         EmptyMessage.Visibility = System.Windows.Visibility.Collapsed;
