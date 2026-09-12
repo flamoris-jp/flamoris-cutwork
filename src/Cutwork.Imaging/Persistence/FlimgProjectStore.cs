@@ -16,11 +16,13 @@ public sealed class FlimgProjectStore
 {
     private readonly FlimgArchiveCodec _codec;
     private readonly IAtomicProjectFileSystem _files;
+    private readonly AtomicFileWriter _writer;
 
     public FlimgProjectStore(FlimgArchiveCodec? codec = null, IAtomicProjectFileSystem? files = null)
     {
         _codec = codec ?? new FlimgArchiveCodec();
         _files = files ?? new LocalAtomicProjectFileSystem();
+        _writer = new AtomicFileWriter(_files);
     }
 
     public CutworkDocument Load(string path)
@@ -42,40 +44,12 @@ public sealed class FlimgProjectStore
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var destination = Path.GetFullPath(path);
-        var directory = Path.GetDirectoryName(destination);
-        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
-            throw new FlimgException(FlimgError.IoFailure);
-        var temporary = Path.Combine(directory,
-            $".{Path.GetFileName(destination)}.{Guid.NewGuid():N}.tmp");
-        try
+        _writer.Write(path, output => _codec.Write(output, document), temporary =>
         {
-            using (var output = _files.CreateNew(temporary))
-            {
-                _codec.Write(output, document);
-                output.Flush();
-                if (output is FileStream file) file.Flush(flushToDisk: true);
-            }
             // Validate the completely closed artifact before it can replace a valid project.
-            using (var input = _files.OpenRead(temporary)) _ = _codec.Read(input);
-            _files.Replace(temporary, destination);
-        }
-        catch (FlimgException)
-        {
-            BestEffortDelete(temporary);
-            throw;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            BestEffortDelete(temporary);
-            throw new FlimgException(FlimgError.IoFailure, exception);
-        }
-    }
-
-    private void BestEffortDelete(string path)
-    {
-        try { _files.DeleteIfExists(path); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+            using var input = _files.OpenRead(temporary);
+            _ = _codec.Read(input);
+        });
     }
 }
 
