@@ -107,4 +107,17 @@
   <data name="CloneTool_Status_Painting" xml:space="preserve"><value>クローン補修中。離すと1操作として確定、Escで取り消します。</value></data>
   <data name="CloneTool_Status_Cancelled" xml:space="preserve"><value>クローン補修を取り消しました。</value></data>
   <data name="CloneTool_Status_Committed" xml:space="preserve"><value>クローン補修を確定しました。</value></data>
+  <data name="BlurTool_Name" xml:space="preserve"><value>ぼかし</value></data>
+  <data name="BlurTool_Tooltip" xml:space="preserve"><value>選択中の補修レイヤーの継ぎ目をぼかす</value></data>
+  <data name="SmudgeTool_Name" xml:space="preserve"><value>引きずり</value></data>
+  <data name="SmudgeTool_Tooltip" xml:space="preserve"><value>選択中の補修画素をストローク方向へ引きずる</value></data>
+  <data name="FinishingTool_Radius" xml:space="preserve"><value>半径（画像px）</value></data>
+  <data name="FinishingTool_Strength" xml:space="preserve"><value>強さ（%）</value></data>
+  <data name="BlurTool_Status_Ready" xml:space="preserve"><value>補修レイヤーを選択してドラッグすると、局所的にぼかします。</value></data>
+  <data name="SmudgeTool_Status_Ready" xml:space="preserve"><value>補修レイヤーを選択して、動かしたい方向へドラッグします。</value></data>
+  <data name="FinishingTool_Status_SelectRepair" xml:space="preserve"><value>補修・ペイントレイヤーを選択してください。元画像、ベース、パーツ、パッチは変更しません。</value></data>
+  <data name="FinishingTool_Status_Painting" xml:space="preserve"><value>補修仕上げ中。離すと1操作として確定、Escで取り消します。</value></data>
+  <data name="FinishingTool_Status_Cancelled" xml:space="preserve"><value>補修仕上げを取り消しました。</value></data>
+  <data name="FinishingTool_Status_Committed" xml:space="preserve"><value>補修仕上げを確定しました。</value></data>
+  <data name="FinishingTool_InvalidNumber" xml:space="preserve"><value>半径は0.5〜512画像px、強さは1〜100%で入力してください。</value></data>
 </root>

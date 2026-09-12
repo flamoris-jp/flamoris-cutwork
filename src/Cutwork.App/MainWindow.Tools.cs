@@ -17,6 +17,10 @@ public partial class MainWindow
         PatchToolButton.ToolTip = text["PatchTool_Tooltip"];
         CloneToolButton.Content = text["CloneTool_Name"];
         CloneToolButton.ToolTip = text["CloneTool_Tooltip"];
+        BlurToolButton.Content = text["BlurTool_Name"];
+        BlurToolButton.ToolTip = text["BlurTool_Tooltip"];
+        SmudgeToolButton.Content = text["SmudgeTool_Name"];
+        SmudgeToolButton.ToolTip = text["SmudgeTool_Tooltip"];
         PatchCommitButton.Content = text["PatchTool_Commit"];
         PatchCancelButton.Content = text["PatchTool_Cancel"];
         MaskRadiusLabel.Text = text["MaskTool_Radius"];
@@ -29,6 +33,9 @@ public partial class MainWindow
         PatchApplyButton.Content = text["Properties_Apply"];
         CloneRadiusLabel.Text = text["CloneTool_Radius"];
         CloneApplyButton.Content = text["Properties_Apply"];
+        FinishingRadiusLabel.Text = text["FinishingTool_Radius"];
+        FinishingStrengthLabel.Text = text["FinishingTool_Strength"];
+        FinishingApplyButton.Content = text["Properties_Apply"];
         UpdatePhase4ToolUi();
     }
 
@@ -52,6 +59,22 @@ public partial class MainWindow
     {
         if (_session.Document is null) return;
         _inputRouter.SetActiveTool(_cloneTool);
+        UpdatePartToolUi();
+        CanvasView.Focus();
+    }
+
+    private void BlurTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (_session.Document is null) return;
+        _inputRouter.SetActiveTool(_blurTool);
+        UpdatePartToolUi();
+        CanvasView.Focus();
+    }
+
+    private void SmudgeTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (_session.Document is null) return;
+        _inputRouter.SetActiveTool(_smudgeTool);
         UpdatePartToolUi();
         CanvasView.Focus();
     }
@@ -101,6 +124,25 @@ public partial class MainWindow
         CanvasView.Focus();
     }
 
+    private void FinishingApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryRead(FinishingRadiusEditor.Text, out var radius)
+            || !TryRead(FinishingStrengthEditor.Text, out var strengthPercent))
+        {
+            ShowFinishingInputError();
+            return;
+        }
+        var tool = _blurTool.IsActive ? _blurTool : _smudgeTool.IsActive ? _smudgeTool : null;
+        if (tool is null) return;
+        try
+        {
+            tool.SetRadius(radius);
+            tool.SetStrength(strengthPercent / 100.0);
+        }
+        catch (ArgumentOutOfRangeException) { ShowFinishingInputError(); }
+        CanvasView.Focus();
+    }
+
     private void PatchApply_Click(object sender, RoutedEventArgs e)
     {
         if (!TryRead(PatchXEditor.Text, out var x)
@@ -143,6 +185,8 @@ public partial class MainWindow
         MaskToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _maskTool);
         PatchToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _patchTool);
         CloneToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _cloneTool);
+        BlurToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _blurTool);
+        SmudgeToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _smudgeTool);
         var patchPending = _patchTool.Snapshot().Source is not null;
         PatchCommitButton.Visibility = patchPending ? Visibility.Visible : Visibility.Collapsed;
         PatchCancelButton.Visibility = _patchTool.Snapshot().SourceFence.Count > 0 || patchPending
@@ -153,7 +197,8 @@ public partial class MainWindow
 
     private void RefreshToolProperties(Layer? selected)
     {
-        if (_maskTool is null || _patchTool is null || _cloneTool is null) return;
+        if (_maskTool is null || _patchTool is null || _cloneTool is null
+            || _blurTool is null || _smudgeTool is null) return;
         _refreshingToolProperties = true;
         try
         {
@@ -177,6 +222,16 @@ public partial class MainWindow
             ClonePropertiesPanel.Visibility = _cloneTool.IsActive
                 ? Visibility.Visible : Visibility.Collapsed;
             CloneRadiusEditor.Text = _cloneTool.Radius.ToString("0.##", LocalizationService.Current.Culture);
+
+            var finishing = _blurTool.IsActive ? _blurTool : _smudgeTool.IsActive ? _smudgeTool : null;
+            FinishingPropertiesPanel.Visibility = finishing is null
+                ? Visibility.Collapsed : Visibility.Visible;
+            if (finishing is not null)
+            {
+                FinishingRadiusEditor.Text = finishing.Radius.ToString("0.##", LocalizationService.Current.Culture);
+                FinishingStrengthEditor.Text = (finishing.Strength * 100)
+                    .ToString("0.##", LocalizationService.Current.Culture);
+            }
         }
         finally { _refreshingToolProperties = false; }
     }
@@ -229,6 +284,20 @@ public partial class MainWindow
             };
             return true;
         }
+        var finishing = _blurTool.IsActive ? _blurTool : _smudgeTool.IsActive ? _smudgeTool : null;
+        if (finishing is not null)
+        {
+            status = finishing.Message switch
+            {
+                RepairFinishingMessage.SelectRepair => text["FinishingTool_Status_SelectRepair"],
+                RepairFinishingMessage.Painting => text["FinishingTool_Status_Painting"],
+                RepairFinishingMessage.Cancelled => text["FinishingTool_Status_Cancelled"],
+                RepairFinishingMessage.Committed => text["FinishingTool_Status_Committed"],
+                _ => text[finishing.Kind == RepairFinishingKind.Blur
+                    ? "BlurTool_Status_Ready" : "SmudgeTool_Status_Ready"],
+            };
+            return true;
+        }
         status = "";
         return false;
     }
@@ -238,5 +307,9 @@ public partial class MainWindow
 
     private void ShowToolInputError() => MessageBox.Show(this,
         LocalizationService.Current["Tool_InvalidNumber"],
+        LocalizationService.Current["Edit_ErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Warning);
+
+    private void ShowFinishingInputError() => MessageBox.Show(this,
+        LocalizationService.Current["FinishingTool_InvalidNumber"],
         LocalizationService.Current["Edit_ErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Warning);
 }
