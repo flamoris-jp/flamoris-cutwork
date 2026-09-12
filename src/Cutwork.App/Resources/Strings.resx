@@ -120,4 +120,19 @@
   <data name="FinishingTool_Status_Cancelled" xml:space="preserve"><value>補修仕上げを取り消しました。</value></data>
   <data name="FinishingTool_Status_Committed" xml:space="preserve"><value>補修仕上げを確定しました。</value></data>
   <data name="FinishingTool_InvalidNumber" xml:space="preserve"><value>半径は0.5〜512画像px、強さは1〜100%で入力してください。</value></data>
+  <data name="Menu_File_OpenProject" xml:space="preserve"><value>プロジェクトを開く...</value></data>
+  <data name="Menu_File_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Menu_File_SaveAs" xml:space="preserve"><value>名前を付けて保存...</value></data>
+  <data name="Menu_Export_Composite" xml:space="preserve"><value>合成画像 PNG...</value></data>
+  <data name="Menu_Export_Handoff" xml:space="preserve"><value>レイヤー受け渡し...</value></data>
+  <data name="Dialog_ProjectFilter" xml:space="preserve"><value>Cutwork プロジェクト (*.flimg)|*.flimg</value></data>
+  <data name="Dialog_PngFilter" xml:space="preserve"><value>PNG 画像 (*.png)|*.png</value></data>
+  <data name="Dialog_HandoffFilter" xml:space="preserve"><value>Cutwork レイヤー受け渡し (*.zip)|*.zip</value></data>
+  <data name="UnsavedChanges_Title" xml:space="preserve"><value>未保存の変更</value></data>
+  <data name="UnsavedChanges_Message" xml:space="preserve"><value>変更を保存しますか？「いいえ」を選ぶと、未保存の変更は失われます。</value></data>
+  <data name="ProjectError_Title" xml:space="preserve"><value>ファイル操作に失敗しました</value></data>
+  <data name="ProjectError_IoFailure" xml:space="preserve"><value>ファイルを読み書きできません。場所とアクセス権を確認してください。</value></data>
+  <data name="ProjectError_UnsupportedVersion" xml:space="preserve"><value>このバージョンの Cutwork では開けないプロジェクト形式です。</value></data>
+  <data name="ProjectError_SizeLimit" xml:space="preserve"><value>ファイルまたは画像が安全上の上限を超えています。</value></data>
+  <data name="ProjectError_InvalidFile" xml:space="preserve"><value>ファイルが壊れているか、安全に読み取れない内容を含んでいます。</value></data>
 </root>
