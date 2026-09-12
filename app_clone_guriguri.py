@@ -30,6 +30,8 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_last_destination: tuple[int, int] | None = None
         self.clone_source_cursor: tuple[int, int] | None = None
         self.clone_undo_stack: list[tuple[str, np.ndarray]] = []
+        self.clone_stroke_hole_mask: np.ndarray | None = None
+        self.clone_stroke_touched = 0
         self.clone_hole_only = tk.BooleanVar(master=root, value=True)
         self.show_original_preview = tk.BooleanVar(master=root, value=False)
         super().__init__(root)
@@ -133,6 +135,21 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         if len(self.clone_undo_stack) > 20:
             self.clone_undo_stack.pop(0)
 
+        # Hole geometry cannot change during one clone stroke. Computing this once
+        # avoids a full-image union on every pointer-motion segment.
+        self.clone_stroke_hole_mask = (
+            union_part_masks(self.state.layers, self.state.original_rgb.shape[:2])
+            if self.clone_hole_only.get()
+            else None
+        )
+        self.clone_stroke_touched = 0
+
+        # A repair layer without local edits is already the rendered RGBA layer.
+        # Keep the cache pointing at that live buffer instead of rebuilding/copying
+        # the full image for every tiny clone segment.
+        if not repair.local_edits:
+            self._layer_cache[repair.id] = repair.paint_rgba
+
         self.clone_source_anchor = rect_center(self.clone_source_rect)
         self.clone_destination_anchor = point
         self.clone_last_destination = point
@@ -192,11 +209,16 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             self.refresh_preview()
             return
 
+        touched = self.clone_stroke_touched
+        self.clone_stroke_hole_mask = None
+        self.clone_stroke_touched = 0
         self.clone_destination_anchor = None
         self.clone_last_destination = None
         self.clone_source_anchor = rect_center(self.clone_source_rect) if self.clone_source_rect is not None else None
         self.clone_source_cursor = self.clone_source_anchor
-        self.status.set("Clone stroke ready. Paint another direction, choose a new source patch, Blur/Smudge, or Undo Clone Stroke.")
+        self.status.set(
+            f"Clone stroke ready: copied {touched:,} destination px. Paint another direction, choose a new source patch, Blur/Smudge, or Undo Clone Stroke."
+        )
         self.refresh_preview()
 
     def _ensure_repair_layer(self):
@@ -226,7 +248,6 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         ):
             return
 
-        hole_mask = union_part_masks(self.state.layers, original.shape[:2]) if self.clone_hole_only.get() else None
         touched = paint_aligned_clone(
             active.paint_rgba,
             original,
@@ -236,11 +257,24 @@ class CloneGuriguriApp(PolygonGuriguriApp):
             start,
             end,
             max(1, self.brush_size.get() // 2),
-            hole_mask=hole_mask,
+            hole_mask=self.clone_stroke_hole_mask,
         )
-        self._invalidate_layer(active.id)
-        self.status.set(f"Clone Paint: copied {touched:,} destination px from immutable original. Drag along hair/skin flow.")
-        self._schedule_refresh(delay_ms=8)
+        self.clone_stroke_touched += touched
+
+        if active.local_edits:
+            # Local edits must be replayed over the changed paint buffer.
+            self._invalidate_layer(active.id)
+        else:
+            # Keep the rendered-layer cache alive. The clone kernel mutates this
+            # same RGBA buffer in place, so only the final composite is stale.
+            self._layer_cache[active.id] = active.paint_rgba
+            self._composite_cache_rgb = None
+
+        # Full Tk/PIL preview composition is much more expensive than the local
+        # clone kernel. Cap redraw requests around 30 fps and let multiple motion
+        # events accumulate between frames; line interpolation still connects the
+        # last and current image-space points so no stroke gaps are introduced.
+        self._schedule_refresh(delay_ms=33)
 
     def undo_clone_stroke(self) -> None:
         if not self.clone_undo_stack:
@@ -266,6 +300,8 @@ class CloneGuriguriApp(PolygonGuriguriApp):
         self.clone_destination_anchor = None
         self.clone_last_destination = None
         self.clone_source_cursor = None
+        self.clone_stroke_hole_mask = None
+        self.clone_stroke_touched = 0
         self.clone_undo_stack.clear()
 
     def _refresh_original_preview(self) -> None:
