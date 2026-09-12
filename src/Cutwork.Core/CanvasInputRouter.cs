@@ -17,6 +17,7 @@ public sealed class CanvasInputRouter
 
     public ICanvasToolInput? ActiveTool => _activeTool;
     public bool IsPanning => _panButton != CanvasPointerButton.None;
+    public bool HasPendingToolWork => _activeTool is ICanvasDeferredWork { HasPendingWork: true };
 
     public void SetActiveTool(ICanvasToolInput? tool)
     {
@@ -110,6 +111,11 @@ public sealed class CanvasInputRouter
 
     public CanvasInputEffects KeyDown(CanvasToolKey key, CanvasModifiers modifiers) =>
         _activeTool?.KeyDown(key, modifiers) ?? CanvasInputEffects.None;
+
+    public CanvasInputEffects ProcessPendingToolWork() =>
+        _activeTool is ICanvasDeferredWork pending && pending.HasPendingWork
+            ? pending.ProcessPendingWork()
+            : CanvasInputEffects.None;
 
     public void CancelActiveTool() => _activeTool?.Cancel();
 

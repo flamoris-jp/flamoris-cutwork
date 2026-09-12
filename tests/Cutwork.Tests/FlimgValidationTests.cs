@@ -1,8 +1,12 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging.Persistence;
 
 namespace Flamoris.Cutwork.Tests;
@@ -25,6 +29,40 @@ public sealed class FlimgValidationTests
     {
         AssertRejected(FlimgError.UnsupportedVersion, MutateManifest(root =>
             root["schemaVersion"] = 99));
+    }
+
+    [TestMethod]
+    public void FutureVersionDispatchDoesNotRequireV1Shape()
+    {
+        AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":2,"future":{"mode":"new"}}"""));
+        AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":2}"""));
+        AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":0,"legacyShape":true}"""));
+    }
+
+    [TestMethod]
+    public void MalformedOrDuplicateSchemaEnvelopeIsRejected()
+    {
+        AssertRejected(FlimgError.MalformedManifest, ManifestOnly(
+            """{"schemaVersion":2}"""));
+        AssertRejected(FlimgError.MalformedManifest, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":"2"}"""));
+        AssertRejected(FlimgError.MalformedManifest, ManifestOnly(
+            """{"format":"flamoris-cutwork","schemaVersion":1,"schemaVersion":2}"""));
+    }
+
+    [TestMethod]
+    public void ValidV1StillUsesStrictV1Deserializer()
+    {
+        var expected = FlimgRoundTripTests.FullDocument();
+        var valid = FlimgRoundTripTests.Write(expected);
+        var restored = FlimgRoundTripTests.Read(valid);
+        Assert.AreEqual(expected.Dimensions, restored.Dimensions);
+
+        AssertRejected(FlimgError.MalformedManifest, MutateManifest(root =>
+            root["unknownV1Property"] = true));
     }
 
     [TestMethod]
@@ -116,6 +154,44 @@ public sealed class FlimgValidationTests
     }
 
     [TestMethod]
+    public void CanonicalOriginalRejectsRgbIndexedAndGrayscalePngs()
+    {
+        var size = new PixelSize(2, 2);
+        var rgb = EncodeFixturePng(size, PixelFormats.Rgb24);
+        var indexed = EncodeFixturePng(size, PixelFormats.Indexed8,
+            new BitmapPalette([Colors.Red, Colors.Blue]));
+        var grayscale = EncodeFixturePng(size, PixelFormats.Gray8);
+        Assert.AreEqual((byte)2, rgb[25]);
+        Assert.AreEqual((byte)3, indexed[25]);
+        Assert.AreEqual((byte)0, grayscale[25]);
+
+        AssertPngRejected(() => PngAssetCodec.DecodeBgra32(rgb, size));
+        AssertPngRejected(() => PngAssetCodec.DecodeBgra32(indexed, size));
+        AssertPngRejected(() => PngAssetCodec.DecodeBgra32(grayscale, size));
+    }
+
+    [TestMethod]
+    public void CanonicalPartRejectsRgbaPng()
+    {
+        var size = new PixelSize(2, 2);
+        var rgba = EncodeFixturePng(size, PixelFormats.Bgra32);
+        Assert.AreEqual((byte)6, rgba[25]);
+
+        AssertPngRejected(() => PngAssetCodec.DecodeGray8(rgba, size));
+    }
+
+    [TestMethod]
+    public void CanonicalRgba8AndGray8PngsAreAccepted()
+    {
+        var size = new PixelSize(2, 2);
+        var rgba = EncodeFixturePng(size, PixelFormats.Bgra32);
+        var grayscale = EncodeFixturePng(size, PixelFormats.Gray8);
+
+        Assert.AreEqual(16, PngAssetCodec.DecodeBgra32(rgba, size).Length);
+        Assert.AreEqual(4, PngAssetCodec.DecodeGray8(grayscale, size).Length);
+    }
+
+    [TestMethod]
     public void DeclaredAndManifestSizeLimitsAreRejected()
     {
         AssertRejected(FlimgError.InvalidDimensions, MutateManifest(root =>
@@ -123,6 +199,75 @@ public sealed class FlimgValidationTests
         var oversized = Enumerable.Repeat((byte)' ', FlimgArchiveCodec.MaximumManifestBytes + 1).ToArray();
         AssertRejected(FlimgError.SizeLimitExceeded,
             Archive([("manifest.json", oversized)]));
+    }
+
+    [TestMethod]
+    public void PhysicalEntryReadsStopAtDeclaredLengthPlusOne()
+    {
+        using var overlong = new MemoryStream([1, 2, 3, 4, 5, 6]);
+        var exception = Assert.ThrowsExactly<FlimgException>(() => FlimgArchiveCodec.ReadBounded(
+            overlong, declaredLength: 4, limit: 4, new ArchiveReadBudget(100)));
+
+        Assert.AreEqual(FlimgError.MalformedArchive, exception.Error);
+        Assert.AreEqual(5, overlong.Position);
+
+        using var tooShort = new MemoryStream([1, 2, 3]);
+        exception = Assert.ThrowsExactly<FlimgException>(() => FlimgArchiveCodec.ReadBounded(
+            tooShort, declaredLength: 4, limit: 4, new ArchiveReadBudget(100)));
+        Assert.AreEqual(FlimgError.MalformedArchive, exception.Error);
+    }
+
+    [TestMethod]
+    public void PhysicalEntryReadsEnforceCumulativeArchiveBudget()
+    {
+        var budget = new ArchiveReadBudget(6);
+        using var first = new MemoryStream([1, 2, 3, 4]);
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3, 4 },
+            FlimgArchiveCodec.ReadBounded(first, 4, 4, budget));
+
+        using var second = new MemoryStream([5, 6, 7, 8]);
+        var exception = Assert.ThrowsExactly<FlimgException>(() =>
+            FlimgArchiveCodec.ReadBounded(second, 4, 4, budget));
+
+        Assert.AreEqual(FlimgError.SizeLimitExceeded, exception.Error);
+        Assert.AreEqual(2, budget.Remaining);
+        Assert.AreEqual(3, second.Position);
+    }
+
+    [TestMethod]
+    public void ForgedDeclaredLengthIsRejectedAsMalformedArchive()
+    {
+        var archive = Archive([("manifest.json", "12345678"u8.ToArray())],
+            CompressionLevel.NoCompression);
+        PatchCentralDirectoryLength(archive, "manifest.json", 7);
+
+        AssertRejected(FlimgError.MalformedArchive, archive);
+    }
+
+    [TestMethod]
+    public void ExcessiveEntryCountIsRejectedBeforeManifestProcessing()
+    {
+        var entries = Enumerable.Range(0, FlimgArchiveCodec.MaximumEntries + 1)
+            .Select(index => ($"entries/{index}", Array.Empty<byte>()));
+        var bytes = Archive(entries);
+
+        using var input = new MemoryStream(bytes);
+        var exception = Assert.ThrowsExactly<FlimgException>(() =>
+            FlimgArchiveCodec.PreflightArchive(input));
+        Assert.AreEqual(FlimgError.SizeLimitExceeded, exception.Error);
+        AssertRejected(FlimgError.SizeLimitExceeded, bytes);
+    }
+
+    [TestMethod]
+    public void CentralDirectoryPreflightRejectsForgedEntryCountBeforeMaterialization()
+    {
+        var bytes = Archive([("manifest.json", "{}"u8.ToArray()), ("asset.bin", new byte[] { 1 })]);
+        PatchEndRecordEntryCount(bytes, 1);
+
+        using var input = new MemoryStream(bytes);
+        var exception = Assert.ThrowsExactly<FlimgException>(() =>
+            FlimgArchiveCodec.PreflightArchive(input));
+        Assert.AreEqual(FlimgError.MalformedArchive, exception.Error);
     }
 
     [TestMethod]
@@ -139,6 +284,9 @@ public sealed class FlimgValidationTests
         return Archive(Replace(valid, "manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString(
             new JsonSerializerOptions { WriteIndented = true }))));
     }
+
+    private static byte[] ManifestOnly(string json) =>
+        Archive([("manifest.json", Encoding.UTF8.GetBytes(json))]);
 
     private static byte[] ReplaceAssetAndHash(string path, byte[] bytes) => MutateArchive(entries =>
     {
@@ -173,19 +321,83 @@ public sealed class FlimgValidationTests
         }).ToList();
     }
 
-    private static byte[] Archive(IEnumerable<(string Path, byte[] Bytes)> entries)
+    private static byte[] Archive(IEnumerable<(string Path, byte[] Bytes)> entries,
+        CompressionLevel compressionLevel = CompressionLevel.Optimal)
     {
         using var output = new MemoryStream();
         using (var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
             foreach (var item in entries)
             {
-                var entry = archive.CreateEntry(item.Path);
+                var entry = archive.CreateEntry(item.Path, compressionLevel);
                 using var target = entry.Open();
                 target.Write(item.Bytes);
             }
         }
         return output.ToArray();
+    }
+
+    private static void PatchCentralDirectoryLength(byte[] archive, string path, uint length)
+    {
+        for (var index = 0; index <= archive.Length - 46; index++)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(archive.AsSpan(index, 4)) != 0x02014b50)
+                continue;
+            var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(archive.AsSpan(index + 28, 2));
+            if (index + 46 + nameLength > archive.Length) continue;
+            var name = Encoding.UTF8.GetString(archive, index + 46, nameLength);
+            if (name != path) continue;
+            BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(index + 24, 4), length);
+            return;
+        }
+        Assert.Fail($"Central directory entry not found: {path}");
+    }
+
+    private static void PatchEndRecordEntryCount(byte[] archive, ushort count)
+    {
+        for (var index = archive.Length - 22; index >= 0; index--)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(archive.AsSpan(index, 4)) != 0x06054b50)
+                continue;
+            BinaryPrimitives.WriteUInt16LittleEndian(archive.AsSpan(index + 8, 2), count);
+            BinaryPrimitives.WriteUInt16LittleEndian(archive.AsSpan(index + 10, 2), count);
+            return;
+        }
+        Assert.Fail("End of central directory record not found.");
+    }
+
+    private static byte[] EncodeFixturePng(PixelSize size, PixelFormat format,
+        BitmapPalette? palette = null)
+    {
+        var stride = checked((size.Width * format.BitsPerPixel + 7) / 8);
+        var pixels = new byte[checked(stride * size.Height)];
+        if (format == PixelFormats.Rgb24)
+        {
+            pixels[0] = 10;
+            pixels[1] = 80;
+            pixels[2] = 190;
+        }
+        if (format == PixelFormats.Bgra32)
+        {
+            pixels[0] = 10;
+            pixels[1] = 80;
+            pixels[2] = 190;
+            for (var index = 3; index < pixels.Length; index += 4) pixels[index] = 255;
+        }
+        if (format == PixelFormats.Indexed8) pixels[0] = 1;
+        var bitmap = BitmapSource.Create(size.Width, size.Height, 96, 96, format, palette,
+            pixels, stride);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var output = new MemoryStream();
+        encoder.Save(output);
+        return output.ToArray();
+    }
+
+    private static void AssertPngRejected(Action action)
+    {
+        var exception = Assert.ThrowsExactly<FlimgException>(action);
+        Assert.AreEqual(FlimgError.MalformedPng, exception.Error);
     }
 
     private static void AssertRejected(FlimgError expected, byte[] bytes)

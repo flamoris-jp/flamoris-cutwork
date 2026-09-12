@@ -5,6 +5,8 @@ public sealed class EditTransaction : IDisposable
 {
     private readonly EditorSession _session;
     private bool _finished;
+    private bool _batching;
+    private long _retainedBytes;
     internal EditTransaction(EditorSession session, CutworkDocument document)
     {
         _session = session; Document = document;
@@ -13,7 +15,7 @@ public sealed class EditTransaction : IDisposable
     internal CutworkDocument Document { get; }
     internal Guid? SelectionBefore { get; }
     internal List<AppliedEdit> Edits { get; } = [];
-    internal long RetainedBytes => Edits.Sum(edit => edit.RetainedBytes);
+    internal long RetainedBytes => _retainedBytes;
 
     public void Apply(EditCommand command)
     {
@@ -24,9 +26,33 @@ public sealed class EditTransaction : IDisposable
             var edit = command.Apply(Document);
             if (edit is null) return;
             Edits.Add(edit);
-            if (RetainedBytes > _session.HistoryBudgetBytes)
+            _retainedBytes = checked(_retainedBytes + edit.RetainedBytes);
+            if (_retainedBytes > _session.HistoryBudgetBytes)
                 throw new EditException(EditError.HistoryBudgetExceeded);
-            edit.Publish(Document);
+            if (!_batching)
+            {
+                edit.Publish(Document);
+                _session.NotifyChanged();
+            }
+        }
+        catch
+        {
+            Cancel();
+            throw;
+        }
+    }
+    internal void ApplyBatch(Action apply)
+    {
+        if (_finished) throw new ObjectDisposedException(nameof(EditTransaction));
+        ArgumentNullException.ThrowIfNull(apply);
+        if (_batching) throw new InvalidOperationException("Nested edit batches are not supported.");
+        var firstEdit = Edits.Count;
+        _batching = true;
+        try
+        {
+            apply();
+            if (Edits.Count == firstEdit) return;
+            PublishAll(Document, Edits.GetRange(firstEdit, Edits.Count - firstEdit));
             _session.NotifyChanged();
         }
         catch
@@ -34,6 +60,7 @@ public sealed class EditTransaction : IDisposable
             Cancel();
             throw;
         }
+        finally { _batching = false; }
     }
     public void Commit()
     {
