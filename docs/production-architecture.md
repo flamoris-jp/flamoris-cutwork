@@ -636,10 +636,9 @@ These should be resolved by the roadmap phase that first needs them:
 
 1. Minimum supported Windows version and whether the first distributable is portable/self-contained only or also MSIX.
 2. Final Guriguri wheel direction after a short hands-on comparison; Issue #1 says the current experimental direction feels reversed.
-3. Whether hiding a Part must always preserve its Base hole. This document recommends yes and requires an explicit acceptance test.
-4. Whether v0.1 limits import/export to 8-bit sRGB PNG/JPEG or needs another format immediately.
-5. Exact default brush diameter/feather and the memory budget for Undo/Redo.
-6. Whether `.flimg` becomes the final public extension or remains provisional until the first persistence round trip.
-7. Whether Patch/Repair need controlled cross-Base movement; v0.1 defaults to fixed stack bands.
+3. Whether v0.1 limits import/export to 8-bit sRGB PNG/JPEG or needs another format immediately.
+4. Exact default brush diameter/feather and the memory budget for Undo/Redo.
+5. Whether `.flimg` becomes the final public extension or remains provisional until the first persistence round trip.
+6. Whether Patch/Repair need controlled cross-Base movement; v0.1 defaults to fixed stack bands.
 
 None of these questions blocks the foundation or first real-image canvas. They must not be answered by scattered implementation defaults.

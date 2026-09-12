@@ -115,7 +115,7 @@ Establish the smallest production editing spine before tool ports begin.
 
 - Base uniqueness and stack constraints;
 - layer order/visibility composite fixtures;
-- hiding a Part preserves its authored Base hole, if accepted;
+- hiding a Part preserves its authored Base hole;
 - one gesture transaction round-trip infrastructure;
 - dirty rectangle propagation; and
 - original pixels remain unchanged.
