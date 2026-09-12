@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Flamoris.Cutwork.App</RootNamespace>
+    <AssemblyName>Flamoris.Cutwork</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
+    <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
+  </ItemGroup>
+</Project>

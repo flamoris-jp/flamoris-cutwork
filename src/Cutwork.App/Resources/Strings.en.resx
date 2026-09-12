@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="AppTitle" xml:space="preserve"><value>FLAMORIS Cutwork</value></data>
+  <data name="Menu_File" xml:space="preserve"><value>File</value></data>
+  <data name="Menu_File_Open" xml:space="preserve"><value>Open Image...</value></data>
+  <data name="Menu_File_Exit" xml:space="preserve"><value>Exit</value></data>
+  <data name="Menu_Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="Menu_View" xml:space="preserve"><value>View</value></data>
+  <data name="Menu_View_Fit" xml:space="preserve"><value>Fit</value></data>
+  <data name="Menu_View_ActualSize" xml:space="preserve"><value>Actual Size / 100%</value></data>
+  <data name="Menu_View_Original" xml:space="preserve"><value>Original</value></data>
+  <data name="Menu_View_Composite" xml:space="preserve"><value>Composite</value></data>
+  <data name="Menu_View_Language" xml:space="preserve"><value>Language</value></data>
+  <data name="Language_Japanese" xml:space="preserve"><value>日本語</value></data>
+  <data name="Language_English" xml:space="preserve"><value>English</value></data>
+  <data name="Menu_Layer" xml:space="preserve"><value>Layer</value></data>
+  <data name="Menu_Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Menu_Help" xml:space="preserve"><value>Help</value></data>
+  <data name="Panel_Tools" xml:space="preserve"><value>Tools</value></data>
+  <data name="Panel_Layers" xml:space="preserve"><value>Layers</value></data>
+  <data name="Panel_Properties" xml:space="preserve"><value>Properties</value></data>
+  <data name="Canvas_NoDocument" xml:space="preserve"><value>Open an image to begin</value></data>
+  <data name="Status_Ready" xml:space="preserve"><value>Ready</value></data>
+  <data name="Status_ImageOpened" xml:space="preserve"><value>{0} — {1}×{2} px — {3:F0}%</value></data>
+  <data name="Status_CanvasPosition" xml:space="preserve"><value>X: {0:F1}  Y: {1:F1} — {2:F0}%</value></data>
+  <data name="Dialog_ImageFilter" xml:space="preserve"><value>Image files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|PNG (*.png)|*.png|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg</value></data>
+  <data name="Error_Title" xml:space="preserve"><value>Cannot Open Image</value></data>
+  <data name="Error_UnsupportedFormat" xml:space="preserve"><value>Select a PNG or JPEG file.</value></data>
+  <data name="Error_InvalidImage" xml:space="preserve"><value>The image is damaged or cannot be decoded.</value></data>
+  <data name="Error_IoFailure" xml:space="preserve"><value>The image file cannot be accessed.</value></data>
+</root>
