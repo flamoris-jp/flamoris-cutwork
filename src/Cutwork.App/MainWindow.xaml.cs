@@ -12,15 +12,25 @@ public partial class MainWindow : Window
 {
     private readonly EditorSession _session = new();
     private readonly ImageImportService _imageImporter = new();
+    private readonly PartToolController _partTool;
+    private readonly CanvasInputRouter _inputRouter;
     private DocumentPoint? _pointerPosition;
 
     public MainWindow()
     {
         InitializeComponent();
+        _partTool = new PartToolController(_session, new GuriguriPartFitter());
+        _inputRouter = new CanvasInputRouter(_session);
         InitializeLayerEditing();
         CanvasView.AttachSession(_session);
+        CanvasView.AttachInputRouter(_inputRouter, _partTool);
         CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
         CanvasView.ViewportChanged += (_, _) => UpdateStatus();
+        _partTool.Changed += (_, _) =>
+        {
+            UpdatePartToolUi();
+            UpdateStatus();
+        };
         ApplyLocalization();
     }
 
@@ -44,6 +54,10 @@ public partial class MainWindow : Window
         ExportMenu.Header = text["Menu_Export"];
         HelpMenu.Header = text["Menu_Help"];
         ToolRailLabel.Text = text["Panel_Tools"];
+        PartToolButton.Content = text["PartTool_Name"];
+        PartToolButton.ToolTip = text["PartTool_Tooltip"];
+        PartCommitButton.Content = text["PartTool_Commit"];
+        PartCancelButton.Content = text["PartTool_Cancel"];
         LayersGroup.Header = text["Panel_Layers"];
         PropertiesGroup.Header = text["Panel_Properties"];
         CanvasView.EmptyText = text["Canvas_NoDocument"];
@@ -51,6 +65,7 @@ public partial class MainWindow : Window
         JapaneseMenuItem.IsChecked = text.Culture.Name == "ja-JP";
         EnglishMenuItem.IsChecked = text.Culture.Name == "en-US";
         LocalizeLayerEditing();
+        UpdatePartToolUi();
     }
 
     private void OpenMenuItem_Click(object sender, RoutedEventArgs e)
@@ -73,6 +88,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _inputRouter.CancelActiveTool();
         var document = new CutworkDocument(result.Original!);
         _session.Open(document);
         _pointerPosition = null;
@@ -81,6 +97,7 @@ public partial class MainWindow : Window
         ActualSizeMenuItem.IsEnabled = true;
         OriginalMenuItem.IsEnabled = true;
         CompositeMenuItem.IsEnabled = true;
+        PartToolButton.IsEnabled = true;
         UpdatePreviewChecks();
         ApplyLocalization();
     }
@@ -126,6 +143,26 @@ public partial class MainWindow : Window
         var document = _session.Document;
         Title = $"{text["AppTitle"]} — {document.Original.SourceName}";
         if (_session.IsDirty) Title += text["Status_UnsavedMarker"];
+        if (_partTool.IsActive)
+        {
+            var snapshot = _partTool.Snapshot();
+            StatusText.Text = snapshot.Status.Message switch
+            {
+                PartToolMessage.DrawingFence => string.Format(text.Culture,
+                    text["PartTool_Status_DrawingFence"], snapshot.Fence.Count),
+                PartToolMessage.NeedsThreePoints => string.Format(text.Culture,
+                    text["PartTool_Status_NeedsThreePoints"], snapshot.Fence.Count),
+                PartToolMessage.FenceTooSmall => string.Format(text.Culture,
+                    text["PartTool_Status_FenceTooSmall"], snapshot.Status.Value),
+                PartToolMessage.FittingPreview => string.Format(text.Culture,
+                    text["PartTool_Status_FittingPreview"], snapshot.Step,
+                    snapshot.RemainingPixels, snapshot.FencePixels),
+                PartToolMessage.Cancelled => text["PartTool_Status_Cancelled"],
+                PartToolMessage.Committed => text["PartTool_Status_Committed"],
+                _ => text["PartTool_Status_Ready"],
+            };
+            return;
+        }
         StatusText.Text = _pointerPosition is { } point
             ? string.Format(
                 text.Culture,
@@ -168,6 +205,36 @@ public partial class MainWindow : Window
     {
         LocalizationService.Current.SetCulture(new CultureInfo("en-US"));
         ApplyLocalization();
+    }
+
+    private void PartTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (_session.Document is null) return;
+        _inputRouter.SetActiveTool(_partTool);
+        UpdatePartToolUi();
+        CanvasView.Focus();
+    }
+
+    private void PartCommit_Click(object sender, RoutedEventArgs e)
+    {
+        try { _partTool.Commit(); }
+        catch (EditException exception) { ShowEditError(exception); }
+        CanvasView.Focus();
+    }
+
+    private void PartCancel_Click(object sender, RoutedEventArgs e)
+    {
+        _inputRouter.CancelActiveTool();
+        CanvasView.Focus();
+    }
+
+    private void UpdatePartToolUi()
+    {
+        PartToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _partTool);
+        PartCommitButton.Visibility = _partTool.State == PartToolState.FittingPreview
+            ? Visibility.Visible : Visibility.Collapsed;
+        PartCancelButton.Visibility = _partTool.State != PartToolState.Idle
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e) => Close();

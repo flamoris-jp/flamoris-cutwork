@@ -43,17 +43,34 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="72" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="260" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="#2B2D31" BorderBrush="#45474D" BorderThickness="0,0,1,0">
-                <TextBlock x:Name="ToolRailLabel"
-                           Margin="4,12"
-                           Foreground="#B8BBC2"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap" />
+                <StackPanel Margin="4,10">
+                    <TextBlock x:Name="ToolRailLabel"
+                               Margin="0,0,0,8"
+                               Foreground="#B8BBC2"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+                    <ToggleButton x:Name="PartToolButton"
+                                  MinHeight="42"
+                                  Padding="3"
+                                  IsEnabled="False"
+                                  Click="PartTool_Click" />
+                    <Button x:Name="PartCommitButton"
+                            Margin="0,10,0,0"
+                            Padding="3"
+                            Visibility="Collapsed"
+                            Click="PartCommit_Click" />
+                    <Button x:Name="PartCancelButton"
+                            Margin="0,4,0,0"
+                            Padding="3"
+                            Visibility="Collapsed"
+                            Click="PartCancel_Click" />
+                </StackPanel>
             </Border>
 
             <controls:DocumentCanvas x:Name="CanvasView" Grid.Column="1" />

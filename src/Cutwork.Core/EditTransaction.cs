@@ -37,7 +37,12 @@ public sealed class EditTransaction : IDisposable
     }
     public void Commit()
     {
+        Commit(null);
+    }
+    public void Commit(Guid? selectionAfter)
+    {
         if (_finished) throw new ObjectDisposedException(nameof(EditTransaction));
+        if (selectionAfter is { } id) _session.SetTransactionSelection(id);
         _finished = true;
         _session.Finish(this, commit: true);
     }

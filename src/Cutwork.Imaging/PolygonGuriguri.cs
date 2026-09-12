@@ -6,7 +6,7 @@ namespace Flamoris.Cutwork.Imaging;
 /// Deterministic outside-in fitting inside one user-authored polygon fence.
 /// Boundary preparation and the progressive removal order are independent of WPF.
 /// </summary>
-public sealed class PolygonGuriguri
+public sealed class PolygonGuriguri : IPartFittingSession
 {
     public const double KeepFactorPerStep = 0.88;
     public const int MinimumKeepPixels = 8;
@@ -147,6 +147,12 @@ public sealed class PolygonGuriguri
             return cost != 0 ? cost : Index.CompareTo(other.Index);
         }
     }
+}
+
+public sealed class GuriguriPartFitter : IPartBoundaryFitter
+{
+    public IPartFittingSession Create(OriginalAsset original, IReadOnlyList<DocumentPoint> fence) =>
+        PolygonGuriguri.Create(original, fence);
 }
 
 public static class PolygonMaskRasterizer

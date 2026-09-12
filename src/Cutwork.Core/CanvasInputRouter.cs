@@ -21,8 +21,9 @@ public sealed class CanvasInputRouter
     public void SetActiveTool(ICanvasToolInput? tool)
     {
         if (ReferenceEquals(_activeTool, tool)) return;
-        _activeTool?.Cancel();
+        _activeTool?.Deactivate();
         _activeTool = tool;
+        _activeTool?.Activate();
     }
 
     public CanvasInputEffects PointerDown(CanvasPointerInput input)

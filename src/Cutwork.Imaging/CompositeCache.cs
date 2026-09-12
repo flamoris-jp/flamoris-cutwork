@@ -94,6 +94,12 @@ public sealed class CompositeCache : IDisposable
         return (byte[])_pixels.Clone();
     }
 
+    public byte[] CopyHoleMask()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return (byte[])_holes.Clone();
+    }
+
     private static void SourceOver(Span<byte> destination, ReadOnlySpan<byte> source, byte mask)
     {
         var alpha = Multiply(source[3], mask);

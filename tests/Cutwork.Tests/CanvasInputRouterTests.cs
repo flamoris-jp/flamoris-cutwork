@@ -71,6 +71,8 @@ public sealed class CanvasInputRouterTests
         public int PointerDownCount { get; private set; }
         public int WheelCount { get; private set; }
         public DocumentPoint? LastPoint { get; private set; }
+        public void Activate() { }
+        public void Deactivate() { }
         public CanvasInputEffects PointerDown(DocumentPoint point, int clickCount, CanvasModifiers modifiers)
         {
             PointerDownCount++;

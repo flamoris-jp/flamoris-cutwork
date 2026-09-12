@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Flamoris.Cutwork.App.Rendering;
 using Flamoris.Cutwork.Core;
@@ -17,8 +19,9 @@ public partial class DocumentCanvas : UserControl
     private CutworkDocument? _presentedDocument;
     private bool _refreshQueued;
     private EditorSession? _session;
-    private ViewportPoint _lastPanPoint;
-    private bool _isPanning;
+    private CanvasInputRouter? _inputRouter;
+    private PartToolController? _partTool;
+    private readonly List<Ellipse> _partFencePoints = [];
     private bool _autoFit = true;
 
     public DocumentCanvas()
@@ -30,8 +33,9 @@ public partial class DocumentCanvas : UserControl
         MouseLeave += (_, _) => ClearPointerOverlay();
         MouseDown += Canvas_MouseDown;
         MouseUp += Canvas_MouseUp;
-        LostMouseCapture += (_, _) => EndPan();
+        LostMouseCapture += (_, _) => ApplyInputEffects(_inputRouter?.LostPointerCapture() ?? CanvasInputEffects.None);
         MouseWheel += Canvas_MouseWheel;
+        PreviewKeyDown += Canvas_PreviewKeyDown;
     }
 
     public event EventHandler<DocumentPointerEventArgs>? PointerDocumentPositionChanged;
@@ -54,6 +58,17 @@ public partial class DocumentCanvas : UserControl
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _session.Changed += SessionChanged;
     }
+
+    public void AttachInputRouter(CanvasInputRouter router, PartToolController partTool)
+    {
+        if (_partTool is not null) _partTool.Changed -= PartToolChanged;
+        _inputRouter = router ?? throw new ArgumentNullException(nameof(router));
+        _partTool = partTool ?? throw new ArgumentNullException(nameof(partTool));
+        _partTool.Changed += PartToolChanged;
+        RenderPartOverlay();
+    }
+
+    private void PartToolChanged(object? sender, EventArgs e) => RenderPartOverlay();
 
     private void SessionChanged(object? sender, EventArgs e)
     {
@@ -158,76 +173,76 @@ public partial class DocumentCanvas : UserControl
 
     private void Canvas_MouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (_session?.Document is null)
-        {
-            return;
-        }
-
         var position = e.GetPosition(this);
-        var anchor = new ViewportPoint(position.X, position.Y);
-        var factor = Math.Pow(1.0015, e.Delta);
-
-        // In Phase 1 both plain and Ctrl+wheel route to viewport zoom. A future
-        // tool router can consume plain wheel while preserving this Ctrl route.
-        _ = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
-        _autoFit = false;
-        _session.Viewport.ZoomAt(anchor, factor);
-        ApplyViewport();
+        var effects = _inputRouter?.Wheel(
+            new ViewportPoint(position.X, position.Y), e.Delta, CurrentModifiers()) ?? CanvasInputEffects.None;
+        ApplyInputEffects(effects);
         UpdateCrosshair(position);
-        e.Handled = true;
+        e.Handled = effects.HasFlag(CanvasInputEffects.Handled);
     }
 
     private void Canvas_MouseDown(object sender, MouseButtonEventArgs e)
     {
         Focus();
-        var spaceHeld = Keyboard.IsKeyDown(Key.Space);
-        if (e.ChangedButton != MouseButton.Middle && !(e.ChangedButton == MouseButton.Left && spaceHeld))
-        {
-            return;
-        }
-
         var position = e.GetPosition(this);
-        _lastPanPoint = new ViewportPoint(position.X, position.Y);
-        _isPanning = true;
-        _autoFit = false;
-        CaptureMouse();
-        Mouse.OverrideCursor = Cursors.Hand;
-        e.Handled = true;
+        var effects = _inputRouter?.PointerDown(new(
+            new ViewportPoint(position.X, position.Y), MapButton(e.ChangedButton), e.ClickCount, CurrentModifiers()))
+            ?? CanvasInputEffects.None;
+        ApplyInputEffects(effects);
+        e.Handled = effects.HasFlag(CanvasInputEffects.Handled);
     }
 
     private void Canvas_MouseMove(object sender, MouseEventArgs e)
     {
         var position = e.GetPosition(this);
-        if (_isPanning && _session is not null)
-        {
-            var current = new ViewportPoint(position.X, position.Y);
-            _session.Viewport.PanBy(current.X - _lastPanPoint.X, current.Y - _lastPanPoint.Y);
-            _lastPanPoint = current;
-            ApplyViewport();
-        }
-
+        var effects = _inputRouter?.PointerMove(
+            new ViewportPoint(position.X, position.Y), CurrentModifiers()) ?? CanvasInputEffects.None;
+        ApplyInputEffects(effects);
         UpdateCrosshair(position);
     }
 
     private void Canvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_isPanning && (e.ChangedButton == MouseButton.Middle || e.ChangedButton == MouseButton.Left))
-        {
-            EndPan();
-            e.Handled = true;
-        }
+        var position = e.GetPosition(this);
+        var effects = _inputRouter?.PointerUp(new(
+            new ViewportPoint(position.X, position.Y), MapButton(e.ChangedButton), e.ClickCount, CurrentModifiers()))
+            ?? CanvasInputEffects.None;
+        ApplyInputEffects(effects);
+        e.Handled = effects.HasFlag(CanvasInputEffects.Handled);
     }
 
-    private void EndPan()
+    private void Canvas_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (!_isPanning)
+        var key = e.Key switch
         {
-            return;
-        }
+            Key.Enter => CanvasToolKey.Enter,
+            Key.Escape => CanvasToolKey.Escape,
+            _ => (CanvasToolKey?)null,
+        };
+        if (key is null) return;
+        var effects = _inputRouter?.KeyDown(key.Value, CurrentModifiers()) ?? CanvasInputEffects.None;
+        ApplyInputEffects(effects);
+        e.Handled = effects.HasFlag(CanvasInputEffects.Handled);
+    }
 
-        _isPanning = false;
-        ReleaseMouseCapture();
-        Mouse.OverrideCursor = null;
+    private void ApplyInputEffects(CanvasInputEffects effects)
+    {
+        if (effects.HasFlag(CanvasInputEffects.ViewportChanged))
+        {
+            _autoFit = false;
+            ApplyViewport();
+        }
+        if (effects.HasFlag(CanvasInputEffects.CapturePointer))
+        {
+            CaptureMouse();
+            Mouse.OverrideCursor = Cursors.Hand;
+        }
+        if (effects.HasFlag(CanvasInputEffects.ReleasePointer))
+        {
+            if (IsMouseCaptured) ReleaseMouseCapture();
+            Mouse.OverrideCursor = null;
+        }
+        if (effects.HasFlag(CanvasInputEffects.ToolOverlayChanged)) RenderPartOverlay();
     }
 
     private void ApplyViewport()
@@ -245,7 +260,96 @@ public partial class DocumentCanvas : UserControl
             projection.ScaleY,
             projection.OffsetX,
             projection.OffsetY);
+        RenderPartOverlay();
         ViewportChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RenderPartOverlay()
+    {
+        foreach (var point in _partFencePoints) OverlaySurface.Children.Remove(point);
+        _partFencePoints.Clear();
+        PartFenceLine.Points.Clear();
+        PartFenceLine.Visibility = Visibility.Collapsed;
+        PartMaskOverlay.Visibility = Visibility.Collapsed;
+        if (_session is null || _partTool is null) return;
+
+        var snapshot = _partTool.Snapshot();
+        foreach (var documentPoint in snapshot.Fence)
+        {
+            var point = _session.Viewport.DocumentToViewport(documentPoint);
+            PartFenceLine.Points.Add(new Point(point.X, point.Y));
+            var marker = new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = Brushes.White,
+                Stroke = new SolidColorBrush(Color.FromRgb(235, 70, 170)),
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+            };
+            Canvas.SetLeft(marker, point.X - 3.5);
+            Canvas.SetTop(marker, point.Y - 3.5);
+            OverlaySurface.Children.Add(marker);
+            _partFencePoints.Add(marker);
+        }
+        if (snapshot.State == PartToolState.DrawingFence && snapshot.HoverPoint is { } hover)
+        {
+            var point = _session.Viewport.DocumentToViewport(hover);
+            PartFenceLine.Points.Add(new Point(point.X, point.Y));
+        }
+        if (snapshot.Fence.Count > 0)
+        {
+            if (snapshot.State == PartToolState.FittingPreview)
+            {
+                var first = _session.Viewport.DocumentToViewport(snapshot.Fence[0]);
+                PartFenceLine.Points.Add(new Point(first.X, first.Y));
+            }
+            PartFenceLine.Visibility = Visibility.Visible;
+        }
+
+        if (snapshot.State != PartToolState.FittingPreview || snapshot.Mask is null || snapshot.MaskBounds.IsEmpty)
+            return;
+        var overlayPixels = new byte[checked(snapshot.Mask.Length * 4)];
+        for (var index = 0; index < snapshot.Mask.Length; index++)
+        {
+            var alpha = (byte)(snapshot.Mask[index] * 88 / 255);
+            overlayPixels[index * 4] = (byte)(170 * alpha / 255);
+            overlayPixels[index * 4 + 1] = (byte)(70 * alpha / 255);
+            overlayPixels[index * 4 + 2] = (byte)(235 * alpha / 255);
+            overlayPixels[index * 4 + 3] = alpha;
+        }
+        var bitmap = new WriteableBitmap(snapshot.MaskBounds.Width, snapshot.MaskBounds.Height, 96, 96,
+            PixelFormats.Pbgra32, null);
+        bitmap.WritePixels(new Int32Rect(0, 0, snapshot.MaskBounds.Width, snapshot.MaskBounds.Height),
+            overlayPixels, snapshot.MaskBounds.Width * 4, 0);
+        bitmap.Freeze();
+        PartMaskOverlay.Source = bitmap;
+        PartMaskOverlay.Width = snapshot.MaskBounds.Width;
+        PartMaskOverlay.Height = snapshot.MaskBounds.Height;
+        var projection = _session.Viewport.Projection;
+        PartMaskOverlay.RenderTransform = new MatrixTransform(
+            projection.ScaleX, 0, 0, projection.ScaleY,
+            projection.OffsetX + snapshot.MaskBounds.X * projection.ScaleX,
+            projection.OffsetY + snapshot.MaskBounds.Y * projection.ScaleY);
+        PartMaskOverlay.Visibility = Visibility.Visible;
+    }
+
+    private static CanvasPointerButton MapButton(MouseButton button) => button switch
+    {
+        MouseButton.Left => CanvasPointerButton.Left,
+        MouseButton.Middle => CanvasPointerButton.Middle,
+        MouseButton.Right => CanvasPointerButton.Right,
+        _ => CanvasPointerButton.None,
+    };
+
+    private static CanvasModifiers CurrentModifiers()
+    {
+        var result = CanvasModifiers.None;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) result |= CanvasModifiers.Control;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) result |= CanvasModifiers.Shift;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) result |= CanvasModifiers.Alt;
+        if (Keyboard.IsKeyDown(Key.Space)) result |= CanvasModifiers.Space;
+        return result;
     }
 
     private void UpdateCrosshair(Point position)

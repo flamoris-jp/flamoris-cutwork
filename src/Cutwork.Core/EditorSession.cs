@@ -132,6 +132,12 @@ public sealed class EditorSession
         NormalizeSelection();
         Changed?.Invoke(this, EventArgs.Empty);
     }
+    internal void SetTransactionSelection(Guid id)
+    {
+        if (_active is null) throw new EditException(EditError.TransactionActive);
+        RequireDocument().GetLayer(id);
+        SelectedLayerId = id;
+    }
     private void NormalizeSelection()
     {
         if (Document is not null && !Document.Layers.Any(layer => layer.Id == SelectedLayerId))

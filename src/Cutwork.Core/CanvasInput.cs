@@ -47,6 +47,8 @@ public readonly record struct CanvasPointerInput(
 /// </summary>
 public interface ICanvasToolInput
 {
+    void Activate();
+    void Deactivate();
     CanvasInputEffects PointerDown(DocumentPoint point, int clickCount, CanvasModifiers modifiers);
     CanvasInputEffects PointerMove(DocumentPoint? point, CanvasModifiers modifiers);
     CanvasInputEffects PointerUp(DocumentPoint? point, CanvasPointerButton button, CanvasModifiers modifiers);
