@@ -132,7 +132,6 @@ public sealed class RasterPatch : EditCommand
         if (!document.Contains(_region)) throw new EditException(EditError.InvalidPatch);
         var beforeBounds = layer.Bounds;
         var canGrow = layer is RepairLayer;
-        if (!canGrow && !beforeBounds.Contains(_region)) throw new EditException(EditError.InvalidPatch);
         var afterBounds = canGrow ? beforeBounds.Union(_region) : beforeBounds;
         var before = canGrow
             ? layer.CopyPixelsWithTransparentOutside(_region)
