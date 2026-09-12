@@ -122,8 +122,7 @@ public sealed class PartToolController : ICanvasToolInput
         if (State != PartToolState.FittingPreview || _fitting is null) return CanvasInputEffects.None;
         var previousStep = _fitting.Step;
         _mask = _fitting.Adjust(steps);
-        Status = new(PartToolMessage.FittingPreview, _fitting.Step,
-            _fitting.CurrentKeepPixels);
+        Status = new(PartToolMessage.FittingPreview);
         if (_fitting.Step != previousStep)
         {
             _maskRevision++;
@@ -185,7 +184,7 @@ public sealed class PartToolController : ICanvasToolInput
         _maskRevision++;
         _hover = null;
         State = PartToolState.FittingPreview;
-        Status = new(PartToolMessage.FittingPreview, fitting.Step, fitting.CurrentKeepPixels);
+        Status = new(PartToolMessage.FittingPreview);
         NotifyChanged();
         return true;
     }
