@@ -93,13 +93,26 @@ public sealed class MaskPatch : EditCommand
     internal override AppliedEdit? Apply(CutworkDocument document)
     {
         if (document.GetLayer(_layerId) is not PartLayer layer) throw new EditException(EditError.InvalidPatch);
-        var before = layer.CopyMask(_region);
+        if (!document.Contains(_region)) throw new EditException(EditError.InvalidPatch);
+        var beforeBounds = layer.Bounds;
+        var afterBounds = beforeBounds.Union(_region);
+        var before = layer.CopyMaskWithTransparentOutside(_region);
         if (before.Length != _after.Length) throw new EditException(EditError.InvalidPatch);
-        if (before.AsSpan().SequenceEqual(_after)) return null;
+        if (before.AsSpan().SequenceEqual(_after) && beforeBounds == afterBounds) return null;
         var after = _after;
         var region = _region;
+        layer.ResizeMask(afterBounds);
         layer.WriteMask(region, after);
-        return new(() => layer.WriteMask(region, before), () => layer.WriteMask(region, after),
+        return new(() =>
+            {
+                layer.WriteMask(region, before);
+                layer.ResizeMask(beforeBounds);
+            },
+            () =>
+            {
+                layer.ResizeMask(afterBounds);
+                layer.WriteMask(region, after);
+            },
             layer, region, region, 128L + before.LongLength + after.LongLength);
     }
 }

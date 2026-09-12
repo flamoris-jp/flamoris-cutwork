@@ -183,7 +183,7 @@ public sealed class EditHistoryTests
     {
         var s = Open(); var part = Part(); s.Execute(new AddLayer(part));
         var before = part.CopyMask(part.Bounds); var revision = s.Document!.Revision;
-        Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, new DocumentRect(3, 2, 1, 1), new byte[] { 1 })));
+        Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, new DocumentRect(4, 2, 1, 1), new byte[] { 1 })));
         Reject(EditError.InvalidPatch, () => s.Execute(new MaskPatch(part.Id, part.Bounds, new byte[] { 1 })));
         CollectionAssert.AreEqual(before, part.CopyMask(part.Bounds));
         Assert.AreEqual(revision, s.Document.Revision);

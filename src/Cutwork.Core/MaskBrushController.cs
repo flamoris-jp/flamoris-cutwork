@@ -152,10 +152,18 @@ public sealed class MaskBrushController : ICanvasToolInput
     {
         if (samples.Count == 0 || _part is null || _transaction is null) return;
         var region = default(DocumentRect);
-        foreach (var sample in samples) region = region.Union(DabBounds(sample).Intersect(_part.Bounds));
+        foreach (var sample in samples)
+        {
+            var dab = DabBounds(sample);
+            region = region.Union(polarity == MaskPolarity.Add ? dab : dab.Intersect(_part.Bounds));
+        }
         if (region.IsEmpty) return;
 
-        var after = _part.CopyMask(region);
+        // A disconnected click must not inflate a compact Part into a near-full-frame rectangle.
+        // Continuous sampled strokes naturally overlap the current local surface as they cross its edge.
+        if (polarity == MaskPolarity.Add && region.Intersect(_part.Bounds).IsEmpty) return;
+
+        var after = _part.CopyMaskWithTransparentOutside(region);
         var value = polarity == MaskPolarity.Add ? (byte)255 : (byte)0;
         var radiusSquared = Radius * Radius;
         for (var y = region.Y; y < region.Bottom; y++)

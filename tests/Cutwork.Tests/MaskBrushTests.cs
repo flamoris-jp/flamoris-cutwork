@@ -115,6 +115,61 @@ public sealed class MaskBrushTests
     }
 
     [TestMethod]
+    public void AddAcrossPartBoundsExpandsLocalMaskAndUndoRedoRestoresGeometry()
+    {
+        var (session, part, tool) = CreateExpandablePart();
+        var document = session.Document!;
+        var original = document.Original.CopyPixelBytes();
+        var beforeBounds = part.Bounds;
+        var beforeMask = part.CopyMask(beforeBounds);
+        using var cache = new CompositeCache(document);
+        cache.RenderPending();
+
+        tool.SetRadius(1.5);
+        tool.PointerDown(new(7, 6), 1, CanvasModifiers.None);
+        tool.PointerMove(new(10, 6), CanvasModifiers.None);
+        tool.PointerUp(new(10, 6), CanvasPointerButton.Left, CanvasModifiers.None);
+        cache.RenderPending();
+        var afterBounds = part.Bounds;
+        var afterMask = part.CopyMask(afterBounds);
+
+        Assert.IsTrue(afterBounds.Right > beforeBounds.Right);
+        Assert.AreEqual((byte)255, part.MaskAt(10, 5));
+        Assert.AreEqual((byte)255, cache.CopyHoleMask()[5 * document.Dimensions.Width + 10]);
+        Assert.AreEqual(1, session.UndoCount);
+
+        session.Undo(); cache.RenderPending();
+        Assert.AreEqual(beforeBounds, part.Bounds);
+        CollectionAssert.AreEqual(beforeMask, part.CopyMask(part.Bounds));
+        Assert.AreEqual((byte)0, part.MaskAt(10, 5));
+        Assert.AreEqual((byte)0, cache.CopyHoleMask()[5 * document.Dimensions.Width + 10]);
+
+        session.Redo(); cache.RenderPending();
+        Assert.AreEqual(afterBounds, part.Bounds);
+        CollectionAssert.AreEqual(afterMask, part.CopyMask(part.Bounds));
+        Assert.AreEqual((byte)255, part.MaskAt(10, 5));
+        CollectionAssert.AreEqual(original, document.Original.CopyPixelBytes());
+    }
+
+    [TestMethod]
+    public void CancelledExpansionRestoresOriginalMaskBoundsWithoutHistory()
+    {
+        var (session, part, tool) = CreateExpandablePart();
+        var beforeBounds = part.Bounds;
+        var beforeMask = part.CopyMask(beforeBounds);
+
+        tool.SetRadius(1.5);
+        tool.PointerDown(new(7, 6), 1, CanvasModifiers.None);
+        tool.PointerMove(new(10, 6), CanvasModifiers.None);
+        tool.LostPointerCapture();
+
+        Assert.AreEqual(beforeBounds, part.Bounds);
+        CollectionAssert.AreEqual(beforeMask, part.CopyMask(part.Bounds));
+        Assert.AreEqual(0, session.UndoCount);
+        Assert.IsFalse(session.IsDirty);
+    }
+
+    [TestMethod]
     public void NonPartSelectionDoesNotStartAStroke()
     {
         var (session, _, tool) = Create(maskValue: 0);
@@ -158,6 +213,22 @@ public sealed class MaskBrushTests
         var part = new PartLayer(bounds, Enumerable.Repeat(maskValue, 100).ToArray());
         session.Execute(new AddLayer(part));
         // Fixture setup is not part of the gesture history under test.
+        session.Open(session.Document!);
+        session.MarkSaved();
+        session.SelectLayer(part.Id);
+        var tool = new MaskBrushController(session);
+        tool.Activate();
+        return (session, part, tool);
+    }
+
+    private static (EditorSession Session, PartLayer Part, MaskBrushController Tool) CreateExpandablePart()
+    {
+        var pixels = Enumerable.Repeat(new byte[] { 20, 40, 60, 255 }, 16 * 12)
+            .SelectMany(pixel => pixel).ToArray();
+        var session = new EditorSession();
+        session.Open(new CutworkDocument(new OriginalAsset("fixture.png", new(16, 12), 64, pixels)));
+        var part = new PartLayer(new(4, 4, 4, 4), new byte[16]);
+        session.Execute(new AddLayer(part));
         session.Open(session.Document!);
         session.MarkSaved();
         session.SelectLayer(part.Id);

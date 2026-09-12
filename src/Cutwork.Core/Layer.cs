@@ -30,18 +30,48 @@ public sealed class BaseLayer : Layer
 
 public sealed class PartLayer : Layer
 {
-    private readonly byte[] _mask;
+    private byte[] _mask;
+    private DocumentRect _maskBounds;
     public PartLayer(DocumentRect bounds, ReadOnlySpan<byte> mask, string name = "")
         : base(LayerKind.Part, bounds, name)
     {
         if (mask.Length != checked(bounds.Width * bounds.Height))
             throw new ArgumentException("Mask size mismatch.", nameof(mask));
         _mask = mask.ToArray();
+        _maskBounds = bounds;
     }
+    public override DocumentRect Bounds => _maskBounds;
     public byte MaskAt(int x, int y) => x < Bounds.X || y < Bounds.Y || x >= Bounds.Right || y >= Bounds.Bottom
         ? (byte)0 : _mask[(y - Bounds.Y) * Bounds.Width + x - Bounds.X];
     public byte[] CopyMask(DocumentRect region) => PixelRegion.Copy(_mask, Bounds, region, 1);
+    internal byte[] CopyMaskWithTransparentOutside(DocumentRect region)
+    {
+        var result = new byte[checked(region.Width * region.Height)];
+        var overlap = Bounds.Intersect(region);
+        if (overlap.IsEmpty) return result;
+        for (var row = 0; row < overlap.Height; row++)
+            _mask.AsSpan((overlap.Y - Bounds.Y + row) * Bounds.Width + overlap.X - Bounds.X,
+                overlap.Width).CopyTo(result.AsSpan(
+                (overlap.Y - region.Y + row) * region.Width + overlap.X - region.X, overlap.Width));
+        return result;
+    }
     internal void WriteMask(DocumentRect region, byte[] bytes) => PixelRegion.Write(_mask, Bounds, region, bytes, 1);
+    internal void ResizeMask(DocumentRect bounds)
+    {
+        if (bounds.IsEmpty) throw new EditException(EditError.InvalidPatch);
+        if (bounds == Bounds) return;
+        var resized = new byte[checked(bounds.Width * bounds.Height)];
+        var overlap = Bounds.Intersect(bounds);
+        if (!overlap.IsEmpty)
+        {
+            for (var row = 0; row < overlap.Height; row++)
+                _mask.AsSpan((overlap.Y - Bounds.Y + row) * Bounds.Width + overlap.X - Bounds.X,
+                    overlap.Width).CopyTo(resized.AsSpan(
+                    (overlap.Y - bounds.Y + row) * bounds.Width + overlap.X - bounds.X, overlap.Width));
+        }
+        _mask = resized;
+        _maskBounds = bounds;
+    }
     internal override long RetainedBytes => base.RetainedBytes + _mask.LongLength;
 }
 

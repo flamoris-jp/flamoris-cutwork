@@ -9,6 +9,7 @@ Phase 4 extends the existing Phase 2 editing spine and Phase 3 input router. It 
 - Radius is measured in document pixels. The canvas only projects that radius for the independent circular cursor overlay.
 - Normal drag uses the configured primary Add or Erase polarity. Holding Alt temporarily inverts the polarity; releasing Alt restores the primary setting.
 - Every sampled change is an existing local `MaskPatch` inside one `EditTransaction`. Pointer-up commits one Undo entry; Escape or lost capture cancels the transaction and restores the exact before bytes.
+- Add strokes may grow the Part's compact mask bounds as a connected local rectangle when they cross an existing edge. History retains the old bounds and touched ROI bytes, not a full-document or full-mask snapshot; a disconnected distant click does not inflate the surface.
 - Mask changes invalidate their local region for both composite pixels and the Base-hole union. Part visibility remains independent from hole geometry.
 
 Pointer movement and polarity/cursor changes affect only the overlay. They do not revise the document or rebuild the presented bitmap.
