@@ -23,6 +23,24 @@ public sealed class MaskBrushTests
     }
 
     [TestMethod]
+    public void SparseStrokeHasNoHolesAndPublishesOnlyLocalDirtyRegion()
+    {
+        var (session, part, tool) = Create(maskValue: 0);
+        tool.SetRadius(1);
+        DocumentChange? latest = null;
+        session.Document!.Changed += (_, change) => latest = change;
+
+        tool.PointerDown(new(2, 5), 1, CanvasModifiers.None);
+        tool.PointerMove(new(10, 5), CanvasModifiers.None);
+        tool.PointerUp(new(10, 5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        for (var x = 2; x < 10; x++) Assert.AreEqual((byte)255, part.MaskAt(x, 4));
+        Assert.IsNotNull(latest);
+        Assert.IsTrue(part.Bounds.Contains(latest.DirtyRegion));
+        Assert.IsTrue(latest.DirtyRegion.Width < session.Document.Dimensions.Width);
+    }
+
+    [TestMethod]
     public void EraseAndTemporaryAltInverseRestorePrimaryAfterRelease()
     {
         var (_, part, tool) = Create(maskValue: 255);
@@ -120,6 +138,8 @@ public sealed class MaskBrushTests
         var bounds = new DocumentRect(1, 1, 10, 10);
         var part = new PartLayer(bounds, Enumerable.Repeat(maskValue, 100).ToArray());
         session.Execute(new AddLayer(part));
+        // Fixture setup is not part of the gesture history under test.
+        session.Open(session.Document!);
         session.MarkSaved();
         session.SelectLayer(part.Id);
         var tool = new MaskBrushController(session);
