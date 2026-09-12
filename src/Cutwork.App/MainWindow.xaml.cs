@@ -4,6 +4,8 @@ using System.Windows;
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.App.Controls;
 using Flamoris.Cutwork.Imaging;
+using Flamoris.Cutwork.Imaging.Export;
+using Flamoris.Cutwork.Imaging.Persistence;
 using Microsoft.Win32;
 
 namespace Flamoris.Cutwork.App;
@@ -12,6 +14,8 @@ public partial class MainWindow : Window
 {
     private readonly EditorSession _session = new();
     private readonly ImageImportService _imageImporter = new();
+    private readonly ProjectWorkspace _workspace;
+    private readonly DocumentExportService _exporter;
     private readonly PartToolController _partTool;
     private readonly MaskBrushController _maskTool;
     private readonly PatchToolController _patchTool;
@@ -24,6 +28,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _workspace = new ProjectWorkspace(_session);
+        _exporter = new DocumentExportService();
         _partTool = new PartToolController(_session, new GuriguriPartFitter());
         _maskTool = new MaskBrushController(_session);
         _patchTool = new PatchToolController(_session, new PatchSourceSampler());
@@ -78,6 +84,9 @@ public partial class MainWindow : Window
         Title = text["AppTitle"];
         FileMenu.Header = text["Menu_File"];
         OpenMenuItem.Header = text["Menu_File_Open"];
+        OpenProjectMenuItem.Header = text["Menu_File_OpenProject"];
+        SaveMenuItem.Header = text["Menu_File_Save"];
+        SaveAsMenuItem.Header = text["Menu_File_SaveAs"];
         ExitMenuItem.Header = text["Menu_File_Exit"];
         EditMenu.Header = text["Menu_Edit"];
         ViewMenu.Header = text["Menu_View"];
@@ -90,6 +99,8 @@ public partial class MainWindow : Window
         EnglishMenuItem.Header = text["Language_English"];
         LayerMenu.Header = text["Menu_Layer"];
         ExportMenu.Header = text["Menu_Export"];
+        ExportCompositeMenuItem.Header = text["Menu_Export_Composite"];
+        ExportHandoffMenuItem.Header = text["Menu_Export_Handoff"];
         HelpMenu.Header = text["Menu_Help"];
         ToolRailLabel.Text = text["Panel_Tools"];
         PartToolButton.Content = text["PartTool_Name"];
@@ -126,25 +137,12 @@ public partial class MainWindow : Window
             ShowImportError(result.Error ?? ImageImportError.InvalidImage);
             return;
         }
+        if (!ConfirmUnsavedChanges()) return;
 
-        _inputRouter.CancelActiveTool();
-        _cloneTool.ResetSource();
         var document = new CutworkDocument(result.Original!);
-        _session.Open(document);
-        _pointerPosition = null;
-        CanvasView.Present(document);
-        FitMenuItem.IsEnabled = true;
-        ActualSizeMenuItem.IsEnabled = true;
-        OriginalMenuItem.IsEnabled = true;
-        CompositeMenuItem.IsEnabled = true;
-        PartToolButton.IsEnabled = true;
-        MaskToolButton.IsEnabled = true;
-        PatchToolButton.IsEnabled = true;
-        CloneToolButton.IsEnabled = true;
-        BlurToolButton.IsEnabled = true;
-        SmudgeToolButton.IsEnabled = true;
-        UpdatePreviewChecks();
-        ApplyLocalization();
+        _inputRouter.CancelActiveTool();
+        _workspace.OpenArtwork(document);
+        CompleteDocumentOpen(document);
     }
 
     private void FitMenuItem_Click(object sender, RoutedEventArgs e) => CanvasView.Fit();
@@ -186,7 +184,9 @@ public partial class MainWindow : Window
         }
 
         var document = _session.Document;
-        Title = $"{text["AppTitle"]} — {document.Original.SourceName}";
+        var documentLabel = _workspace.ProjectPath is { } path
+            ? Path.GetFileName(path) : document.Original.SourceName;
+        Title = $"{text["AppTitle"]} — {documentLabel}";
         if (_session.IsDirty) Title += text["Status_UnsavedMarker"];
         if (TryGetPhase4Status(out var phase4Status))
         {
