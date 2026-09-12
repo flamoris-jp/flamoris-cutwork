@@ -5,6 +5,8 @@
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <Compile Remove="ImageImportService.cs" />
+    <Compile Remove="Persistence\**\*.cs" />
+    <Compile Remove="Export\**\*.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
