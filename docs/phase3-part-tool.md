@@ -43,10 +43,10 @@ It has no WPF, Python runtime, OpenCV runtime, GPU, or AI dependency.
 
 ## Wheel mapping
 
-- In `FittingPreview`, wheel up restores outward toward the rough fence and
-  wheel down moves inward (shrinks). WPF reports those directions as positive
-  and negative wheel deltas, respectively; the conversion is centralized
-  before the tool receives steps.
+- In `FittingPreview`, a physical forward wheel rotation moves inward (shrinks)
+  and a physical backward rotation restores outward toward the rough fence.
+  WPF reports those directions as positive and negative wheel deltas,
+  respectively; the conversion is centralized before the tool receives steps.
 - `Ctrl+wheel` always zooms the viewport.
 - Outside fitting preview, ordinary wheel retains normal viewport zoom.
 
@@ -77,7 +77,8 @@ the following before merge:
 1. Open representative PNG and JPEG artwork.
 2. Activate Part Tool and rough-fence an eye, ear, and hand with 4–10 clicks.
 3. Finalize once with Enter and once with double-click.
-4. Confirm wheel down contracts inward and wheel up exactly restores outward.
+4. Confirm forward wheel rotation contracts inward and backward rotation exactly
+   restores outward.
 5. Confirm `Ctrl+wheel` zooms during fitting without changing the mask step.
 6. Pan with middle drag and Space+drag before and during drawing; confirm fence
    points do not drift after repeated zoom/pan.

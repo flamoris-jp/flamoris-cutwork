@@ -38,19 +38,19 @@ public sealed class CanvasInputRouterTests
     }
 
     [TestMethod]
-    public void PlainWheelMapsUpwardDeltaToOutwardToolStepsAndControlWheelAlwaysZooms()
+    public void PlainWheelMapsPhysicalForwardToPositiveToolStepsAndControlWheelAlwaysZooms()
     {
         var (session, router, tool) = CreateRouter();
         tool.HandleWheel = true;
 
-        // Positive WPF delta is wheel up and restores the fitting outward.
+        // WPF reports the physical forward rotation as a positive delta.
         var plain = router.Wheel(new ViewportPoint(50, 50), 120, CanvasModifiers.None);
         var zoomBefore = session.Viewport.Zoom;
         var control = router.Wheel(new ViewportPoint(50, 50), 120, CanvasModifiers.Control);
 
         Assert.IsTrue(plain.HasFlag(CanvasInputEffects.ToolOverlayChanged));
         Assert.AreEqual(1, tool.WheelCount);
-        Assert.AreEqual(-1, tool.LastWheelSteps);
+        Assert.AreEqual(1, tool.LastWheelSteps);
         Assert.IsTrue(control.HasFlag(CanvasInputEffects.ViewportChanged));
         Assert.IsTrue(session.Viewport.Zoom > zoomBefore);
         Assert.AreEqual(1, tool.WheelCount);
