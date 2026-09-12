@@ -15,7 +15,7 @@ public sealed record MaskBrushSnapshot(
     MaskBrushStatus Status);
 
 /// <summary>Unified Part-mask brush. One captured drag owns one transaction.</summary>
-public sealed class MaskBrushController : ICanvasToolInput
+public sealed class MaskBrushController : ICanvasToolInput, ICanvasDeferredWork
 {
     public const double MinimumRadius = 0.5;
     public const double MaximumRadius = 512;
@@ -26,6 +26,10 @@ public sealed class MaskBrushController : ICanvasToolInput
     private StrokeSampler? _sampler;
     private DocumentPoint? _hover;
     private CanvasModifiers _modifiers;
+    private bool _finishPending;
+    private DocumentPoint? _finishPoint;
+    private CanvasModifiers _finishModifiers;
+    private MaskPolarity _pendingPolarity;
 
     public MaskBrushController(EditorSession session)
     {
@@ -37,6 +41,8 @@ public sealed class MaskBrushController : ICanvasToolInput
     public double Radius { get; private set; } = 12;
     public MaskPolarity PrimaryPolarity { get; private set; } = MaskPolarity.Add;
     public MaskBrushStatus Status { get; private set; } = new(MaskBrushMessage.Ready);
+    public bool HasPendingWork => State == MaskBrushState.Painting
+        && _sampler is { HasPendingSamples: true };
     public event EventHandler? Changed;
 
     public void SetRadius(double radius)
@@ -99,8 +105,12 @@ public sealed class MaskBrushController : ICanvasToolInput
         var changed = _hover != point || _modifiers != modifiers;
         _hover = point;
         _modifiers = modifiers;
-        if (State == MaskBrushState.Painting && point is { } current && _sampler is not null)
-            ApplySamples(_sampler.Add(current), EffectivePolarity(modifiers));
+        if (State == MaskBrushState.Painting && !_finishPending
+            && point is { } current && _sampler is not null)
+        {
+            _pendingPolarity = EffectivePolarity(modifiers);
+            ApplySamples(_sampler.Add(current), _pendingPolarity);
+        }
         if (changed) NotifyChanged();
         return changed ? CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None;
     }
@@ -110,7 +120,32 @@ public sealed class MaskBrushController : ICanvasToolInput
         if (State != MaskBrushState.Painting || button != CanvasPointerButton.Left)
             return CanvasInputEffects.None;
         if (point is { } current && _sampler is not null)
-            ApplySamples(_sampler.Add(current), EffectivePolarity(modifiers));
+        {
+            _pendingPolarity = EffectivePolarity(modifiers);
+            ApplySamples(_sampler.Add(current), _pendingPolarity);
+        }
+        if (_sampler is { HasPendingSamples: true })
+        {
+            _finishPending = true;
+            _finishPoint = point;
+            _finishModifiers = modifiers;
+            return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
+        }
+        return CompletePointerUp(point, modifiers);
+    }
+
+    public CanvasInputEffects ProcessPendingWork()
+    {
+        if (!HasPendingWork || _sampler is null) return CanvasInputEffects.None;
+        ApplySamples(_sampler.TakePendingBatch(), _pendingPolarity);
+        if (_sampler.HasPendingSamples) return CanvasInputEffects.Handled;
+        return _finishPending
+            ? CompletePointerUp(_finishPoint, _finishModifiers)
+            : CanvasInputEffects.Handled;
+    }
+
+    private CanvasInputEffects CompletePointerUp(DocumentPoint? point, CanvasModifiers modifiers)
+    {
         _transaction!.Commit();
         ClearStroke();
         _hover = point;
@@ -150,20 +185,38 @@ public sealed class MaskBrushController : ICanvasToolInput
 
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples, MaskPolarity polarity)
     {
+        if (samples.Count > StrokeSampler.MaximumBatchSamples)
+            throw new ArgumentOutOfRangeException(nameof(samples));
         if (samples.Count == 0 || _part is null || _transaction is null) return;
+        var part = _part;
+        var transaction = _transaction;
+        try { transaction.ApplyBatch(() => ApplySampleBatch(transaction, part, samples, polarity)); }
+        catch
+        {
+            transaction.Cancel();
+            ClearStroke();
+            Status = new(MaskBrushMessage.Cancelled);
+            NotifyChanged();
+            throw;
+        }
+    }
+
+    private void ApplySampleBatch(EditTransaction transaction, PartLayer part,
+        IReadOnlyList<DocumentPoint> samples, MaskPolarity polarity)
+    {
         var region = default(DocumentRect);
         foreach (var sample in samples)
         {
             var dab = DabBounds(sample);
-            region = region.Union(polarity == MaskPolarity.Add ? dab : dab.Intersect(_part.Bounds));
+            region = region.Union(polarity == MaskPolarity.Add ? dab : dab.Intersect(part.Bounds));
         }
         if (region.IsEmpty) return;
 
         // A disconnected click must not inflate a compact Part into a near-full-frame rectangle.
         // Continuous sampled strokes naturally overlap the current local surface as they cross its edge.
-        if (polarity == MaskPolarity.Add && region.Intersect(_part.Bounds).IsEmpty) return;
+        if (polarity == MaskPolarity.Add && region.Intersect(part.Bounds).IsEmpty) return;
 
-        var after = _part.CopyMaskWithTransparentOutside(region);
+        var after = part.CopyMaskWithTransparentOutside(region);
         var value = polarity == MaskPolarity.Add ? (byte)255 : (byte)0;
         var radiusSquared = Radius * Radius;
         for (var y = region.Y; y < region.Bottom; y++)
@@ -176,14 +229,7 @@ public sealed class MaskBrushController : ICanvasToolInput
                     + (centerY - sample.Y) * (centerY - sample.Y) <= radiusSquared)) continue;
             after[(y - region.Y) * region.Width + x - region.X] = value;
         }
-        try { _transaction.Apply(new MaskPatch(_part.Id, region, after)); }
-        catch
-        {
-            ClearStroke();
-            Status = new(MaskBrushMessage.Cancelled);
-            NotifyChanged();
-            throw;
-        }
+        transaction.Apply(new MaskPatch(part.Id, region, after));
     }
 
     private DocumentRect DabBounds(DocumentPoint point)
@@ -206,6 +252,9 @@ public sealed class MaskBrushController : ICanvasToolInput
         _transaction = null;
         _part = null;
         _sampler = null;
+        _finishPending = false;
+        _finishPoint = null;
+        _finishModifiers = CanvasModifiers.None;
         State = MaskBrushState.Idle;
     }
 

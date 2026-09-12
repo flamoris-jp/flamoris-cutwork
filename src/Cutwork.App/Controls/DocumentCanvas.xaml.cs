@@ -31,6 +31,7 @@ public partial class DocumentCanvas : UserControl
     private long _presentedPartMaskRevision = -1;
     private FrozenPatchSource? _presentedPatchSource;
     private bool _autoFit = true;
+    private bool _deferredToolWorkQueued;
 
     public DocumentCanvas()
     {
@@ -281,6 +282,20 @@ public partial class DocumentCanvas : UserControl
             if (IsMouseCaptured) ReleaseMouseCapture();
             Mouse.OverrideCursor = null;
         }
+        QueueDeferredToolWork();
+    }
+
+    private void QueueDeferredToolWork()
+    {
+        if (_deferredToolWorkQueued || _inputRouter?.HasPendingToolWork != true) return;
+        _deferredToolWorkQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            _deferredToolWorkQueued = false;
+            var effects = RouteInput(() =>
+                _inputRouter?.ProcessPendingToolWork() ?? CanvasInputEffects.None);
+            ApplyInputEffects(effects);
+        }));
     }
 
     private CanvasInputEffects RouteInput(Func<CanvasInputEffects> route)

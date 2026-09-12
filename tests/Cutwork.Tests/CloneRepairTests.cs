@@ -104,6 +104,18 @@ public sealed class CloneRepairTests
     }
 
     [TestMethod]
+    public void KernelRejectsAnUnbatchedSampleSet()
+    {
+        var original = Original(20, 20);
+        var repair = new RepairLayer(new(0, 0, 20, 20), new byte[20 * 20 * 4]);
+        var samples = Enumerable.Range(0, StrokeSampler.MaximumBatchSamples + 1)
+            .Select(index => new DocumentPoint(index + .5, index + .5)).ToArray();
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
+            new CloneRepairKernel().CreatePatch(original, repair, samples, new(0, 0), 1));
+    }
+
+    [TestMethod]
     public void WheelUsesCloneRadiusPrecedenceAndCtrlWheelOnlyZooms()
     {
         var (session, tool) = CreateTool(20, 20);
@@ -239,6 +251,74 @@ public sealed class CloneRepairTests
             radius * 2 * session.Viewport.Projection.ScaleX, 1e-9);
     }
 
+    [TestMethod]
+    public void LongSparseDiagonalReachesKernelOnlyInBoundedBatches()
+    {
+        var session = OpenSession(256, 256);
+        var kernel = new RecordingCloneKernel();
+        var tool = new CloneRepairController(session, kernel);
+        tool.Activate();
+        tool.SetRadius(2);
+        tool.PointerDown(new(4.5, 4.5), 1, CanvasModifiers.Alt);
+
+        tool.PointerDown(new(12.5, 12.5), 1, CanvasModifiers.None);
+        kernel.BatchSizes.Clear();
+        tool.PointerMove(new(243.5, 243.5), CanvasModifiers.None);
+        Assert.AreEqual(1, kernel.BatchSizes.Count);
+        tool.PointerUp(new(243.5, 243.5), CanvasPointerButton.Left, CanvasModifiers.None);
+        Assert.AreEqual(2, kernel.BatchSizes.Count);
+        while (tool.HasPendingWork)
+        {
+            var before = kernel.BatchSizes.Count;
+            tool.ProcessPendingWork();
+            Assert.IsTrue(kernel.BatchSizes.Count - before <= 1);
+        }
+
+        Assert.IsTrue(kernel.BatchSizes.Count > 1);
+        Assert.IsTrue(kernel.BatchSizes.All(size => size is > 0
+            && size <= StrokeSampler.MaximumBatchSamples));
+        Assert.AreEqual(1, session.UndoCount);
+    }
+
+    [TestMethod]
+    public void SparseAndDenseCloneInputProduceExactSameRepair()
+    {
+        var sparse = CreateTool(64, 64);
+        var dense = CreateTool(64, 64);
+        sparse.Tool.SetRadius(2);
+        dense.Tool.SetRadius(2);
+        sparse.Tool.PointerDown(new(3.5, 3.5), 1, CanvasModifiers.Alt);
+        dense.Tool.PointerDown(new(3.5, 3.5), 1, CanvasModifiers.Alt);
+
+        sparse.Tool.PointerDown(new(12.5, 12.5), 1, CanvasModifiers.None);
+        sparse.Tool.PointerMove(new(52.5, 52.5), CanvasModifiers.None);
+        sparse.Tool.PointerUp(new(52.5, 52.5), CanvasPointerButton.Left, CanvasModifiers.None);
+        DrainPending(sparse.Tool);
+
+        dense.Tool.PointerDown(new(12.5, 12.5), 1, CanvasModifiers.None);
+        for (var coordinate = 16.5; coordinate < 52.5; coordinate += 4)
+            dense.Tool.PointerMove(new(coordinate, coordinate), CanvasModifiers.None);
+        dense.Tool.PointerUp(new(52.5, 52.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        var sparseRepair = sparse.Session.Document!.Layers.OfType<RepairLayer>().Single();
+        var denseRepair = dense.Session.Document!.Layers.OfType<RepairLayer>().Single();
+        Assert.AreEqual(sparseRepair.Bounds, denseRepair.Bounds);
+        CollectionAssert.AreEqual(sparseRepair.CopyPixels(sparseRepair.Bounds),
+            denseRepair.CopyPixels(denseRepair.Bounds));
+        Assert.AreEqual(1, sparse.Session.UndoCount);
+        Assert.AreEqual(1, dense.Session.UndoCount);
+    }
+
+    private static void DrainPending(ICanvasDeferredWork tool)
+    {
+        var slices = 0;
+        while (tool.HasPendingWork)
+        {
+            tool.ProcessPendingWork();
+            Assert.IsTrue(++slices < 10_000, "Deferred tool work did not converge.");
+        }
+    }
+
     private static void VerifyCancellation(Func<CloneRepairController, CanvasInputEffects> cancel)
     {
         var session = OpenSession(30, 20);
@@ -251,10 +331,11 @@ public sealed class CloneRepairTests
         var history = session.UndoCount;
         var tool = new CloneRepairController(session, new CloneRepairKernel());
         tool.Activate();
-        tool.SetRadius(3);
+        tool.SetRadius(1);
         tool.PointerDown(new(3, 3), 1, CanvasModifiers.Alt);
         tool.PointerDown(new(10.5, 8.5), 1, CanvasModifiers.None);
         tool.PointerMove(new(17.5, 8.5), CanvasModifiers.None);
+        Assert.IsTrue(tool.HasPendingWork);
         cancel(tool);
 
         Assert.AreEqual(CloneRepairState.Idle, tool.State);
@@ -303,10 +384,12 @@ public sealed class CloneRepairTests
     private sealed class RecordingCloneKernel : ICloneRepairKernel
     {
         public List<DocumentPoint> Offsets { get; } = [];
+        public List<int> BatchSizes { get; } = [];
         public CloneRepairPatch CreatePatch(OriginalAsset original, RepairLayer target,
             IReadOnlyList<DocumentPoint> destinationSamples, DocumentPoint offset, double radius)
         {
             Offsets.Add(offset);
+            BatchSizes.Add(destinationSamples.Count);
             var point = destinationSamples[0];
             var x = Math.Clamp((int)Math.Floor(point.X), 0, original.Dimensions.Width - 1);
             var y = Math.Clamp((int)Math.Floor(point.Y), 0, original.Dimensions.Height - 1);

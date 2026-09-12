@@ -15,7 +15,7 @@ public sealed record CloneRepairSnapshot(
     CloneRepairStatus Status);
 
 /// <summary>Point-source Clone Repair. Source and stroke geometry are document-space only.</summary>
-public sealed class CloneRepairController : ICanvasToolInput
+public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWork
 {
     public const double MinimumRadius = 0.5;
     public const double MaximumRadius = 512;
@@ -33,6 +33,8 @@ public sealed class CloneRepairController : ICanvasToolInput
     private DocumentPoint? _strokeOffset;
     private bool _createdRepair;
     private bool _hasRasterChange;
+    private bool _finishPending;
+    private DocumentPoint? _finishPoint;
 
     public CloneRepairController(EditorSession session, ICloneRepairKernel kernel)
     {
@@ -44,6 +46,8 @@ public sealed class CloneRepairController : ICanvasToolInput
     public CloneRepairState State { get; private set; }
     public double Radius { get; private set; } = 12;
     public CloneRepairStatus Status { get; private set; } = new(CloneRepairMessage.Ready);
+    public bool HasPendingWork => State == CloneRepairState.Painting
+        && _sampler is { HasPendingSamples: true };
     public event EventHandler? Changed;
 
     public void SetRadius(double radius)
@@ -117,7 +121,8 @@ public sealed class CloneRepairController : ICanvasToolInput
     {
         var changed = _hover != point;
         _hover = point;
-        if (State == CloneRepairState.Painting && point is { } current && _sampler is not null)
+        if (State == CloneRepairState.Painting && !_finishPending
+            && point is { } current && _sampler is not null)
             ApplySamples(_sampler.Add(current));
         if (changed) NotifyChanged();
         return changed ? CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None;
@@ -128,6 +133,25 @@ public sealed class CloneRepairController : ICanvasToolInput
         if (State != CloneRepairState.Painting || button != CanvasPointerButton.Left)
             return CanvasInputEffects.None;
         if (point is { } current && _sampler is not null) ApplySamples(_sampler.Add(current));
+        if (_sampler is { HasPendingSamples: true })
+        {
+            _finishPending = true;
+            _finishPoint = point;
+            return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
+        }
+        return CompletePointerUp(point);
+    }
+
+    public CanvasInputEffects ProcessPendingWork()
+    {
+        if (!HasPendingWork || _sampler is null) return CanvasInputEffects.None;
+        ApplySamples(_sampler.TakePendingBatch());
+        if (_sampler.HasPendingSamples) return CanvasInputEffects.Handled;
+        return _finishPending ? CompletePointerUp(_finishPoint) : CanvasInputEffects.Handled;
+    }
+
+    private CanvasInputEffects CompletePointerUp(DocumentPoint? point)
+    {
         if (_createdRepair && !_hasRasterChange) _transaction!.Cancel();
         else _transaction!.Commit(_repair!.Id);
         ClearStroke();
@@ -183,20 +207,27 @@ public sealed class CloneRepairController : ICanvasToolInput
 
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples)
     {
+        if (samples.Count > StrokeSampler.MaximumBatchSamples)
+            throw new ArgumentOutOfRangeException(nameof(samples));
         if (samples.Count == 0 || _repair is null || _transaction is null || _strokeOffset is not { } offset)
             return;
+        var repair = _repair;
+        var transaction = _transaction;
         try
         {
-            var patch = _kernel.CreatePatch(_session.Document!.Original, _repair, samples, offset, Radius);
-            if (!patch.Region.IsEmpty && patch.HasChanges)
+            transaction.ApplyBatch(() =>
             {
-                _transaction.Apply(new RasterPatch(_repair.Id, patch.Region, patch.StraightBgra.Span));
+                var patch = _kernel.CreatePatch(_session.Document!.Original, repair,
+                    samples, offset, Radius);
+                if (patch.Region.IsEmpty || !patch.HasChanges) return;
+                transaction.Apply(new RasterPatch(repair.Id, patch.Region,
+                    patch.StraightBgra.Span));
                 _hasRasterChange = true;
-            }
+            });
         }
         catch
         {
-            _transaction.Cancel();
+            transaction.Cancel();
             ClearStroke();
             Status = new(CloneRepairMessage.Cancelled);
             NotifyChanged();
@@ -213,6 +244,8 @@ public sealed class CloneRepairController : ICanvasToolInput
         _strokeOffset = null;
         _createdRepair = false;
         _hasRasterChange = false;
+        _finishPending = false;
+        _finishPoint = null;
         State = CloneRepairState.Idle;
     }
 

@@ -57,3 +57,13 @@ public interface ICanvasToolInput
     CanvasInputEffects LostPointerCapture();
     void Cancel();
 }
+
+/// <summary>
+/// Optional bounded continuation surface for tools whose current pointer event left sampled
+/// authoring work pending. The UI pumps one slice at a time through CanvasInputRouter.
+/// </summary>
+public interface ICanvasDeferredWork
+{
+    bool HasPendingWork { get; }
+    CanvasInputEffects ProcessPendingWork();
+}
