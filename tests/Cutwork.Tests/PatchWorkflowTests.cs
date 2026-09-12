@@ -100,6 +100,25 @@ public sealed class PatchWorkflowTests
     }
 
     [TestMethod]
+    public void SourceNeedsThreePointsAndEscapeClearsPendingWorkflow()
+    {
+        var session = Session();
+        var tool = new PatchToolController(session, new PatchSourceSampler());
+        tool.Activate();
+        tool.PointerDown(new(1, 1), 1, CanvasModifiers.None);
+        tool.PointerDown(new(4, 1), 1, CanvasModifiers.None);
+
+        Assert.IsFalse(tool.FinalizeSource());
+        Assert.AreEqual(PatchToolMessage.NeedsThreePoints, tool.Status.Message);
+        var effects = tool.KeyDown(CanvasToolKey.Escape, CanvasModifiers.None);
+
+        Assert.IsTrue(effects.HasFlag(CanvasInputEffects.Handled));
+        Assert.AreEqual(PatchToolState.ChoosingSource, tool.State);
+        Assert.AreEqual(0, tool.Snapshot().SourceFence.Count);
+        Assert.AreEqual(0, session.UndoCount);
+    }
+
+    [TestMethod]
     public void TransformCommandDirtiesOldAndNewBoundsAndRestoresExactly()
     {
         var session = Session();
@@ -117,6 +136,24 @@ public sealed class PatchWorkflowTests
         Assert.AreEqual(after, patch.Transform);
         session.Undo(); Assert.AreEqual(before, patch.Transform);
         session.Redo(); Assert.AreEqual(after, patch.Transform);
+    }
+
+    [TestMethod]
+    public void TransformRecompositesTheOldAndNewUnionInsteadOfTheFullDocument()
+    {
+        var session = Session();
+        var patch = new PatchLayer(new(1, 1, 2, 2), Enumerable.Repeat((byte)255, 16).ToArray());
+        session.Execute(new AddLayer(patch));
+        using var cache = new CompositeCache(session.Document!);
+        cache.RenderPending();
+        var before = cache.CompositedPixelCount;
+
+        session.Execute(new SetPatchTransform(patch.Id, new PatchTransform(6, 6)));
+        var update = cache.RenderPending()!;
+
+        Assert.AreEqual(new DocumentRect(1, 1, 6, 6), update.Region);
+        Assert.AreEqual(36, cache.CompositedPixelCount - before);
+        Assert.IsTrue(update.Region.Width < session.Document.Dimensions.Width);
     }
 
     [TestMethod]
