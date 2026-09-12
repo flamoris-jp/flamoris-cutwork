@@ -23,6 +23,7 @@ public partial class DocumentCanvas : UserControl
     private PartToolController? _partTool;
     private MaskBrushController? _maskTool;
     private PatchToolController? _patchTool;
+    private CloneRepairController? _cloneTool;
     private readonly List<Ellipse> _partFencePoints = [];
     private readonly List<Ellipse> _patchFencePoints = [];
     private long _presentedPartMaskRevision = -1;
@@ -71,18 +72,22 @@ public partial class DocumentCanvas : UserControl
     }
 
     public void AttachInputRouter(CanvasInputRouter router, PartToolController partTool,
-        MaskBrushController? maskTool = null, PatchToolController? patchTool = null)
+        MaskBrushController? maskTool = null, PatchToolController? patchTool = null,
+        CloneRepairController? cloneTool = null)
     {
         if (_partTool is not null) _partTool.Changed -= PartToolChanged;
         if (_maskTool is not null) _maskTool.Changed -= ToolOverlayChanged;
         if (_patchTool is not null) _patchTool.Changed -= ToolOverlayChanged;
+        if (_cloneTool is not null) _cloneTool.Changed -= ToolOverlayChanged;
         _inputRouter = router ?? throw new ArgumentNullException(nameof(router));
         _partTool = partTool ?? throw new ArgumentNullException(nameof(partTool));
         _maskTool = maskTool;
         _patchTool = patchTool;
+        _cloneTool = cloneTool;
         _partTool.Changed += PartToolChanged;
         if (_maskTool is not null) _maskTool.Changed += ToolOverlayChanged;
         if (_patchTool is not null) _patchTool.Changed += ToolOverlayChanged;
+        if (_cloneTool is not null) _cloneTool.Changed += ToolOverlayChanged;
         RenderToolOverlays();
     }
 
@@ -303,6 +308,7 @@ public partial class DocumentCanvas : UserControl
         RenderPartOverlay();
         RenderMaskOverlay();
         RenderPatchOverlay();
+        RenderCloneOverlay();
     }
 
     private void RenderPartOverlay()
@@ -399,6 +405,29 @@ public partial class DocumentCanvas : UserControl
         Canvas.SetLeft(BrushCursor, center.X - BrushCursor.Width / 2);
         Canvas.SetTop(BrushCursor, center.Y - BrushCursor.Height / 2);
         BrushCursor.Visibility = Visibility.Visible;
+    }
+
+    private void RenderCloneOverlay()
+    {
+        CloneSourceMarker.Visibility = Visibility.Collapsed;
+        if (_session is null || _cloneTool is null || !_cloneTool.IsActive) return;
+        var snapshot = _cloneTool.Snapshot();
+        if (snapshot.HoverPoint is { } hover)
+        {
+            var center = _session.Viewport.DocumentToViewport(hover);
+            var projection = _session.Viewport.Projection;
+            BrushCursor.Width = snapshot.Radius * 2 * projection.ScaleX;
+            BrushCursor.Height = snapshot.Radius * 2 * projection.ScaleY;
+            BrushCursor.Stroke = Brushes.DeepSkyBlue;
+            Canvas.SetLeft(BrushCursor, center.X - BrushCursor.Width / 2);
+            Canvas.SetTop(BrushCursor, center.Y - BrushCursor.Height / 2);
+            BrushCursor.Visibility = Visibility.Visible;
+        }
+        if (snapshot.SourceAnchor is not { } source) return;
+        var marker = _session.Viewport.DocumentToViewport(source);
+        Canvas.SetLeft(CloneSourceMarker, marker.X - CloneSourceMarker.Width / 2);
+        Canvas.SetTop(CloneSourceMarker, marker.Y - CloneSourceMarker.Height / 2);
+        CloneSourceMarker.Visibility = Visibility.Visible;
     }
 
     private void RenderPatchOverlay()
@@ -533,7 +562,7 @@ public partial class DocumentCanvas : UserControl
         CrosshairVertical.X2 = position.X;
         CrosshairVertical.Y1 = position.Y - halfSize;
         CrosshairVertical.Y2 = position.Y + halfSize;
-        var showCrosshair = _maskTool?.IsActive != true;
+        var showCrosshair = _maskTool?.IsActive != true && _cloneTool?.IsActive != true;
         CrosshairHorizontal.Visibility = showCrosshair ? Visibility.Visible : Visibility.Collapsed;
         CrosshairVertical.Visibility = showCrosshair ? Visibility.Visible : Visibility.Collapsed;
         PointerDocumentPositionChanged?.Invoke(this, new DocumentPointerEventArgs(documentPoint));

@@ -39,6 +39,14 @@
                      Fill="#10FFFFFF"
                      IsHitTestVisible="False"
                      Visibility="Collapsed" />
+            <Ellipse x:Name="CloneSourceMarker"
+                     Width="14"
+                     Height="14"
+                     Stroke="#FF4DC8FF"
+                     StrokeThickness="1.5"
+                     Fill="#1800AEEF"
+                     IsHitTestVisible="False"
+                     Visibility="Collapsed" />
             <Line x:Name="CrosshairHorizontal" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
             <Line x:Name="CrosshairVertical" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
         </Canvas>

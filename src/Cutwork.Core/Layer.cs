@@ -77,16 +77,17 @@ public sealed class PartLayer : Layer
 
 public abstract class RasterLayer : Layer
 {
-    private readonly byte[] _pixels;
+    private byte[] _pixels;
+    private DocumentRect _pixelBounds;
     private protected RasterLayer(LayerKind kind, DocumentRect bounds, ReadOnlySpan<byte> bgra, string name)
         : base(kind, bounds, name)
     {
         if (bgra.Length != checked(bounds.Width * bounds.Height * 4))
             throw new ArgumentException("Raster size mismatch.", nameof(bgra));
         _pixels = bgra.ToArray();
-        PixelBounds = bounds;
+        _pixelBounds = bounds;
     }
-    protected DocumentRect PixelBounds { get; }
+    protected DocumentRect PixelBounds => _pixelBounds;
     public ReadOnlySpan<byte> PixelAt(int x, int y) => PixelAtRaster(x, y);
     protected ReadOnlySpan<byte> PixelAtRaster(int x, int y)
     {
@@ -95,7 +96,36 @@ public abstract class RasterLayer : Layer
         return _pixels.AsSpan(checked(((y - PixelBounds.Y) * PixelBounds.Width + x - PixelBounds.X) * 4), 4);
     }
     public byte[] CopyPixels(DocumentRect region) => PixelRegion.Copy(_pixels, PixelBounds, region, 4);
+    public byte[] CopyPixelsWithTransparentOutside(DocumentRect region)
+    {
+        var result = new byte[checked(region.Width * region.Height * 4)];
+        var overlap = PixelBounds.Intersect(region);
+        if (overlap.IsEmpty) return result;
+        for (var row = 0; row < overlap.Height; row++)
+            _pixels.AsSpan(checked(((overlap.Y - PixelBounds.Y + row) * PixelBounds.Width
+                + overlap.X - PixelBounds.X) * 4), overlap.Width * 4).CopyTo(result.AsSpan(
+                checked(((overlap.Y - region.Y + row) * region.Width + overlap.X - region.X) * 4),
+                overlap.Width * 4));
+        return result;
+    }
     internal void WritePixels(DocumentRect region, byte[] bytes) => PixelRegion.Write(_pixels, PixelBounds, region, bytes, 4);
+    internal void ResizePixels(DocumentRect bounds)
+    {
+        if (bounds.IsEmpty) throw new EditException(EditError.InvalidPatch);
+        if (bounds == PixelBounds) return;
+        var resized = new byte[checked(bounds.Width * bounds.Height * 4)];
+        var overlap = PixelBounds.Intersect(bounds);
+        if (!overlap.IsEmpty)
+        {
+            for (var row = 0; row < overlap.Height; row++)
+                _pixels.AsSpan(checked(((overlap.Y - PixelBounds.Y + row) * PixelBounds.Width
+                    + overlap.X - PixelBounds.X) * 4), overlap.Width * 4).CopyTo(resized.AsSpan(
+                    checked(((overlap.Y - bounds.Y + row) * bounds.Width + overlap.X - bounds.X) * 4),
+                    overlap.Width * 4));
+        }
+        _pixels = resized;
+        _pixelBounds = bounds;
+    }
     internal override long RetainedBytes => base.RetainedBytes + _pixels.LongLength;
 }
 
@@ -201,7 +231,10 @@ public sealed class PatchLayer : RasterLayer
 }
 
 public sealed class RepairLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
-    : RasterLayer(LayerKind.Repair, bounds, bgra, name);
+    : RasterLayer(LayerKind.Repair, bounds, bgra, name)
+{
+    public override DocumentRect Bounds => PixelBounds;
+}
 
 internal static class PixelRegion
 {

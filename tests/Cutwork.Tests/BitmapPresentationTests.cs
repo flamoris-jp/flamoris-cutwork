@@ -123,10 +123,12 @@ public sealed class BitmapPresentationTests
             var partTool = new PartToolController(session, new GuriguriPartFitter());
             var maskTool = new MaskBrushController(session); maskTool.SetRadius(3);
             var patchTool = new PatchToolController(session, new PatchSourceSampler());
+            var cloneTool = new CloneRepairController(session, new CloneRepairKernel());
+            cloneTool.SetRadius(4);
             var router = new CanvasInputRouter(session);
             var canvas = new DocumentCanvas();
             canvas.AttachSession(session);
-            canvas.AttachInputRouter(router, partTool, maskTool, patchTool);
+            canvas.AttachInputRouter(router, partTool, maskTool, patchTool, cloneTool);
             canvas.Present(session.Document!);
             canvas.Measure(new Size(800, 600)); canvas.Arrange(new Rect(0, 0, 800, 600));
             canvas.ActualSize();
@@ -150,6 +152,18 @@ public sealed class BitmapPresentationTests
             var patchOverlay = (Image)canvas.FindName("PatchImageOverlay");
             Assert.AreEqual(Visibility.Visible, patchOverlay.Visibility);
             Assert.IsInstanceOfType(patchOverlay.Source, typeof(WriteableBitmap));
+            Assert.AreEqual(generation, canvas.BitmapGeneration);
+            Assert.AreEqual(revision, session.Document.Revision);
+            Assert.AreEqual(0, session.UndoCount);
+
+            router.SetActiveTool(cloneTool);
+            cloneTool.PointerDown(new(4, 4), 1, CanvasModifiers.Alt);
+            cloneTool.PointerMove(new(10, 10), CanvasModifiers.None);
+            var sourceMarker = (Ellipse)canvas.FindName("CloneSourceMarker");
+            Assert.AreEqual(Visibility.Visible, sourceMarker.Visibility);
+            Assert.AreEqual(Visibility.Visible, cursor.Visibility);
+            Assert.AreEqual(cloneTool.Radius * 2 * session.Viewport.Projection.ScaleX,
+                cursor.Width, 0.001);
             Assert.AreEqual(generation, canvas.BitmapGeneration);
             Assert.AreEqual(revision, session.Document.Revision);
             Assert.AreEqual(0, session.UndoCount);
