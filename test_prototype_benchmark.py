@@ -36,12 +36,14 @@ class PrototypeBenchmarkTests(unittest.TestCase):
                         "touched_pixels": 80,
                         "kernel_ms": 1.0,
                         "image_update_ms": 0.5,
+                        "scheduling_ms": 0.25,
                         "total_ms": 2.0,
                     }
                 ],
                 "refreshes": [
                     {
                         "composite_ms": 10.0,
+                        "overlay_ms": 0.5,
                         "viewport_transform_ms": 4.0,
                         "photo_image_ms": 3.0,
                         "canvas_update_ms": 1.0,
@@ -51,6 +53,8 @@ class PrototypeBenchmarkTests(unittest.TestCase):
             }
         )
         self.assertEqual(summary["kernel_ms"]["average"], 1.0)
+        self.assertEqual(summary["scheduling_ms"]["average"], 0.25)
+        self.assertEqual(summary["overlay_ms"]["average"], 0.5)
         self.assertEqual(summary["visible_refresh_ms"]["average"], 18.0)
         self.assertEqual(summary["recorded_processing_ms"], 23.0)
 
