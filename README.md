@@ -32,7 +32,8 @@ Current milestone:
 - Phase 3: unified Part Tool and Guriguri complete;
 - Phase 4: unified Mask Brush and Patch workflow complete;
 - Phase 5: point-source Clone Repair complete;
-- current: Phase 6, Blur and Smudge repair finishing.
+- Phase 6: Blur and Smudge repair finishing complete;
+- current: Phase 7, `.flimg` persistence and export.
 
 ## Design authority
 
@@ -102,8 +103,8 @@ Open an image, then use **Help → Developer: Add Fixture Layers** (Japanese:
 two colored underpaint layers in one transaction. Hide the Part to inspect the
 hole and repairs; add the fixture twice to test foreground reordering. Rename,
 toggle visibility, reorder within a band, delete, Undo (Ctrl+Z), and Redo (Ctrl+Y).
-Base cannot move or be deleted. The unsaved marker is session state only: project
-Save/Open and `.flimg` are not implemented yet.
+Base cannot move or be deleted. The unsaved marker reflects authored changes only;
+viewport and tool-preview changes do not trigger it.
 
 See [Phase 2 editing spine](docs/phase2-editing-spine.md) for pixel, dirty-region,
 history, and memory-budget contracts.
@@ -112,7 +113,9 @@ Phase 3–6 hands-on behavior is documented in
 [the Part Tool guide](docs/phase3-part-tool.md) and
 [the Mask/Patch guide](docs/phase4-mask-patch.md),
 [the Clone Repair guide](docs/phase5-clone-repair.md), and
-[the repair finishing guide](docs/phase6-repair-finishing.md).
+[the repair finishing guide](docs/phase6-repair-finishing.md). Phase 7 project and
+export contracts are defined by [the `.flimg` v1 schema](docs/flimg-schema-v1.md)
+and [the persistence/export guide](docs/phase7-persistence-export.md).
 
 ## Repository layout
 

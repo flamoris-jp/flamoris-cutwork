@@ -140,6 +140,7 @@ public partial class MainWindow : Window
         if (!ConfirmUnsavedChanges()) return;
 
         var document = new CutworkDocument(result.Original!);
+        _inputRouter.CancelActiveTool();
         _workspace.OpenArtwork(document);
         CompleteDocumentOpen(document);
     }

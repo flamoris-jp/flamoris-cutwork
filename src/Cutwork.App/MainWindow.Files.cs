@@ -23,6 +23,7 @@ public partial class MainWindow
 
         try
         {
+            _inputRouter.CancelActiveTool();
             _workspace.OpenProject(dialog.FileName);
             CompleteDocumentOpen(_session.Document!);
         }
@@ -45,7 +46,7 @@ public partial class MainWindow
                 DefaultExt = ".flimg",
                 AddExtension = true,
                 OverwritePrompt = true,
-                FileName = Path.GetFileNameWithoutExtension(_session.Document.Original.SourceName),
+                FileName = SuggestedFileName(_session.Document.Original.SourceName),
             };
             if (dialog.ShowDialog(this) != true) return false;
             path = dialog.FileName;
@@ -53,6 +54,7 @@ public partial class MainWindow
 
         try
         {
+            _inputRouter.CancelActiveTool();
             _workspace.Save(path);
             UpdateStatus();
             return true;
@@ -73,7 +75,7 @@ public partial class MainWindow
             DefaultExt = ".png",
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = Path.GetFileNameWithoutExtension(document.Original.SourceName) + "-composite",
+            FileName = SuggestedFileName(document.Original.SourceName) + "-composite",
         };
         if (dialog.ShowDialog(this) != true) return;
         TryExport(() => _exporter.ExportComposite(document, dialog.FileName));
@@ -88,7 +90,7 @@ public partial class MainWindow
             DefaultExt = ".zip",
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = Path.GetFileNameWithoutExtension(document.Original.SourceName) + "-layers",
+            FileName = SuggestedFileName(document.Original.SourceName) + "-layers",
         };
         if (dialog.ShowDialog(this) != true) return;
         TryExport(() => _exporter.ExportLayerHandoff(document, dialog.FileName));
@@ -156,6 +158,14 @@ public partial class MainWindow
         };
         MessageBox.Show(this, text[key], text["ProjectError_Title"],
             MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+
+    private static string SuggestedFileName(string sourceName)
+    {
+        var name = Path.GetFileNameWithoutExtension(sourceName);
+        foreach (var character in Path.GetInvalidFileNameChars()) name = name.Replace(character, '_');
+        name = name.Trim().TrimEnd('.');
+        return string.IsNullOrEmpty(name) ? "cutwork" : name;
     }
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
