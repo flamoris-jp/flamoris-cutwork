@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly PartToolController _partTool;
     private readonly MaskBrushController _maskTool;
     private readonly PatchToolController _patchTool;
+    private readonly CloneRepairController _cloneTool;
     private readonly CanvasInputRouter _inputRouter;
     private DocumentPoint? _pointerPosition;
 
@@ -24,10 +25,11 @@ public partial class MainWindow : Window
         _partTool = new PartToolController(_session, new GuriguriPartFitter());
         _maskTool = new MaskBrushController(_session);
         _patchTool = new PatchToolController(_session, new PatchSourceSampler());
+        _cloneTool = new CloneRepairController(_session, new CloneRepairKernel());
         _inputRouter = new CanvasInputRouter(_session);
         InitializeLayerEditing();
         CanvasView.AttachSession(_session);
-        CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool);
+        CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool, _cloneTool);
         CanvasView.PointerDocumentPositionChanged += CanvasView_PointerDocumentPositionChanged;
         CanvasView.ViewportChanged += (_, _) => UpdateStatus();
         CanvasView.EditRejected += (_, e) => ShowEditError(e.Exception);
@@ -42,6 +44,11 @@ public partial class MainWindow : Window
             UpdateStatus();
         };
         _patchTool.Changed += (_, _) =>
+        {
+            UpdatePhase4ToolUi();
+            UpdateStatus();
+        };
+        _cloneTool.Changed += (_, _) =>
         {
             UpdatePhase4ToolUi();
             UpdateStatus();
@@ -116,6 +123,7 @@ public partial class MainWindow : Window
         PartToolButton.IsEnabled = true;
         MaskToolButton.IsEnabled = true;
         PatchToolButton.IsEnabled = true;
+        CloneToolButton.IsEnabled = true;
         UpdatePreviewChecks();
         ApplyLocalization();
     }

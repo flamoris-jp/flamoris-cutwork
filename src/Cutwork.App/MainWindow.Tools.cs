@@ -15,6 +15,8 @@ public partial class MainWindow
         MaskToolButton.ToolTip = text["MaskTool_Tooltip"];
         PatchToolButton.Content = text["PatchTool_Name"];
         PatchToolButton.ToolTip = text["PatchTool_Tooltip"];
+        CloneToolButton.Content = text["CloneTool_Name"];
+        CloneToolButton.ToolTip = text["CloneTool_Tooltip"];
         PatchCommitButton.Content = text["PatchTool_Commit"];
         PatchCancelButton.Content = text["PatchTool_Cancel"];
         MaskRadiusLabel.Text = text["MaskTool_Radius"];
@@ -25,6 +27,8 @@ public partial class MainWindow
         PatchScaleLabel.Text = text["PatchTool_Scale"];
         PatchRotationLabel.Text = text["PatchTool_Rotation"];
         PatchApplyButton.Content = text["Properties_Apply"];
+        CloneRadiusLabel.Text = text["CloneTool_Radius"];
+        CloneApplyButton.Content = text["Properties_Apply"];
         UpdatePhase4ToolUi();
     }
 
@@ -40,6 +44,14 @@ public partial class MainWindow
     {
         if (_session.Document is null) return;
         _inputRouter.SetActiveTool(_patchTool);
+        UpdatePartToolUi();
+        CanvasView.Focus();
+    }
+
+    private void CloneTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (_session.Document is null) return;
+        _inputRouter.SetActiveTool(_cloneTool);
         UpdatePartToolUi();
         CanvasView.Focus();
     }
@@ -73,6 +85,18 @@ public partial class MainWindow
             return;
         }
         try { _maskTool.SetRadius(radius); }
+        catch (ArgumentOutOfRangeException) { ShowToolInputError(); }
+        CanvasView.Focus();
+    }
+
+    private void CloneApply_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryRead(CloneRadiusEditor.Text, out var radius))
+        {
+            ShowToolInputError();
+            return;
+        }
+        try { _cloneTool.SetRadius(radius); }
         catch (ArgumentOutOfRangeException) { ShowToolInputError(); }
         CanvasView.Focus();
     }
@@ -118,6 +142,7 @@ public partial class MainWindow
         if (_inputRouter is null) return;
         MaskToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _maskTool);
         PatchToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _patchTool);
+        CloneToolButton.IsChecked = ReferenceEquals(_inputRouter.ActiveTool, _cloneTool);
         var patchPending = _patchTool.Snapshot().Source is not null;
         PatchCommitButton.Visibility = patchPending ? Visibility.Visible : Visibility.Collapsed;
         PatchCancelButton.Visibility = _patchTool.Snapshot().SourceFence.Count > 0 || patchPending
@@ -128,7 +153,7 @@ public partial class MainWindow
 
     private void RefreshToolProperties(Layer? selected)
     {
-        if (_maskTool is null || _patchTool is null) return;
+        if (_maskTool is null || _patchTool is null || _cloneTool is null) return;
         _refreshingToolProperties = true;
         try
         {
@@ -148,6 +173,10 @@ public partial class MainWindow
                 PatchScaleEditor.Text = (value.Scale * 100).ToString("0.##", LocalizationService.Current.Culture);
                 PatchRotationEditor.Text = value.RotationDegrees.ToString("0.##", LocalizationService.Current.Culture);
             }
+
+            ClonePropertiesPanel.Visibility = _cloneTool.IsActive
+                ? Visibility.Visible : Visibility.Collapsed;
+            CloneRadiusEditor.Text = _cloneTool.Radius.ToString("0.##", LocalizationService.Current.Culture);
         }
         finally { _refreshingToolProperties = false; }
     }
@@ -181,6 +210,22 @@ public partial class MainWindow
                 PatchToolMessage.Cancelled => text["PatchTool_Status_Cancelled"],
                 PatchToolMessage.Committed => text["PatchTool_Status_Committed"],
                 _ => text["PatchTool_Status_Ready"],
+            };
+            return true;
+        }
+        if (_cloneTool.IsActive)
+        {
+            var snapshot = _cloneTool.Snapshot();
+            status = snapshot.Status.Message switch
+            {
+                CloneRepairMessage.SourceRequired => text["CloneTool_Status_SourceRequired"],
+                CloneRepairMessage.SourceSet => string.Format(text.Culture,
+                    text["CloneTool_Status_SourceSet"], snapshot.SourceAnchor!.Value.X,
+                    snapshot.SourceAnchor.Value.Y),
+                CloneRepairMessage.Painting => text["CloneTool_Status_Painting"],
+                CloneRepairMessage.Cancelled => text["CloneTool_Status_Cancelled"],
+                CloneRepairMessage.Committed => text["CloneTool_Status_Committed"],
+                _ => text["CloneTool_Status_Ready"],
             };
             return true;
         }
