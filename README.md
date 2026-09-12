@@ -33,7 +33,8 @@ Current milestone:
 - Phase 4: unified Mask Brush and Patch workflow complete;
 - Phase 5: point-source Clone Repair complete;
 - Phase 6: Blur and Smudge repair finishing complete;
-- current: Phase 7, `.flimg` persistence and export.
+- Phase 7: `.flimg` persistence and export complete;
+- current: Phase 8, self-contained Windows packaging.
 
 ## Design authority
 
@@ -88,6 +89,11 @@ Build and test:
 dotnet build Cutwork.sln --configuration Release
 dotnet test Cutwork.sln --configuration Release --no-build
 ```
+
+For normal use, download the `FLAMORIS-Cutwork-v0.1.0-win-x64` CI artifact,
+extract its ZIP completely, and start `Cutwork.exe`. The portable build is
+self-contained and does not require the .NET SDK/runtime or Python. See the
+[Windows release guide](docs/phase8-windows-packaging.md).
 
 ### Phase 2 developer checkpoint
 
