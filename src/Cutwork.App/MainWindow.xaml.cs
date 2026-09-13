@@ -102,14 +102,13 @@ public partial class MainWindow : Window
         ExportCompositeMenuItem.Header = text["Menu_Export_Composite"];
         ExportHandoffMenuItem.Header = text["Menu_Export_Handoff"];
         HelpMenu.Header = text["Menu_Help"];
-        ToolRailLabel.Text = text["Panel_Tools"];
-        PartToolButton.Content = text["PartTool_Name"];
         PartToolButton.ToolTip = text["PartTool_Tooltip"];
+        OpenToolbarButton.ToolTip = text["Menu_File_Open"];
+        SaveToolbarButton.ToolTip = text["Menu_File_Save"];
+        SaveAsToolbarButton.ToolTip = text["Menu_File_SaveAs"];
         PartCommitButton.Content = text["PartTool_Commit"];
         PartCancelButton.Content = text["PartTool_Cancel"];
         LocalizePhase4Tools();
-        LayersGroup.Header = text["Panel_Layers"];
-        PropertiesGroup.Header = text["Panel_Properties"];
         CanvasView.EmptyText = text["Canvas_NoDocument"];
         UpdateStatus();
         JapaneseMenuItem.IsChecked = text.Culture.Name == "ja-JP";

@@ -33,6 +33,11 @@
   <data name="PartTool_Status_Cancelled" xml:space="preserve"><value>Cancelled the uncommitted Part.</value></data>
   <data name="PartTool_Status_Committed" xml:space="preserve"><value>Created the Part. One Undo removes the whole creation.</value></data>
   <data name="Panel_Layers" xml:space="preserve"><value>Layers</value></data>
+  <data name="Panel_Parts" xml:space="preserve"><value>Parts</value></data>
+  <data name="Part_Add" xml:space="preserve"><value>Add with Part Tool</value></data>
+  <data name="Part_Delete" xml:space="preserve"><value>Delete selected Part</value></data>
+  <data name="Part_SemanticName" xml:space="preserve"><value>Semantic name</value></data>
+  <data name="Part_SemanticName_None" xml:space="preserve"><value>No semantic name</value></data>
   <data name="Panel_Properties" xml:space="preserve"><value>Properties</value></data>
   <data name="Canvas_NoDocument" xml:space="preserve"><value>Open an image to begin</value></data>
   <data name="Status_Ready" xml:space="preserve"><value>Ready</value></data>
@@ -82,6 +87,8 @@
   <data name="MaskTool_Status_Painting" xml:space="preserve"><value>Editing mask. Release to commit one action; Esc cancels it.</value></data>
   <data name="MaskTool_Status_Cancelled" xml:space="preserve"><value>Mask edit cancelled.</value></data>
   <data name="MaskTool_Status_Committed" xml:space="preserve"><value>Mask edit committed.</value></data>
+  <data name="MaskTool_Target" xml:space="preserve"><value>Mask: {0}</value></data>
+  <data name="MaskTool_Target_None" xml:space="preserve"><value>Mask: no Part selected</value></data>
   <data name="PatchTool_Name" xml:space="preserve"><value>Patch</value></data>
   <data name="PatchTool_Tooltip" xml:space="preserve"><value>Create and place a repair fragment from Original</value></data>
   <data name="PatchTool_Commit" xml:space="preserve"><value>Commit</value></data>
@@ -93,7 +100,7 @@
   <data name="PatchTool_Status_DrawingSource" xml:space="preserve"><value>Choosing source: {0} points. Press Enter or double-click to finish.</value></data>
   <data name="PatchTool_Status_NeedsThreePoints" xml:space="preserve"><value>A source needs at least 3 points ({0} now).</value></data>
   <data name="PatchTool_Status_InvalidSource" xml:space="preserve"><value>A patch source cannot be made from this region.</value></data>
-  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>Drag to place. Adjust scale and rotation in Properties, then commit.</value></data>
+  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>Drag to place. Adjust scale and rotation in the top tool options, then commit.</value></data>
   <data name="PatchTool_Status_Cancelled" xml:space="preserve"><value>Patch creation cancelled.</value></data>
   <data name="PatchTool_Status_Committed" xml:space="preserve"><value>Patch committed.</value></data>
   <data name="Properties_Apply" xml:space="preserve"><value>Apply</value></data>

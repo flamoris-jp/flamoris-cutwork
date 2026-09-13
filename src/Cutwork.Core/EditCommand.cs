@@ -27,6 +27,21 @@ public sealed class RenameLayer(Guid layerId, string name) : EditCommand
     }
 }
 
+public sealed class SetLayerSemanticName(Guid layerId, string? semanticName) : EditCommand
+{
+    internal override AppliedEdit? Apply(CutworkDocument document)
+    {
+        var layer = document.GetLayer(layerId);
+        var normalized = string.IsNullOrWhiteSpace(semanticName) ? null : semanticName.Trim();
+        var before = layer.SemanticName;
+        if (StringComparer.Ordinal.Equals(before, normalized)) return null;
+        layer.SemanticName = normalized;
+        return new(() => layer.SemanticName = before, () => layer.SemanticName = normalized,
+            layer, default, default,
+            128L + (before?.Length ?? 0) * 2L + (normalized?.Length ?? 0) * 2L);
+    }
+}
+
 public sealed class SetLayerVisibility(Guid layerId, bool visible) : EditCommand
 {
     internal override AppliedEdit? Apply(CutworkDocument document)

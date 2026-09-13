@@ -33,6 +33,11 @@
   <data name="PartTool_Status_Cancelled" xml:space="preserve"><value>未確定のパーツを取り消しました。</value></data>
   <data name="PartTool_Status_Committed" xml:space="preserve"><value>パーツを作成しました。元に戻す1回で作成全体を取り消せます。</value></data>
   <data name="Panel_Layers" xml:space="preserve"><value>レイヤー</value></data>
+  <data name="Panel_Parts" xml:space="preserve"><value>パーツ</value></data>
+  <data name="Part_Add" xml:space="preserve"><value>パーツツールで追加</value></data>
+  <data name="Part_Delete" xml:space="preserve"><value>選択中のパーツを削除</value></data>
+  <data name="Part_SemanticName" xml:space="preserve"><value>識別名</value></data>
+  <data name="Part_SemanticName_None" xml:space="preserve"><value>識別名なし</value></data>
   <data name="Panel_Properties" xml:space="preserve"><value>プロパティ</value></data>
   <data name="Canvas_NoDocument" xml:space="preserve"><value>画像を開いてください</value></data>
   <data name="Status_Ready" xml:space="preserve"><value>準備完了</value></data>
@@ -82,6 +87,8 @@
   <data name="MaskTool_Status_Painting" xml:space="preserve"><value>マスク編集中。離すと1操作として確定、Escで取り消します。</value></data>
   <data name="MaskTool_Status_Cancelled" xml:space="preserve"><value>マスク編集を取り消しました。</value></data>
   <data name="MaskTool_Status_Committed" xml:space="preserve"><value>マスク編集を確定しました。</value></data>
+  <data name="MaskTool_Target" xml:space="preserve"><value>マスク：{0}</value></data>
+  <data name="MaskTool_Target_None" xml:space="preserve"><value>マスク：パーツ未選択</value></data>
   <data name="PatchTool_Name" xml:space="preserve"><value>パッチ</value></data>
   <data name="PatchTool_Tooltip" xml:space="preserve"><value>元画像から補修片を作成して配置</value></data>
   <data name="PatchTool_Commit" xml:space="preserve"><value>確定</value></data>
@@ -93,7 +100,7 @@
   <data name="PatchTool_Status_DrawingSource" xml:space="preserve"><value>補修元を選択中：{0}点。Enterまたはダブルクリックで確定。</value></data>
   <data name="PatchTool_Status_NeedsThreePoints" xml:space="preserve"><value>補修元には3点以上必要です（現在{0}点）。</value></data>
   <data name="PatchTool_Status_InvalidSource" xml:space="preserve"><value>この範囲から補修元を作成できません。</value></data>
-  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>ドラッグで配置。プロパティで拡大率と回転を調整し、確定してください。</value></data>
+  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>ドラッグで配置。上のツールオプションで拡大率と回転を調整し、確定してください。</value></data>
   <data name="PatchTool_Status_Cancelled" xml:space="preserve"><value>パッチ作成を取り消しました。</value></data>
   <data name="PatchTool_Status_Committed" xml:space="preserve"><value>パッチを確定しました。</value></data>
   <data name="Properties_Apply" xml:space="preserve"><value>適用</value></data>

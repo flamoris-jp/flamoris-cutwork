@@ -2,12 +2,69 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Flamoris.Cutwork.App.Controls"
-        Width="1200"
-        Height="760"
-        MinWidth="800"
-        MinHeight="520"
+        Width="1240"
+        Height="780"
+        MinWidth="920"
+        MinHeight="560"
         Closing="MainWindow_Closing"
         Background="#202124">
+    <Window.Resources>
+        <Style x:Key="CommandIconButton" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="1" />
+            <Setter Property="Padding" Value="6" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFF0E6E9" />
+                    <Setter Property="BorderBrush" Value="#FFD20B3A" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ToolRailButton" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="Margin" Value="0,2" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="250" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFF0E6E9" />
+                    <Setter Property="BorderBrush" Value="#FFD6A6B2" />
+                </Trigger>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#FFFFE4EA" />
+                    <Setter Property="BorderBrush" Value="#FFD20B3A" />
+                    <Setter Property="BorderThickness" Value="2" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="PanelIconButton" TargetType="{x:Type Button}" BasedOn="{StaticResource CommandIconButton}">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="27" />
+            <Setter Property="Padding" Value="5" />
+        </Style>
+        <Style x:Key="DirectNameEditor" TargetType="{x:Type TextBox}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FFE7E7E7" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="2,1" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Style.Triggers>
+                <Trigger Property="IsReadOnly" Value="False">
+                    <Setter Property="Background" Value="#FF17181A" />
+                    <Setter Property="BorderBrush" Value="#FFD20B3A" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem x:Name="FileMenu">
@@ -37,15 +94,87 @@
             </MenuItem>
             <MenuItem x:Name="LayerMenu" />
             <MenuItem x:Name="ExportMenu">
-                <MenuItem x:Name="ExportCompositeMenuItem" IsEnabled="False"
-                          Click="ExportCompositeMenuItem_Click" />
-                <MenuItem x:Name="ExportHandoffMenuItem" IsEnabled="False"
-                          Click="ExportHandoffMenuItem_Click" />
+                <MenuItem x:Name="ExportCompositeMenuItem" IsEnabled="False" Click="ExportCompositeMenuItem_Click" />
+                <MenuItem x:Name="ExportHandoffMenuItem" IsEnabled="False" Click="ExportHandoffMenuItem_Click" />
             </MenuItem>
             <MenuItem x:Name="HelpMenu">
-                <MenuItem x:Name="DeveloperFixtureMenuItem" Visibility="Collapsed" IsEnabled="False" Click="DeveloperFixture_Click" />
+                <MenuItem x:Name="DeveloperFixtureMenuItem" Visibility="Collapsed" IsEnabled="False"
+                          Click="DeveloperFixture_Click" />
             </MenuItem>
         </Menu>
+
+        <ToolBarTray DockPanel.Dock="Top" IsLocked="True" Background="#FFF6F3F1">
+            <ToolBar Background="#FFF6F3F1" BorderBrush="#FFD8D3D0" BorderThickness="0,0,0,1">
+                <Button x:Name="OpenToolbarButton" Style="{StaticResource CommandIconButton}"
+                        Click="OpenMenuItem_Click">
+                    <Image Source="{StaticResource Icon.Open}" />
+                </Button>
+                <Button x:Name="SaveToolbarButton" Style="{StaticResource CommandIconButton}"
+                        IsEnabled="False" Click="SaveMenuItem_Click">
+                    <Image Source="{StaticResource Icon.Save}" />
+                </Button>
+                <Button x:Name="SaveAsToolbarButton" Style="{StaticResource CommandIconButton}"
+                        IsEnabled="False" Click="SaveAsMenuItem_Click">
+                    <Image Source="{StaticResource Icon.SaveAs}" />
+                </Button>
+                <Separator />
+                <Button x:Name="UndoToolbarButton" Style="{StaticResource CommandIconButton}">
+                    <Image Source="{StaticResource Icon.Undo}" />
+                </Button>
+                <Button x:Name="RedoToolbarButton" Style="{StaticResource CommandIconButton}">
+                    <Image Source="{StaticResource Icon.Redo}" />
+                </Button>
+                <Separator />
+
+                <StackPanel x:Name="MaskPropertiesPanel" Orientation="Horizontal" Visibility="Collapsed"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="MaskTargetText" VerticalAlignment="Center" FontWeight="SemiBold"
+                               Foreground="#FFD20B3A" Margin="4,0,10,0" />
+                    <TextBlock x:Name="MaskRadiusLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBox x:Name="MaskRadiusEditor" Width="48" Margin="0,0,8,0" />
+                    <RadioButton x:Name="MaskAddRadio" GroupName="MaskPolarity" VerticalAlignment="Center"
+                                 Margin="0,0,8,0" Checked="MaskPolarity_Checked" />
+                    <RadioButton x:Name="MaskEraseRadio" GroupName="MaskPolarity" VerticalAlignment="Center"
+                                 Margin="0,0,8,0" Checked="MaskPolarity_Checked" />
+                    <Button x:Name="MaskApplyButton" Padding="8,2" Click="MaskApply_Click" />
+                </StackPanel>
+                <StackPanel x:Name="PatchPropertiesPanel" Orientation="Horizontal" Visibility="Collapsed"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="PatchPositionLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="PatchXEditor" Width="48" Margin="0,0,3,0" />
+                    <TextBox x:Name="PatchYEditor" Width="48" Margin="0,0,8,0" />
+                    <TextBlock x:Name="PatchScaleLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBox x:Name="PatchScaleEditor" Width="48" Margin="0,0,8,0" />
+                    <TextBlock x:Name="PatchRotationLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBox x:Name="PatchRotationEditor" Width="48" Margin="0,0,8,0" />
+                    <Button x:Name="PatchApplyButton" Padding="8,2" Click="PatchApply_Click" />
+                </StackPanel>
+                <StackPanel x:Name="ClonePropertiesPanel" Orientation="Horizontal" Visibility="Collapsed"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="CloneRadiusLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="CloneRadiusEditor" Width="48" Margin="0,0,8,0" />
+                    <Button x:Name="CloneApplyButton" Padding="8,2" Click="CloneApply_Click" />
+                </StackPanel>
+                <StackPanel x:Name="FinishingPropertiesPanel" Orientation="Horizontal" Visibility="Collapsed"
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="FinishingRadiusLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="FinishingRadiusEditor" Width="48" Margin="0,0,8,0" />
+                    <TextBlock x:Name="FinishingStrengthLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBox x:Name="FinishingStrengthEditor" Width="48" Margin="0,0,8,0" />
+                    <Button x:Name="FinishingApplyButton" Padding="8,2" Click="FinishingApply_Click" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="PartCommitButton" Margin="4,0" Padding="8,2" Visibility="Collapsed"
+                            Click="PartCommit_Click" />
+                    <Button x:Name="PartCancelButton" Margin="0,0,4,0" Padding="8,2" Visibility="Collapsed"
+                            Click="PartCancel_Click" />
+                    <Button x:Name="PatchCommitButton" Margin="4,0" Padding="8,2" Visibility="Collapsed"
+                            Click="PatchCommit_Click" />
+                    <Button x:Name="PatchCancelButton" Margin="0,0,4,0" Padding="8,2" Visibility="Collapsed"
+                            Click="PatchCancel_Click" />
+                </StackPanel>
+            </ToolBar>
+        </ToolBarTray>
 
         <Border DockPanel.Dock="Bottom" Background="#292B2F" Padding="8,5">
             <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
@@ -53,73 +182,39 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="72" />
+                <ColumnDefinition Width="58" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="286" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="#2B2D31" BorderBrush="#45474D" BorderThickness="0,0,1,0">
-                <StackPanel Margin="4,10">
-                    <TextBlock x:Name="ToolRailLabel"
-                               Margin="0,0,0,8"
-                               Foreground="#B8BBC2"
-                               TextAlignment="Center"
-                               TextWrapping="Wrap" />
-                    <ToggleButton x:Name="PartToolButton"
-                                  MinHeight="42"
-                                  Padding="3"
-                                  IsEnabled="False"
-                                  Click="PartTool_Click" />
-                    <ToggleButton x:Name="MaskToolButton"
-                                  MinHeight="42"
-                                  Margin="0,4,0,0"
-                                  Padding="3"
-                                  IsEnabled="False"
-                                  Click="MaskTool_Click" />
-                    <ToggleButton x:Name="PatchToolButton"
-                                  MinHeight="42"
-                                  Margin="0,4,0,0"
-                                  Padding="3"
-                                  IsEnabled="False"
-                                  Click="PatchTool_Click" />
-                    <ToggleButton x:Name="CloneToolButton"
-                                  MinHeight="42"
-                                  Margin="0,4,0,0"
-                                  Padding="3"
-                                  IsEnabled="False"
-                                  Click="CloneTool_Click" />
-                    <ToggleButton x:Name="BlurToolButton"
-                                  MinHeight="42"
-                                  Margin="0,4,0,0"
-                                  Padding="3"
-                                  IsEnabled="False"
-                                  Click="BlurTool_Click" />
-                    <ToggleButton x:Name="SmudgeToolButton"
-                                  MinHeight="42"
-                                  Margin="0,4,0,0"
-                                  Padding="3"
-                                  IsEnabled="False"
-                                  Click="SmudgeTool_Click" />
-                    <Button x:Name="PartCommitButton"
-                            Margin="0,10,0,0"
-                            Padding="3"
-                            Visibility="Collapsed"
-                            Click="PartCommit_Click" />
-                    <Button x:Name="PartCancelButton"
-                            Margin="0,4,0,0"
-                            Padding="3"
-                            Visibility="Collapsed"
-                            Click="PartCancel_Click" />
-                    <Button x:Name="PatchCommitButton"
-                            Margin="0,10,0,0"
-                            Padding="3"
-                            Visibility="Collapsed"
-                            Click="PatchCommit_Click" />
-                    <Button x:Name="PatchCancelButton"
-                            Margin="0,4,0,0"
-                            Padding="3"
-                            Visibility="Collapsed"
-                            Click="PatchCancel_Click" />
+            <Border Grid.Column="0" Background="#FFF6F3F1" BorderBrush="#FFD8D3D0" BorderThickness="0,0,1,0">
+                <StackPanel Margin="6,8" HorizontalAlignment="Center">
+                    <ToggleButton x:Name="PartToolButton" Style="{StaticResource ToolRailButton}"
+                                  IsEnabled="False" Click="PartTool_Click">
+                        <Image Source="{StaticResource Icon.Part}" />
+                    </ToggleButton>
+                    <Separator Margin="3,4" Background="#FFD8D3D0" />
+                    <ToggleButton x:Name="MaskToolButton" Style="{StaticResource ToolRailButton}"
+                                  IsEnabled="False" Click="MaskTool_Click">
+                        <Image Source="{StaticResource Icon.Mask}" />
+                    </ToggleButton>
+                    <Separator Margin="3,4" Background="#FFD8D3D0" />
+                    <ToggleButton x:Name="PatchToolButton" Style="{StaticResource ToolRailButton}"
+                                  IsEnabled="False" Click="PatchTool_Click">
+                        <Image Source="{StaticResource Icon.Patch}" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="CloneToolButton" Style="{StaticResource ToolRailButton}"
+                                  IsEnabled="False" Click="CloneTool_Click">
+                        <Image Source="{StaticResource Icon.Clone}" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="BlurToolButton" Style="{StaticResource ToolRailButton}"
+                                  IsEnabled="False" Click="BlurTool_Click">
+                        <Image Source="{StaticResource Icon.Blur}" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="SmudgeToolButton" Style="{StaticResource ToolRailButton}"
+                                  IsEnabled="False" Click="SmudgeTool_Click">
+                        <Image Source="{StaticResource Icon.Smudge}" />
+                    </ToggleButton>
                 </StackPanel>
             </Border>
 
@@ -128,83 +223,99 @@
             <Grid Grid.Column="2" Background="#2B2D31">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="*" />
+                    <RowDefinition Height="1.15*" />
                 </Grid.RowDefinitions>
-                <GroupBox x:Name="LayersGroup" Margin="8,8,8,4" Foreground="#E7E7E7">
+                <GroupBox x:Name="PartsGroup" Margin="8,8,8,4" Foreground="#E7E7E7">
                     <DockPanel>
-                        <WrapPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
-                            <Button x:Name="LayerUpButton" Margin="2" Padding="6,3" Click="LayerUp_Click" />
-                            <Button x:Name="LayerDownButton" Margin="2" Padding="6,3" Click="LayerDown_Click" />
-                            <Button x:Name="LayerDeleteButton" Margin="2" Padding="6,3" Click="LayerDelete_Click" />
-                        </WrapPanel>
-                        <ListBox x:Name="LayerList" Background="#202124" Foreground="#E7E7E7"
-                                 SelectionChanged="LayerSelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
+                            <DockPanel>
+                                <TextBlock x:Name="SemanticNameLabel" VerticalAlignment="Center" Margin="2,0,6,0" />
+                                <Button x:Name="SemanticNameApplyButton" DockPanel.Dock="Right"
+                                        Padding="7,2" Click="SemanticNameApply_Click" />
+                                <ComboBox x:Name="SemanticNameEditor" IsEditable="True" Margin="0,0,5,0"
+                                          IsTextSearchEnabled="True" />
+                            </DockPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button x:Name="PartAddButton" Style="{StaticResource PanelIconButton}"
+                                        Click="PartAdd_Click">
+                                    <Image Source="{StaticResource Icon.Add}" />
+                                </Button>
+                                <Button x:Name="PartDeleteButton" Style="{StaticResource PanelIconButton}"
+                                        Click="PartDelete_Click">
+                                    <Image Source="{StaticResource Icon.Delete}" />
+                                </Button>
+                            </StackPanel>
+                        </StackPanel>
+                        <ListBox x:Name="PartList" Background="#202124" Foreground="#E7E7E7"
+                                 SelectionChanged="PartSelectionChanged"
+                                 PreviewKeyDown="PartList_PreviewKeyDown"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Margin="2,5">
+                                    <Grid Margin="2,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
                                         <CheckBox IsChecked="{Binding Visible, Mode=OneWay}" Tag="{Binding Id}"
-                                                  ToolTip="{Binding VisibilityLabel}" Click="LayerVisibility_Click" Margin="0,0,8,0" />
-                                        <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="170" ToolTip="{Binding KindLabel}" />
-                                    </StackPanel>
+                                                  ToolTip="{Binding VisibilityLabel}" Click="LayerVisibility_Click"
+                                                  Margin="0,0,7,0" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}"
+                                                 Tag="{Binding Id}" IsReadOnly="True"
+                                                 ToolTip="{Binding SemanticName}"
+                                                 Style="{StaticResource DirectNameEditor}"
+                                                 PreviewMouseDoubleClick="DirectName_PreviewMouseDoubleClick"
+                                                 PreviewKeyDown="DirectName_PreviewKeyDown"
+                                                 LostKeyboardFocus="DirectName_LostKeyboardFocus" />
+                                    </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
                     </DockPanel>
                 </GroupBox>
-                <GroupBox x:Name="PropertiesGroup" Grid.Row="1" Margin="8,4,8,8" Foreground="#E7E7E7">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="6">
-                            <TextBlock x:Name="SelectedKindText" FontWeight="SemiBold" Margin="0,0,0,8" />
-                            <TextBlock x:Name="LayerNameLabel" />
-                            <TextBox x:Name="LayerNameEditor" Margin="0,4,0,4" />
-                            <Button x:Name="LayerRenameButton" HorizontalAlignment="Left" Padding="8,3" Click="LayerRename_Click" />
-                            <TextBlock x:Name="LayerBoundsText" Margin="0,12,0,8" TextWrapping="Wrap" />
-                            <TextBlock x:Name="LayerKindDescription" TextWrapping="Wrap" />
-                            <StackPanel x:Name="MaskPropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                                <Separator />
-                                <TextBlock x:Name="MaskRadiusLabel" Margin="0,8,0,0" />
-                                <TextBox x:Name="MaskRadiusEditor" Margin="0,4,0,6" />
-                                <StackPanel Orientation="Horizontal">
-                                    <RadioButton x:Name="MaskAddRadio" GroupName="MaskPolarity"
-                                                 Margin="0,0,12,0" Checked="MaskPolarity_Checked" />
-                                    <RadioButton x:Name="MaskEraseRadio" GroupName="MaskPolarity"
-                                                 Checked="MaskPolarity_Checked" />
-                                </StackPanel>
-                                <Button x:Name="MaskApplyButton" HorizontalAlignment="Left" Margin="0,8,0,0"
-                                        Padding="8,3" Click="MaskApply_Click" />
-                            </StackPanel>
-                            <StackPanel x:Name="PatchPropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                                <Separator />
-                                <TextBlock x:Name="PatchPositionLabel" Margin="0,8,0,0" />
-                                <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
-                                    <TextBox x:Name="PatchXEditor" Width="82" Margin="0,0,6,0" />
-                                    <TextBox x:Name="PatchYEditor" Width="82" />
-                                </StackPanel>
-                                <TextBlock x:Name="PatchScaleLabel" />
-                                <TextBox x:Name="PatchScaleEditor" Margin="0,4,0,6" />
-                                <TextBlock x:Name="PatchRotationLabel" />
-                                <TextBox x:Name="PatchRotationEditor" Margin="0,4,0,6" />
-                                <Button x:Name="PatchApplyButton" HorizontalAlignment="Left" Padding="8,3"
-                                        Click="PatchApply_Click" />
-                            </StackPanel>
-                            <StackPanel x:Name="ClonePropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                                <Separator />
-                                <TextBlock x:Name="CloneRadiusLabel" Margin="0,8,0,0" />
-                                <TextBox x:Name="CloneRadiusEditor" Margin="0,4,0,6" />
-                                <Button x:Name="CloneApplyButton" HorizontalAlignment="Left" Padding="8,3"
-                                        Click="CloneApply_Click" />
-                            </StackPanel>
-                            <StackPanel x:Name="FinishingPropertiesPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                                <Separator />
-                                <TextBlock x:Name="FinishingRadiusLabel" Margin="0,8,0,0" />
-                                <TextBox x:Name="FinishingRadiusEditor" Margin="0,4,0,6" />
-                                <TextBlock x:Name="FinishingStrengthLabel" />
-                                <TextBox x:Name="FinishingStrengthEditor" Margin="0,4,0,6" />
-                                <Button x:Name="FinishingApplyButton" HorizontalAlignment="Left" Padding="8,3"
-                                        Click="FinishingApply_Click" />
-                            </StackPanel>
+
+                <GroupBox x:Name="LayersGroup" Grid.Row="1" Margin="8,4,8,8" Foreground="#E7E7E7">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button x:Name="LayerUpButton" Style="{StaticResource PanelIconButton}" Click="LayerUp_Click">
+                                <Image Source="{StaticResource Icon.Up}" />
+                            </Button>
+                            <Button x:Name="LayerDownButton" Style="{StaticResource PanelIconButton}" Click="LayerDown_Click">
+                                <Image Source="{StaticResource Icon.Down}" />
+                            </Button>
+                            <Button x:Name="LayerDeleteButton" Style="{StaticResource PanelIconButton}" Click="LayerDelete_Click">
+                                <Image Source="{StaticResource Icon.Delete}" />
+                            </Button>
                         </StackPanel>
-                    </ScrollViewer>
+                        <ListBox x:Name="LayerList" Background="#202124" Foreground="#E7E7E7"
+                                 SelectionChanged="LayerSelectionChanged"
+                                 PreviewKeyDown="LayerList_PreviewKeyDown"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="2,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding Visible, Mode=OneWay}" Tag="{Binding Id}"
+                                                  ToolTip="{Binding VisibilityLabel}" Click="LayerVisibility_Click"
+                                                  Margin="0,0,7,0" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding DisplayName, Mode=OneWay}"
+                                                 Tag="{Binding Id}" IsReadOnly="True"
+                                                 ToolTip="{Binding KindLabel}"
+                                                 Style="{StaticResource DirectNameEditor}"
+                                                 PreviewMouseDoubleClick="DirectName_PreviewMouseDoubleClick"
+                                                 PreviewKeyDown="DirectName_PreviewKeyDown"
+                                                 LostKeyboardFocus="DirectName_LostKeyboardFocus" />
+                                        <TextBlock Grid.Column="2" Text="{Binding KindLabel}" Foreground="#FF9EA2A8"
+                                                   FontSize="10" VerticalAlignment="Center" Margin="5,0,0,0" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
                 </GroupBox>
             </Grid>
         </Grid>
