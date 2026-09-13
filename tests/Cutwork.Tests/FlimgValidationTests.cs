@@ -96,6 +96,24 @@ public sealed class FlimgValidationTests
     }
 
     [TestMethod]
+    public void V2BaseRejectsPartOrderAndRepairOwnershipMetadata()
+    {
+        AssertRejected(FlimgError.InvalidLayer, MutateManifest(root =>
+        {
+            var baseLayer = root["layers"]!.AsArray()
+                .Single(node => node!["kind"]!.GetValue<string>() == "base");
+            baseLayer!["partOrder"] = 0;
+        }));
+        AssertRejected(FlimgError.InvalidLayer, MutateManifest(root =>
+        {
+            var layers = root["layers"]!.AsArray();
+            var baseLayer = layers.Single(node => node!["kind"]!.GetValue<string>() == "base");
+            var part = layers.First(node => node!["kind"]!.GetValue<string>() == "part");
+            baseLayer!["ownerPartId"] = part!["id"]!.GetValue<string>();
+        }));
+    }
+
+    [TestMethod]
     public void MissingAssetAndChecksumMismatchAreRejected()
     {
         var valid = Entries(FlimgRoundTripTests.Write(FlimgRoundTripTests.FullDocument()));

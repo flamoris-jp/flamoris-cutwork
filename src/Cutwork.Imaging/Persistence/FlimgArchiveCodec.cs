@@ -193,7 +193,7 @@ public sealed class FlimgArchiveCodec
             switch (layer.Kind)
             {
                 case "base":
-                    RequireNoAsset(layer);
+                    RequireBaseOnlyFields(layer);
                     if (bounds != DocumentRect.FromSize(dimensions))
                         throw new FlimgException(FlimgError.InvalidLayer);
                     restored.Add(new BaseLayerRestoreState(id, layer.Name,
@@ -499,8 +499,9 @@ public sealed class FlimgArchiveCodec
         return expected;
     }
 
-    private static void RequireNoAsset(FlimgLayer layer)
+    private static void RequireBaseOnlyFields(FlimgLayer layer)
     {
+        // Base accepts common metadata only. Every kind-specific v1/v2 field is invalid.
         if (layer.Asset is not null || layer.Sha256 is not null || layer.Transform is not null
             || layer.SourcePolygon is not null || layer.PartOrder.HasValue
             || layer.OwnerPartId is not null) throw new FlimgException(FlimgError.InvalidLayer);
