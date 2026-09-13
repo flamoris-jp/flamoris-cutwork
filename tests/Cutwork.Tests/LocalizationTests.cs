@@ -42,4 +42,17 @@ public sealed class LocalizationTests
         }
         foreach (var error in Enum.GetValues<EditError>()) Assert.IsTrue(keys.Contains($"EditError_{error}"));
     }
+
+    [TestMethod]
+    public void CloneModeLabelsAreLocalizedInBothCatalogs()
+    {
+        var japanese = new LocalizationService();
+        var english = new LocalizationService();
+        english.SetCulture(new CultureInfo("en-US"));
+
+        Assert.AreEqual("固定クローン", japanese["CloneTool_Mode_Fixed"]);
+        Assert.AreEqual("移動クローン", japanese["CloneTool_Mode_Offset"]);
+        Assert.AreEqual("Fixed Clone", english["CloneTool_Mode_Fixed"]);
+        Assert.AreEqual("Offset Clone", english["CloneTool_Mode_Offset"]);
+    }
 }

@@ -38,23 +38,120 @@ public sealed class CloneRepairTests
     }
 
     [TestMethod]
+    public void FixedMappingKeepsSourceCenterAndPreservesBrushLocalOffset()
+    {
+        var mapping = new CloneStrokeMapping(CloneSamplingMode.Fixed,
+            new(2.5, 3.5), new(10.5, 11.5));
+
+        Assert.AreEqual(new DocumentPoint(2.5, 3.5), mapping.SourceCenterFor(new(14.5, 15.5)));
+        Assert.AreEqual(new DocumentPoint(1.5, 4.5),
+            mapping.SourceFor(new(13.5, 16.5), new(14.5, 15.5)));
+    }
+
+    [TestMethod]
+    public void FixedKernelStampsSameSourceNeighborhoodAtSeparatedDestinations()
+    {
+        var original = Original(14, 5);
+        var repair = new RepairLayer(new(0, 0, 14, 5), new byte[14 * 5 * 4]);
+        var mapping = new CloneStrokeMapping(CloneSamplingMode.Fixed,
+            new(2.5, 2.5), new(6.5, 2.5));
+        var result = new CloneRepairKernel().CreatePatch(original, repair,
+            [new DocumentPoint(6.5, 2.5), new DocumentPoint(10.5, 2.5)], mapping, 1.5);
+
+        for (var localX = -1; localX <= 1; localX++)
+        {
+            AssertPixel(result, 6 + localX, 2, original.PixelAt(2 + localX, 2));
+            AssertPixel(result, 10 + localX, 2, original.PixelAt(2 + localX, 2));
+        }
+    }
+
+    [TestMethod]
+    public void FixedKernelClipsSourceAndDestinationBoundaries()
+    {
+        var original = Original(8, 4);
+        var repair = new RepairLayer(new(0, 0, 1, 1), new byte[4]);
+        var sourceClipped = new CloneRepairKernel().CreatePatch(original, repair,
+            [new DocumentPoint(4.5, 1.5)],
+            new(CloneSamplingMode.Fixed, new(0.5, 0.5), new(4.5, 1.5)), 1.5);
+        AssertPixel(sourceClipped, 4, 1, original.PixelAt(0, 0));
+        AssertPixel(sourceClipped, 3, 1, new byte[4]);
+
+        var destinationClipped = new CloneRepairKernel().CreatePatch(original, repair,
+            [new DocumentPoint(0.5, 0.5)],
+            new(CloneSamplingMode.Fixed, new(4.5, 2.5), new(0.5, 0.5)), 2);
+        Assert.AreEqual(new DocumentRect(0, 0, 3, 3), destinationClipped.Region);
+        AssertPixel(destinationClipped, 0, 0, original.PixelAt(4, 2));
+    }
+
+    [TestMethod]
+    public void ModeSwitchIsSessionOnlyAndCannotChangeAnActiveStroke()
+    {
+        var session = OpenSession(20, 10);
+        session.MarkSaved();
+        var kernel = new RecordingCloneKernel();
+        var tool = new CloneRepairController(session, kernel);
+        tool.Activate();
+        var documentRevision = session.Document!.Revision;
+        var sessionRevision = session.CurrentRevision;
+
+        tool.SetSamplingMode(CloneSamplingMode.Offset);
+        tool.SetSamplingMode(CloneSamplingMode.Fixed);
+        Assert.AreEqual(documentRevision, session.Document.Revision);
+        Assert.AreEqual(sessionRevision, session.CurrentRevision);
+        Assert.AreEqual(0, session.UndoCount);
+        Assert.IsFalse(session.IsDirty);
+
+        tool.SetRadius(0.5);
+        tool.PointerDown(new(2.5, 2.5), 1, CanvasModifiers.Alt);
+        tool.PointerDown(new(8.5, 2.5), 1, CanvasModifiers.None);
+        Assert.AreEqual(CloneSamplingMode.Fixed, tool.Snapshot().StrokeSamplingMode);
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            tool.SetSamplingMode(CloneSamplingMode.Offset));
+        tool.PointerMove(new(10.5, 2.5), CanvasModifiers.None);
+        Assert.IsTrue(kernel.Mappings.All(mapping => mapping.Mode == CloneSamplingMode.Fixed));
+        tool.PointerUp(new(10.5, 2.5), CanvasPointerButton.Left, CanvasModifiers.None);
+    }
+
+    [TestMethod]
+    public void SampledSourceOverlayCenterMatchesTheActiveMode()
+    {
+        var (_, fixedTool) = CreateTool(20, 10);
+        fixedTool.SetRadius(0.5);
+        fixedTool.PointerDown(new(2.5, 2.5), 1, CanvasModifiers.Alt);
+        fixedTool.PointerDown(new(8.5, 2.5), 1, CanvasModifiers.None);
+        fixedTool.PointerMove(new(11.5, 3.5), CanvasModifiers.None);
+        Assert.AreEqual(new DocumentPoint(2.5, 2.5), fixedTool.Snapshot().SampleSource);
+
+        var (_, offsetTool) = CreateTool(20, 10);
+        offsetTool.SetSamplingMode(CloneSamplingMode.Offset);
+        offsetTool.SetRadius(0.5);
+        offsetTool.PointerDown(new(2.5, 2.5), 1, CanvasModifiers.Alt);
+        offsetTool.PointerDown(new(8.5, 2.5), 1, CanvasModifiers.None);
+        offsetTool.PointerMove(new(11.5, 3.5), CanvasModifiers.None);
+        Assert.AreEqual(new DocumentPoint(5.5, 3.5), offsetTool.Snapshot().SampleSource);
+    }
+
+    [TestMethod]
     public void StrokeOffsetIsFixedAndSecondStrokeRecomputesIt()
     {
         var session = OpenSession(20, 20);
         var kernel = new RecordingCloneKernel();
         var tool = new CloneRepairController(session, kernel);
         tool.Activate();
+        tool.SetSamplingMode(CloneSamplingMode.Offset);
         tool.PointerDown(new(4, 5), 1, CanvasModifiers.Alt);
 
         tool.PointerDown(new(10, 12), 1, CanvasModifiers.None);
         tool.PointerMove(new(14, 15), CanvasModifiers.None);
-        Assert.IsTrue(kernel.Offsets.All(value => value == new DocumentPoint(-6, -7)));
+        Assert.IsTrue(kernel.Mappings.All(value => value.Mode == CloneSamplingMode.Offset
+            && value.Offset == new DocumentPoint(-6, -7)));
         tool.PointerUp(new(14, 15), CanvasPointerButton.Left, CanvasModifiers.None);
 
-        kernel.Offsets.Clear();
+        kernel.Mappings.Clear();
         tool.PointerDown(new(8, 9), 1, CanvasModifiers.None);
         tool.PointerMove(new(11, 10), CanvasModifiers.None);
-        Assert.IsTrue(kernel.Offsets.All(value => value == new DocumentPoint(-4, -4)));
+        Assert.IsTrue(kernel.Mappings.All(value => value.Mode == CloneSamplingMode.Offset
+            && value.Offset == new DocumentPoint(-4, -4)));
         Assert.AreEqual(new DocumentPoint(4, 5), tool.Snapshot().SourceAnchor);
         tool.PointerUp(new(11, 10), CanvasPointerButton.Left, CanvasModifiers.None);
     }
@@ -65,7 +162,7 @@ public sealed class CloneRepairTests
         var original = Original(7, 7);
         var repair = new RepairLayer(new(0, 0, 7, 7), new byte[7 * 7 * 4]);
         var result = new CloneRepairKernel().CreatePatch(original, repair,
-            [new DocumentPoint(3.5, 3.5)], new(-2, -1), 1);
+            [new DocumentPoint(3.5, 3.5)], OffsetMapping(new(1.5, 2.5), new(3.5, 3.5)), 1);
 
         Assert.AreEqual(new DocumentRect(2, 2, 3, 3), result.Region);
         AssertPixel(result, 3, 3, original.PixelAt(1, 2));
@@ -81,7 +178,7 @@ public sealed class CloneRepairTests
         var original = Original(5, 4);
         var repair = new RepairLayer(new(0, 0, 1, 1), new byte[4]);
         var result = new CloneRepairKernel().CreatePatch(original, repair,
-            [new DocumentPoint(0.25, 0.25)], new(-1, -1), 2);
+            [new DocumentPoint(0.25, 0.25)], OffsetMapping(new(-0.75, -0.75), new(0.25, 0.25)), 2);
 
         Assert.AreEqual(new DocumentRect(0, 0, 3, 3), result.Region);
         AssertPixel(result, 0, 0, new byte[4]);
@@ -96,7 +193,8 @@ public sealed class CloneRepairTests
         var repair = new RepairLayer(new(0, 0, 6, 2), existing);
         var beforeOriginal = original.CopyPixelBytes();
         var result = new CloneRepairKernel().CreatePatch(original, repair,
-            [new DocumentPoint(3.5, 0.5), new DocumentPoint(4.5, 0.5)], new(-3, 0), 0.5);
+            [new DocumentPoint(3.5, 0.5), new DocumentPoint(4.5, 0.5)],
+            OffsetMapping(new(0.5, 0.5), new(3.5, 0.5)), 0.5);
 
         AssertPixel(result, 3, 0, original.PixelAt(0, 0));
         AssertPixel(result, 4, 0, original.PixelAt(1, 0));
@@ -112,7 +210,8 @@ public sealed class CloneRepairTests
             .Select(index => new DocumentPoint(index + .5, index + .5)).ToArray();
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
-            new CloneRepairKernel().CreatePatch(original, repair, samples, new(0, 0), 1));
+            new CloneRepairKernel().CreatePatch(original, repair, samples,
+                OffsetMapping(new(0, 0), new(0, 0)), 1));
     }
 
     [TestMethod]
@@ -183,6 +282,23 @@ public sealed class CloneRepairTests
         var repair = session.Document!.Layers.OfType<RepairLayer>().Single();
         Assert.AreEqual(part.Id, repair.OwnerPartId);
         Assert.AreEqual(repair.Id, session.SelectedLayerId);
+    }
+
+    [TestMethod]
+    public void OffsetCloneUsesTheSameSelectedPartOwnership()
+    {
+        var (session, tool) = CreateTool(24, 16);
+        var part = new PartLayer(new(0, 0, 4, 4), Enumerable.Repeat((byte)255, 16).ToArray(), "Ear");
+        session.Execute(new AddLayer(part));
+        session.SelectLayer(part.Id);
+        tool.SetSamplingMode(CloneSamplingMode.Offset);
+        tool.SetRadius(0.5);
+        tool.PointerDown(new(3.5, 3.5), 1, CanvasModifiers.Alt);
+        tool.PointerDown(new(12.5, 8.5), 1, CanvasModifiers.None);
+        tool.PointerUp(new(12.5, 8.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        Assert.AreEqual(part.Id,
+            session.Document!.Layers.OfType<RepairLayer>().Single().OwnerPartId);
     }
 
     [TestMethod]
@@ -332,6 +448,7 @@ public sealed class CloneRepairTests
         var session = OpenSession(8, 4);
         var beforeOriginal = session.Document!.Original.CopyPixelBytes();
         var tool = new CloneRepairController(session, new CloneRepairKernel());
+        tool.SetSamplingMode(CloneSamplingMode.Offset);
         tool.SetRadius(0.5);
         var router = new CanvasInputRouter(session);
         router.SetActiveTool(tool);
@@ -363,6 +480,36 @@ public sealed class CloneRepairTests
         Assert.AreEqual(source.Y, actualSource.Value.Y, 1e-9);
         Assert.AreEqual(1, session.UndoCount);
         CollectionAssert.AreEqual(beforeOriginal, session.Document.Original.CopyPixelBytes());
+    }
+
+    [TestMethod]
+    public void FixedCloneMappingIsViewportIndependentAndWritesOnlyTheDestinationDab()
+    {
+        var session = OpenSession(8, 4);
+        var beforeOriginal = session.Document!.Original.CopyPixelBytes();
+        var tool = new CloneRepairController(session, new CloneRepairKernel());
+        tool.SetRadius(0.5);
+        var router = new CanvasInputRouter(session);
+        router.SetActiveTool(tool);
+        session.Viewport.Fit(session.Document.Dimensions, new(160, 80));
+
+        var source = new DocumentPoint(1.5, 1.5);
+        router.PointerDown(new(session.Viewport.DocumentToViewport(source),
+            CanvasPointerButton.Left, 1, CanvasModifiers.Alt));
+        session.Viewport.PanBy(17, -9);
+        session.Viewport.ZoomAt(new(80, 40), 1.75);
+        var destination = new DocumentPoint(6.5, 2.5);
+        router.PointerDown(new(session.Viewport.DocumentToViewport(destination),
+            CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        router.PointerUp(new(session.Viewport.DocumentToViewport(destination),
+            CanvasPointerButton.Left, 1, CanvasModifiers.None));
+
+        var repair = session.Document.Layers.OfType<RepairLayer>().Single();
+        Assert.AreEqual(new DocumentRect(6, 2, 1, 1), repair.Bounds);
+        CollectionAssert.AreEqual(session.Document.Original.PixelAt(1, 1).ToArray(),
+            repair.PixelAt(6, 2).ToArray());
+        CollectionAssert.AreEqual(beforeOriginal, session.Document.Original.CopyPixelBytes());
+        Assert.AreEqual(1, session.UndoCount);
     }
 
     private static void DrainPending(ICanvasDeferredWork tool)
@@ -431,6 +578,9 @@ public sealed class CloneRepairTests
         return new("clone-fixture", new(width, height), width * 4, pixels);
     }
 
+    private static CloneStrokeMapping OffsetMapping(DocumentPoint source, DocumentPoint destination) =>
+        new(CloneSamplingMode.Offset, source, destination);
+
     private static void AssertPixel(CloneRepairPatch patch, int x, int y, ReadOnlySpan<byte> expected)
     {
         var offset = ((y - patch.Region.Y) * patch.Region.Width + x - patch.Region.X) * 4;
@@ -439,12 +589,12 @@ public sealed class CloneRepairTests
 
     private sealed class RecordingCloneKernel : ICloneRepairKernel
     {
-        public List<DocumentPoint> Offsets { get; } = [];
+        public List<CloneStrokeMapping> Mappings { get; } = [];
         public List<int> BatchSizes { get; } = [];
         public CloneRepairPatch CreatePatch(OriginalAsset original, RepairLayer target,
-            IReadOnlyList<DocumentPoint> destinationSamples, DocumentPoint offset, double radius)
+            IReadOnlyList<DocumentPoint> destinationSamples, CloneStrokeMapping mapping, double radius)
         {
-            Offsets.Add(offset);
+            Mappings.Add(mapping);
             BatchSizes.Add(destinationSamples.Count);
             var point = destinationSamples[0];
             var x = Math.Clamp((int)Math.Floor(point.X), 0, original.Dimensions.Width - 1);

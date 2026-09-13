@@ -26,6 +26,9 @@ public partial class MainWindow
         PatchScaleLabel.Text = text["PatchTool_Scale"];
         PatchRotationLabel.Text = text["PatchTool_Rotation"];
         PatchApplyButton.Content = text["Properties_Apply"];
+        CloneModeLabel.Text = text["CloneTool_Mode"];
+        CloneFixedModeRadio.Content = text["CloneTool_Mode_Fixed"];
+        CloneOffsetModeRadio.Content = text["CloneTool_Mode_Offset"];
         CloneRadiusLabel.Text = text["CloneTool_Radius"];
         CloneApplyButton.Content = text["Properties_Apply"];
         FinishingRadiusLabel.Text = text["FinishingTool_Radius"];
@@ -116,6 +119,15 @@ public partial class MainWindow
         }
         try { _cloneTool.SetRadius(radius); }
         catch (ArgumentOutOfRangeException) { ShowToolInputError(); }
+        CanvasView.Focus();
+    }
+
+    private void CloneSamplingMode_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_refreshingToolProperties || _cloneTool is null
+            || _cloneTool.State != CloneRepairState.Idle) return;
+        _cloneTool.SetSamplingMode(ReferenceEquals(sender, CloneOffsetModeRadio)
+            ? CloneSamplingMode.Offset : CloneSamplingMode.Fixed);
         CanvasView.Focus();
     }
 
@@ -217,6 +229,10 @@ public partial class MainWindow
 
             ClonePropertiesPanel.Visibility = _cloneTool.IsActive
                 ? Visibility.Visible : Visibility.Collapsed;
+            CloneFixedModeRadio.IsChecked = _cloneTool.SamplingMode == CloneSamplingMode.Fixed;
+            CloneOffsetModeRadio.IsChecked = _cloneTool.SamplingMode == CloneSamplingMode.Offset;
+            CloneFixedModeRadio.IsEnabled = _cloneTool.State == CloneRepairState.Idle;
+            CloneOffsetModeRadio.IsEnabled = _cloneTool.State == CloneRepairState.Idle;
             CloneRadiusEditor.Text = _cloneTool.Radius.ToString("0.##", LocalizationService.Current.Culture);
 
             var finishing = _blurTool.IsActive ? _blurTool : _smudgeTool.IsActive ? _smudgeTool : null;
