@@ -19,7 +19,9 @@ public sealed class CloneRepairTests
         session.Viewport.ZoomAt(new(100, 80), 2.5);
 
         Assert.AreEqual(new DocumentPoint(2.25, 3.75), source);
-        Assert.AreEqual(source, tool.Snapshot().SourceAnchor);
+        Assert.IsNotNull(tool.Snapshot().SourceAnchor);
+        Assert.AreEqual(source.X, tool.Snapshot().SourceAnchor!.Value.X, 1e-9);
+        Assert.AreEqual(source.Y, tool.Snapshot().SourceAnchor!.Value.Y, 1e-9);
         Assert.AreEqual(0, session.UndoCount);
         Assert.IsFalse(session.IsDirty);
     }
