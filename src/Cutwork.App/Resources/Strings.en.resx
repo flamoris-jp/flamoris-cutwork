@@ -108,6 +108,9 @@
   <data name="Tool_InvalidNumber" xml:space="preserve"><value>The value is invalid or outside its range. Keep the patch inside the image and scale between 1–1000%.</value></data>
   <data name="CloneTool_Name" xml:space="preserve"><value>Clone</value></data>
   <data name="CloneTool_Tooltip" xml:space="preserve"><value>Paint repair pixels from a point in Original</value></data>
+  <data name="CloneTool_Mode" xml:space="preserve"><value>Clone mode</value></data>
+  <data name="CloneTool_Mode_Fixed" xml:space="preserve"><value>Fixed Clone</value></data>
+  <data name="CloneTool_Mode_Offset" xml:space="preserve"><value>Offset Clone</value></data>
   <data name="CloneTool_Radius" xml:space="preserve"><value>Radius (image px)</value></data>
   <data name="CloneTool_Status_Ready" xml:space="preserve"><value>Alt+click a source, then drag to repair. Wheel forward = smaller; backward = larger.</value></data>
   <data name="CloneTool_Status_SourceRequired" xml:space="preserve"><value>Alt+click to choose a clone source first.</value></data>

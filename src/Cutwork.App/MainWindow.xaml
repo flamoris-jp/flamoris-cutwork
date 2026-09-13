@@ -153,7 +153,14 @@
                 </StackPanel>
                 <StackPanel x:Name="ClonePropertiesPanel" Orientation="Horizontal" Visibility="Collapsed"
                             VerticalAlignment="Center">
-                    <TextBlock x:Name="CloneRadiusLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBlock x:Name="CloneModeLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <RadioButton x:Name="CloneFixedModeRadio" GroupName="CloneSamplingMode"
+                                 VerticalAlignment="Center" Margin="0,0,8,0"
+                                 Checked="CloneSamplingMode_Checked" />
+                    <RadioButton x:Name="CloneOffsetModeRadio" GroupName="CloneSamplingMode"
+                                 VerticalAlignment="Center" Margin="0,0,12,0"
+                                 Checked="CloneSamplingMode_Checked" />
+                    <TextBlock x:Name="CloneRadiusLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
                     <TextBox x:Name="CloneRadiusEditor" Width="48" Margin="0,0,8,0" />
                     <Button x:Name="CloneApplyButton" Padding="8,2" Click="CloneApply_Click" />
                 </StackPanel>

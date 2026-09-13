@@ -6,13 +6,15 @@ namespace Flamoris.Cutwork.Imaging;
 public sealed class CloneRepairKernel : ICloneRepairKernel
 {
     public CloneRepairPatch CreatePatch(OriginalAsset original, RepairLayer target,
-        IReadOnlyList<DocumentPoint> destinationSamples, DocumentPoint offset, double radius)
+        IReadOnlyList<DocumentPoint> destinationSamples, CloneStrokeMapping mapping, double radius)
     {
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(destinationSamples);
-        if (!double.IsFinite(offset.X) || !double.IsFinite(offset.Y))
-            throw new ArgumentOutOfRangeException(nameof(offset));
+        if (!Enum.IsDefined(mapping.Mode)
+            || !double.IsFinite(mapping.SourceAnchor.X) || !double.IsFinite(mapping.SourceAnchor.Y)
+            || !double.IsFinite(mapping.DestinationAnchor.X) || !double.IsFinite(mapping.DestinationAnchor.Y))
+            throw new ArgumentOutOfRangeException(nameof(mapping));
         if (!double.IsFinite(radius) || radius <= 0) throw new ArgumentOutOfRangeException(nameof(radius));
         if (destinationSamples.Count == 0) return default;
         if (destinationSamples.Count > StrokeSampler.MaximumBatchSamples)
@@ -29,29 +31,32 @@ public sealed class CloneRepairKernel : ICloneRepairKernel
         {
             var centerX = x + 0.5;
             var centerY = y + 0.5;
-            var covered = false;
-            for (var sampleIndex = 0; sampleIndex < destinationSamples.Count; sampleIndex++)
+            DocumentPoint? coveringSample = null;
+            // A batch represents sequential dabs. The last covering dab wins, matching the
+            // order in which separate batches are applied while keeping work bounded to the ROI.
+            for (var sampleIndex = destinationSamples.Count - 1; sampleIndex >= 0; sampleIndex--)
             {
                 var sample = destinationSamples[sampleIndex];
                 var dx = centerX - sample.X;
                 var dy = centerY - sample.Y;
                 if (dx * dx + dy * dy <= radiusSquared)
                 {
-                    covered = true;
+                    coveringSample = sample;
                     break;
                 }
             }
-            if (!covered) continue;
+            if (coveringSample is not { } destinationSample) continue;
 
-            var sourceX = (int)Math.Floor(centerX + offset.X);
-            var sourceY = (int)Math.Floor(centerY + offset.Y);
+            var sourcePoint = mapping.SourceFor(new(centerX, centerY), destinationSample);
+            var sourceX = (int)Math.Floor(sourcePoint.X);
+            var sourceY = (int)Math.Floor(sourcePoint.Y);
             if ((uint)sourceX >= (uint)original.Dimensions.Width
                 || (uint)sourceY >= (uint)original.Dimensions.Height) continue;
             var destination = pixels.AsSpan(
                 checked(((y - region.Y) * region.Width + x - region.X) * 4), 4);
-            var source = original.PixelAt(sourceX, sourceY);
-            if (source.SequenceEqual(destination)) continue;
-            source.CopyTo(destination);
+            var sourcePixel = original.PixelAt(sourceX, sourceY);
+            if (sourcePixel.SequenceEqual(destination)) continue;
+            sourcePixel.CopyTo(destination);
             changed = true;
         }
 
