@@ -90,7 +90,7 @@ Archive entries are read directly; they are never extracted to the filesystem. A
 
 ## Version dispatch
 
-The container is dispatched by integer `schemaVersion`. The registry has exactly one implementation in Phase 7: v1. Unknown older or future versions produce a stable unsupported-version error. No speculative v2 migration exists.
+The container is dispatched by integer `schemaVersion`. v1 is frozen and remains readable through an explicit deterministic migration. Current writers emit [v2](flimg-schema-v2.md); unknown versions produce a stable unsupported-version error.
 
 ## Save and session boundary
 

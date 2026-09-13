@@ -71,7 +71,7 @@ public partial class MainWindow
             var text = LocalizationService.Current;
             var document = _session.Document;
             var layerRows = document?.Layers.Select(layer => new LayerRow(layer.Id,
-                DisplayName(layer, text), text[$"LayerKind_{layer.Kind}"], layer.Visible,
+                DisplayName(layer, text), LayerKindLabel(document, layer, text), layer.Visible,
                 text["Layer_Visible"])).ToArray() ?? [];
             var partRows = PartLayerProjection.Create(document).Select(part => new PartRow(part.Id,
                 DisplayName(part, text), part.SemanticName ?? text["Part_SemanticName_None"],
@@ -114,6 +114,15 @@ public partial class MainWindow
 
     private static string DisplayName(Layer layer, LocalizationService text) =>
         string.IsNullOrEmpty(layer.Name) ? text[$"LayerKind_{layer.Kind}"] : layer.Name;
+
+    private static string LayerKindLabel(CutworkDocument document, Layer layer,
+        LocalizationService text)
+    {
+        if (layer is RepairLayer { OwnerPartId: { } ownerPartId }
+            && document.GetLayer(ownerPartId) is PartLayer owner)
+            return string.Format(text.Culture, text["Layer_RepairOwner"], DisplayName(owner, text));
+        return text[$"LayerKind_{layer.Kind}"];
+    }
 
     private void PartSelectionChanged(object sender, SelectionChangedEventArgs e)
     {

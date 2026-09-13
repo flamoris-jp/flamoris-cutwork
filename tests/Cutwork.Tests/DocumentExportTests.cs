@@ -105,6 +105,9 @@ public sealed class DocumentExportTests
 
         var repair = document.Layers.OfType<RepairLayer>().Single();
         var repairJson = layers.Single(layer => layer.GetProperty("id").GetString() == repair.Id.ToString("D"));
+        Assert.AreEqual(repair.OwnerPartId?.ToString("D"),
+            repairJson.GetProperty("ownerPartId").GetString());
+        Assert.AreEqual(part.PartOrder, partJson.GetProperty("partOrder").GetInt32());
         CollectionAssert.AreEqual(repair.CopyPixels(repair.Bounds), DecodeEntry(
             entries[repairJson.GetProperty("asset").GetString()!], repair.Bounds));
     }

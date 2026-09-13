@@ -105,13 +105,15 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         }
 
         _transaction = _session.BeginTransaction();
-        _repair = _session.SelectedLayerId is { } selected
-            && document.GetLayer(selected) is RepairLayer existing ? existing : null;
+        var selectedLayer = _session.SelectedLayerId is { } selected
+            ? document.GetLayer(selected) : null;
+        _repair = selectedLayer as RepairLayer;
         if (_repair is null)
         {
             var x = Math.Clamp((int)Math.Floor(point.X), 0, document.Dimensions.Width - 1);
             var y = Math.Clamp((int)Math.Floor(point.Y), 0, document.Dimensions.Height - 1);
-            _repair = new RepairLayer(new DocumentRect(x, y, 1, 1), new byte[4]);
+            _repair = new RepairLayer(new DocumentRect(x, y, 1, 1), new byte[4],
+                ownerPartId: (selectedLayer as PartLayer)?.Id);
             _createdRepair = true;
             _transaction.Apply(new AddLayer(_repair));
         }

@@ -169,6 +169,23 @@ public sealed class CloneRepairTests
     }
 
     [TestMethod]
+    public void NewRepairSelectedFromPartRetainsSemanticOwner()
+    {
+        var (session, tool) = CreateTool(24, 16);
+        var part = new PartLayer(new(0, 0, 4, 4), Enumerable.Repeat((byte)255, 16).ToArray(), "Face");
+        session.Execute(new AddLayer(part));
+        session.SelectLayer(part.Id);
+        tool.SetRadius(1.5);
+        tool.PointerDown(new(3.5, 3.5), 1, CanvasModifiers.Alt);
+        tool.PointerDown(new(12.5, 8.5), 1, CanvasModifiers.None);
+        tool.PointerUp(new(12.5, 8.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        var repair = session.Document!.Layers.OfType<RepairLayer>().Single();
+        Assert.AreEqual(part.Id, repair.OwnerPartId);
+        Assert.AreEqual(repair.Id, session.SelectedLayerId);
+    }
+
+    [TestMethod]
     public void EscapeAndLostCaptureRestoreExactExistingRepairBytesAndBounds()
     {
         VerifyCancellation((tool) => tool.KeyDown(CanvasToolKey.Escape, CanvasModifiers.None));

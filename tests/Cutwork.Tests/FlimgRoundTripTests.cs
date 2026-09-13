@@ -55,8 +55,11 @@ public sealed class FlimgRoundTripTests
             Assert.AreEqual(expected.SemanticName, actual.SemanticName);
             Assert.AreEqual(expected.Visible, actual.Visible);
             if (expected is PartLayer expectedPart)
+            {
+                Assert.AreEqual(expectedPart.PartOrder, ((PartLayer)actual).PartOrder);
                 CollectionAssert.AreEqual(expectedPart.CopyMask(expectedPart.Bounds),
                     ((PartLayer)actual).CopyMask(actual.Bounds));
+            }
             if (expected is PatchLayer expectedPatch)
             {
                 var actualPatch = (PatchLayer)actual;
@@ -67,8 +70,11 @@ public sealed class FlimgRoundTripTests
                     actualPatch.SourcePolygon.ToArray());
             }
             if (expected is RepairLayer expectedRepair)
+            {
+                Assert.AreEqual(expectedRepair.OwnerPartId, ((RepairLayer)actual).OwnerPartId);
                 CollectionAssert.AreEqual(expectedRepair.CopyPixels(expectedRepair.Bounds),
                     ((RepairLayer)actual).CopyPixels(actual.Bounds));
+            }
         }
         CollectionAssert.AreEqual(document.Original.CopyPixelBytes(), loaded.Original.CopyPixelBytes());
         CollectionAssert.AreEqual(before, after);
@@ -85,6 +91,7 @@ public sealed class FlimgRoundTripTests
         var bytes = Write(sourceSession.Document);
 
         var json = ReadManifest(bytes);
+        StringAssert.Contains(json, "\"schemaVersion\": 2");
         Assert.IsFalse(json.Contains("history", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(json.Contains("viewport", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(json.Contains("selection", StringComparison.OrdinalIgnoreCase));
@@ -121,18 +128,20 @@ public sealed class FlimgRoundTripTests
         var partBounds = new DocumentRect(1, 1, 3, 2);
         var patchBounds = new DocumentRect(2, 2, 2, 2);
         var transform = new PatchTransform(4, 3, 1.25, 15);
+        var firstPartId = Guid.NewGuid();
+        var secondPartId = Guid.NewGuid();
         return CutworkDocument.Restore(Guid.NewGuid(), original,
         [
-            new PartLayerRestoreState(Guid.NewGuid(), "eye / left", "eye_left", true,
-                partBounds, new byte[] { 0, 17, 128, 200, 254, 255 }),
-            new PartLayerRestoreState(Guid.NewGuid(), "eye / left", null, false,
-                new(5, 1, 2, 2), new byte[] { 255, 64, 32, 0 }),
+            new PartLayerRestoreState(firstPartId, "eye / left", "eye_left", true,
+                partBounds, new byte[] { 0, 17, 128, 200, 254, 255 }, 0),
+            new PartLayerRestoreState(secondPartId, "eye / left", null, false,
+                new(5, 1, 2, 2), new byte[] { 255, 64, 32, 0 }, 1),
             new BaseLayerRestoreState(Guid.NewGuid(), "base", null, true),
             new PatchLayerRestoreState(Guid.NewGuid(), "patch", "underpaint", true,
                 patchBounds, Pixels(2, 2, 29, transparent: true), transform,
                 [new(2, 2), new(4, 2), new(4, 4), new(2, 4)]),
             new RepairLayerRestoreState(Guid.NewGuid(), "repair", "paint", false,
-                new(0, 4, 3, 2), Pixels(3, 2, 83, transparent: true)),
+                new(0, 4, 3, 2), Pixels(3, 2, 83, transparent: true), firstPartId),
         ]);
     }
 

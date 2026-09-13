@@ -61,6 +61,7 @@
   <data name="LayerKind_Part" xml:space="preserve"><value>Part</value></data>
   <data name="LayerKind_Patch" xml:space="preserve"><value>Patch</value></data>
   <data name="LayerKind_Repair" xml:space="preserve"><value>Repair / Paint</value></data>
+  <data name="Layer_RepairOwner" xml:space="preserve"><value>Repair / Paint · {0}</value></data>
   <data name="Properties_NoSelection" xml:space="preserve"><value>Select a layer</value></data>
   <data name="Layer_Bounds" xml:space="preserve"><value>Bounds: X {0}, Y {1} / {2} × {3} px</value></data>
   <data name="LayerDescription_Base" xml:space="preserve"><value>Fixed layer derived from Original. Cannot be moved or deleted. Hiding a Part does not close its hole.</value></data>

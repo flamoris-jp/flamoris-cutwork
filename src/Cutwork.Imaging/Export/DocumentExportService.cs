@@ -61,6 +61,8 @@ public sealed class DocumentExportService
                 Kind = layer.Kind.ToString().ToLowerInvariant(),
                 Name = layer.Name,
                 SemanticName = layer.SemanticName,
+                PartOrder = (layer as PartLayer)?.PartOrder,
+                OwnerPartId = (layer as RepairLayer)?.OwnerPartId?.ToString("D").ToLowerInvariant(),
                 Visible = layer.Visible,
                 Bounds = Rect(layer.Bounds),
             };
@@ -171,6 +173,10 @@ public sealed class DocumentExportService
         public string Kind { get; set; } = "";
         public string Name { get; set; } = "";
         public string? SemanticName { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? PartOrder { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? OwnerPartId { get; set; }
         public bool Visible { get; set; }
         public HandoffRect Bounds { get; set; } = new();
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

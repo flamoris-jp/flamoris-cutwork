@@ -23,7 +23,9 @@ public sealed class Phase91WorkflowTests
         var drawOrderAfter = session.Document.Layers.OfType<PartLayer>().Select(part => part.Id).ToArray();
         CollectionAssert.AreEqual(partOrderBefore, partOrderAfter);
         CollectionAssert.AreNotEqual(drawOrderBefore, drawOrderAfter);
-        CollectionAssert.AreEqual(partOrderAfter.OrderBy(id => id).ToArray(), partOrderAfter);
+        CollectionAssert.AreEqual(new[] { first.Id, second.Id, third.Id }, partOrderAfter);
+        CollectionAssert.AreEqual(new[] { 0, 1, 2 },
+            PartLayerProjection.Create(session.Document).Select(part => part.PartOrder).ToArray());
     }
 
     [TestMethod]
@@ -65,23 +67,36 @@ public sealed class Phase91WorkflowTests
     }
 
     [TestMethod]
-    public void PartDeleteRemovesOwnedMaskAndUndoRestoresIdentityAndPixels()
+    public void PartDeleteCascadesOwnedRepairsAndUndoRestoresIdentityOrderOwnershipAndPixels()
     {
         var session = EditHistoryTests.Open();
         var part = new PartLayer(new DocumentRect(0, 0, 2, 2), [10, 20, 30, 40], "Face");
         session.Execute(new AddLayer(part));
+        var ownedPixels = Enumerable.Range(0, 16).Select(value => (byte)value).ToArray();
+        var owned = new RepairLayer(new(0, 0, 2, 2), ownedPixels,
+            ownerPartId: part.Id);
+        var global = new RepairLayer(new(0, 0, 1, 1), new byte[4]);
+        session.Execute(new AddLayer(owned), new AddLayer(global));
         session.Open(session.Document!);
         session.SelectLayer(part.Id);
         var mask = part.CopyMask(part.Bounds);
+        var layerOrder = session.Document!.Layers.Select(layer => layer.Id).ToArray();
 
         session.Execute(new DeleteLayer(part.Id));
         Assert.IsFalse(session.Document!.Layers.Any(layer => layer.Id == part.Id));
+        Assert.IsFalse(session.Document.Layers.Any(layer => layer.Id == owned.Id));
+        Assert.IsTrue(session.Document.Layers.Any(layer => layer.Id == global.Id));
         Assert.AreEqual(session.Document.Base.Id, session.SelectedLayerId);
         session.Undo();
 
         var restored = (PartLayer)session.Document.GetLayer(part.Id);
         Assert.AreSame(part, restored);
         CollectionAssert.AreEqual(mask, restored.CopyMask(restored.Bounds));
+        var restoredRepair = (RepairLayer)session.Document.GetLayer(owned.Id);
+        Assert.AreSame(owned, restoredRepair);
+        Assert.AreEqual(part.Id, restoredRepair.OwnerPartId);
+        CollectionAssert.AreEqual(ownedPixels, restoredRepair.CopyPixels(restoredRepair.Bounds));
+        CollectionAssert.AreEqual(layerOrder, session.Document.Layers.Select(layer => layer.Id).ToArray());
         Assert.AreEqual(part.Id, session.SelectedLayerId);
     }
 

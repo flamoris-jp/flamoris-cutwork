@@ -1,6 +1,6 @@
 # Phase 7 persistence and export
 
-Phase 7 connects the authored `CutworkDocument` to durable project files and deterministic output. The schema authority is [`.flimg` schema v1](flimg-schema-v1.md).
+Phase 7 connects the authored `CutworkDocument` to durable project files and deterministic output. The current schema authority is [`.flimg` schema v2](flimg-schema-v2.md); [v1](flimg-schema-v1.md) remains a supported read format.
 
 ## Runtime boundaries
 
@@ -19,7 +19,7 @@ Save and Save As update the project path and saved revision only after the atomi
 File provides:
 
 - Open Image for PNG/JPEG import into a new unsaved project;
-- Open Project for `.flimg` v1;
+- Open Project for `.flimg` v1 or v2;
 - Save, using the current project path or Save As when none exists; and
 - Save As, selecting a new `.flimg` path.
 

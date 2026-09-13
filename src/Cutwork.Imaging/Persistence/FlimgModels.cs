@@ -75,6 +75,10 @@ internal sealed class FlimgLayer
     [JsonRequired]
     public string Name { get; set; } = "";
     public string? SemanticName { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? PartOrder { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwnerPartId { get; set; }
     [JsonRequired]
     public bool Visible { get; set; }
     [JsonRequired]

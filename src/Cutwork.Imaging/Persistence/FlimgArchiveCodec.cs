@@ -11,7 +11,8 @@ namespace Flamoris.Cutwork.Imaging.Persistence;
 
 public sealed class FlimgArchiveCodec
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
+    private const int LegacySchemaVersion = 1;
     public const int MaximumDimension = 16_384;
     public const long MaximumPixels = 100_000_000;
     public const int MaximumEntries = 4_096;
@@ -67,6 +68,7 @@ public sealed class FlimgArchiveCodec
             switch (layer)
             {
                 case PartLayer part:
+                    item.PartOrder = part.PartOrder;
                     item.Asset = LayerPath(layer.Id, "mask.png");
                     var mask = PngAssetCodec.EncodeGray8(
                         new(part.Bounds.Width, part.Bounds.Height), part.CopyMask(part.Bounds));
@@ -93,6 +95,8 @@ public sealed class FlimgArchiveCodec
                     assets.Add((item.Asset, patchBytes));
                     break;
                 case RepairLayer repair:
+                    item.OwnerPartId = repair.OwnerPartId is { } ownerPartId
+                        ? FormatId(ownerPartId) : null;
                     item.Asset = LayerPath(layer.Id, "pixels.png");
                     var repairBytes = PngAssetCodec.EncodeBgra32(
                         new(repair.Bounds.Width, repair.Bounds.Height), repair.CopyPixels(repair.Bounds));
@@ -131,7 +135,7 @@ public sealed class FlimgArchiveCodec
             var manifestBytes = ReadEntry(manifestEntry, MaximumManifestBytes, readBudget);
             ValidateNoDuplicateJsonProperties(manifestBytes);
             var schemaVersion = ReadEnvelope(manifestBytes);
-            if (schemaVersion != SchemaVersion)
+            if (schemaVersion is not LegacySchemaVersion and not SchemaVersion)
                 throw new FlimgException(FlimgError.UnsupportedVersion);
             FlimgManifest manifest;
             try
@@ -144,7 +148,7 @@ public sealed class FlimgArchiveCodec
             {
                 throw new FlimgException(FlimgError.MalformedManifest, exception);
             }
-            return ReadV1(manifest, entries, readBudget);
+            return ReadManifest(manifest, schemaVersion, entries, readBudget);
         }
         catch (FlimgException) { throw; }
         catch (InvalidDataException exception)
@@ -154,7 +158,7 @@ public sealed class FlimgArchiveCodec
         finally { bufferedInput?.Dispose(); }
     }
 
-    private static CutworkDocument ReadV1(FlimgManifest manifest,
+    private static CutworkDocument ReadManifest(FlimgManifest manifest, int schemaVersion,
         IReadOnlyDictionary<string, ZipArchiveEntry> entries, ArchiveReadBudget readBudget)
     {
         if (manifest.Format != "flamoris-cutwork" || manifest.Canvas is null
@@ -180,6 +184,9 @@ public sealed class FlimgArchiveCodec
         {
             if (layer is null || layer.Bounds is null || layer.Name is null)
                 throw new FlimgException(FlimgError.MalformedManifest);
+            if (schemaVersion == LegacySchemaVersion
+                && (layer.PartOrder.HasValue || layer.OwnerPartId is not null))
+                throw new FlimgException(FlimgError.InvalidLayer);
             var id = ParseId(layer.Id);
             if (!identities.Add(id)) throw new FlimgException(FlimgError.InvalidIdentity);
             var bounds = ParseRect(layer.Bounds, dimensions);
@@ -193,16 +200,20 @@ public sealed class FlimgArchiveCodec
                         layer.SemanticName, layer.Visible));
                     break;
                 case "part":
-                    if (layer.Transform is not null || layer.SourcePolygon is not null)
+                    if (layer.Transform is not null || layer.SourcePolygon is not null
+                        || layer.OwnerPartId is not null
+                        || schemaVersion == SchemaVersion && !layer.PartOrder.HasValue)
                         throw new FlimgException(FlimgError.InvalidLayer);
                     var maskPath = RequireAssetPath(layer, id, "mask.png");
                     referenced.Add(maskPath);
                     var maskPng = ReadRequiredAsset(entries, maskPath, layer.Sha256, readBudget);
                     restored.Add(new PartLayerRestoreState(id, layer.Name, layer.SemanticName,
                         layer.Visible, bounds, PngAssetCodec.DecodeGray8(maskPng,
-                            new(bounds.Width, bounds.Height))));
+                            new(bounds.Width, bounds.Height)), layer.PartOrder));
                     break;
                 case "patch":
+                    if (layer.PartOrder.HasValue || layer.OwnerPartId is not null)
+                        throw new FlimgException(FlimgError.InvalidLayer);
                     var patchPath = RequireAssetPath(layer, id, "pixels.png");
                     referenced.Add(patchPath);
                     if (layer.Transform is null || layer.SourcePolygon is null)
@@ -229,14 +240,16 @@ public sealed class FlimgArchiveCodec
                         layer.Visible, bounds, pixels, transform, polygon));
                     break;
                 case "repair":
-                    if (layer.Transform is not null || layer.SourcePolygon is not null)
+                    if (layer.Transform is not null || layer.SourcePolygon is not null
+                        || layer.PartOrder.HasValue)
                         throw new FlimgException(FlimgError.InvalidLayer);
                     var repairPath = RequireAssetPath(layer, id, "pixels.png");
                     referenced.Add(repairPath);
                     var repairPng = ReadRequiredAsset(entries, repairPath, layer.Sha256, readBudget);
                     restored.Add(new RepairLayerRestoreState(id, layer.Name, layer.SemanticName,
                         layer.Visible, bounds, PngAssetCodec.DecodeBgra32(repairPng,
-                            new(bounds.Width, bounds.Height))));
+                            new(bounds.Width, bounds.Height)), layer.OwnerPartId is { } ownerPartId
+                                ? ParseId(ownerPartId) : null));
                     break;
                 default:
                     throw new FlimgException(FlimgError.InvalidLayer);
@@ -489,7 +502,8 @@ public sealed class FlimgArchiveCodec
     private static void RequireNoAsset(FlimgLayer layer)
     {
         if (layer.Asset is not null || layer.Sha256 is not null || layer.Transform is not null
-            || layer.SourcePolygon is not null) throw new FlimgException(FlimgError.InvalidLayer);
+            || layer.SourcePolygon is not null || layer.PartOrder.HasValue
+            || layer.OwnerPartId is not null) throw new FlimgException(FlimgError.InvalidLayer);
     }
 
     private static PatchTransform ParseTransform(FlimgTransform value)

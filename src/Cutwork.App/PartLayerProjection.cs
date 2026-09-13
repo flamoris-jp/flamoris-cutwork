@@ -9,7 +9,10 @@ namespace Flamoris.Cutwork.App;
 public static class PartLayerProjection
 {
     public static IReadOnlyList<PartLayer> Create(CutworkDocument? document) =>
-        document?.Layers.OfType<PartLayer>().OrderBy(layer => layer.Id).ToArray() ?? [];
+        document?.Layers.OfType<PartLayer>()
+            .OrderBy(layer => layer.PartOrder)
+            .ThenBy(layer => layer.Id)
+            .ToArray() ?? [];
 
     public static IReadOnlyList<string> CanonicalSemanticNames { get; } =
     [

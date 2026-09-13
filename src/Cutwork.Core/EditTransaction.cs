@@ -87,7 +87,7 @@ public sealed class EditTransaction : IDisposable
     {
         var dirty = default(DocumentRect); var holes = default(DocumentRect);
         foreach (var edit in edits) { dirty = dirty.Union(edit.Dirty); holes = holes.Union(edit.Holes); }
-        document.Publish(dirty, holes, edits.Select(edit => edit.Layer));
+        document.Publish(dirty, holes, edits.SelectMany(edit => edit.TouchedLayers()));
     }
 }
 

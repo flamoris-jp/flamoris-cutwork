@@ -120,7 +120,7 @@ Phase 3–6 hands-on behavior is documented in
 [the Mask/Patch guide](docs/phase4-mask-patch.md),
 [the Clone Repair guide](docs/phase5-clone-repair.md), and
 [the repair finishing guide](docs/phase6-repair-finishing.md). Phase 7 project and
-export contracts are defined by [the `.flimg` v1 schema](docs/flimg-schema-v1.md)
+export contracts are defined by [the current `.flimg` v2 schema](docs/flimg-schema-v2.md)
 and [the persistence/export guide](docs/phase7-persistence-export.md).
 
 ## Repository layout
