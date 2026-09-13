@@ -108,6 +108,9 @@
   <data name="Tool_InvalidNumber" xml:space="preserve"><value>入力値が範囲外か、数値として読み取れません。パッチは画像内、拡大率は1〜1000%にしてください。</value></data>
   <data name="CloneTool_Name" xml:space="preserve"><value>クローン</value></data>
   <data name="CloneTool_Tooltip" xml:space="preserve"><value>元画像の一点を基準に補修画素を描画</value></data>
+  <data name="CloneTool_Mode" xml:space="preserve"><value>クローンモード</value></data>
+  <data name="CloneTool_Mode_Fixed" xml:space="preserve"><value>固定クローン</value></data>
+  <data name="CloneTool_Mode_Offset" xml:space="preserve"><value>移動クローン</value></data>
   <data name="CloneTool_Radius" xml:space="preserve"><value>半径（画像px）</value></data>
   <data name="CloneTool_Status_Ready" xml:space="preserve"><value>Alt+クリックで複製元を指定し、ドラッグで補修します。ホイール前＝小さく、後ろ＝大きく。</value></data>
   <data name="CloneTool_Status_SourceRequired" xml:space="preserve"><value>先にAlt+クリックで複製元を指定してください。</value></data>
