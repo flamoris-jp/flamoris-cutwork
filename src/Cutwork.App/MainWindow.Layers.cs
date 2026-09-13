@@ -192,7 +192,7 @@ public partial class MainWindow
         }
     }
 
-    private static void BeginSelectedNameEdit(ListBox list)
+    private void BeginSelectedNameEdit(ListBox list)
     {
         if (list.ItemContainerGenerator.ContainerFromItem(list.SelectedItem) is not DependencyObject item)
             return;
@@ -228,8 +228,12 @@ public partial class MainWindow
         if (sender is TextBox { IsReadOnly: false } editor) CommitNameEdit(editor);
     }
 
-    private static void BeginNameEdit(TextBox editor)
+    private void BeginNameEdit(TextBox editor)
     {
+        // Read-only rows may show a localized kind fallback. Editing always begins from the
+        // authored name so merely pressing Enter cannot persist localized UI prose.
+        if (editor.Tag is Guid id && _session.Document is { } document)
+            editor.Text = document.GetLayer(id).Name;
         editor.IsReadOnly = false;
         editor.Focus();
         editor.SelectAll();
