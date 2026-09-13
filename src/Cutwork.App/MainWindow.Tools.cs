@@ -11,15 +11,10 @@ public partial class MainWindow
     private void LocalizePhase4Tools()
     {
         var text = LocalizationService.Current;
-        MaskToolButton.Content = text["MaskTool_Name"];
         MaskToolButton.ToolTip = text["MaskTool_Tooltip"];
-        PatchToolButton.Content = text["PatchTool_Name"];
         PatchToolButton.ToolTip = text["PatchTool_Tooltip"];
-        CloneToolButton.Content = text["CloneTool_Name"];
         CloneToolButton.ToolTip = text["CloneTool_Tooltip"];
-        BlurToolButton.Content = text["BlurTool_Name"];
         BlurToolButton.ToolTip = text["BlurTool_Tooltip"];
-        SmudgeToolButton.Content = text["SmudgeTool_Name"];
         SmudgeToolButton.ToolTip = text["SmudgeTool_Tooltip"];
         PatchCommitButton.Content = text["PatchTool_Commit"];
         PatchCancelButton.Content = text["PatchTool_Cancel"];
@@ -193,6 +188,7 @@ public partial class MainWindow
             ? Visibility.Visible : Visibility.Collapsed;
         RefreshToolProperties(_session.Document?.Layers.FirstOrDefault(
             layer => layer.Id == _session.SelectedLayerId));
+        RefreshLayerPanel();
     }
 
     private void RefreshToolProperties(Layer? selected)
@@ -202,7 +198,7 @@ public partial class MainWindow
         _refreshingToolProperties = true;
         try
         {
-            MaskPropertiesPanel.Visibility = selected is PartLayer ? Visibility.Visible : Visibility.Collapsed;
+            MaskPropertiesPanel.Visibility = _maskTool.IsActive ? Visibility.Visible : Visibility.Collapsed;
             MaskRadiusEditor.Text = _maskTool.Radius.ToString("0.##", LocalizationService.Current.Culture);
             MaskAddRadio.IsChecked = _maskTool.PrimaryPolarity == MaskPolarity.Add;
             MaskEraseRadio.IsChecked = _maskTool.PrimaryPolarity == MaskPolarity.Erase;

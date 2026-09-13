@@ -169,6 +169,23 @@ public sealed class CloneRepairTests
     }
 
     [TestMethod]
+    public void NewRepairSelectedFromPartRetainsSemanticOwner()
+    {
+        var (session, tool) = CreateTool(24, 16);
+        var part = new PartLayer(new(0, 0, 4, 4), Enumerable.Repeat((byte)255, 16).ToArray(), "Face");
+        session.Execute(new AddLayer(part));
+        session.SelectLayer(part.Id);
+        tool.SetRadius(1.5);
+        tool.PointerDown(new(3.5, 3.5), 1, CanvasModifiers.Alt);
+        tool.PointerDown(new(12.5, 8.5), 1, CanvasModifiers.None);
+        tool.PointerUp(new(12.5, 8.5), CanvasPointerButton.Left, CanvasModifiers.None);
+
+        var repair = session.Document!.Layers.OfType<RepairLayer>().Single();
+        Assert.AreEqual(part.Id, repair.OwnerPartId);
+        Assert.AreEqual(repair.Id, session.SelectedLayerId);
+    }
+
+    [TestMethod]
     public void EscapeAndLostCaptureRestoreExactExistingRepairBytesAndBounds()
     {
         VerifyCancellation((tool) => tool.KeyDown(CanvasToolKey.Escape, CanvasModifiers.None));
@@ -307,6 +324,45 @@ public sealed class CloneRepairTests
             denseRepair.CopyPixels(denseRepair.Bounds));
         Assert.AreEqual(1, sparse.Session.UndoCount);
         Assert.AreEqual(1, dense.Session.UndoCount);
+    }
+
+    [TestMethod]
+    public void ViewportMappedStrokeUsesFixedDocumentOffsetAndWritesOnlyExpectedPixels()
+    {
+        var session = OpenSession(8, 4);
+        var beforeOriginal = session.Document!.Original.CopyPixelBytes();
+        var tool = new CloneRepairController(session, new CloneRepairKernel());
+        tool.SetRadius(0.5);
+        var router = new CanvasInputRouter(session);
+        router.SetActiveTool(tool);
+        session.Viewport.Fit(session.Document.Dimensions, new(160, 80));
+
+        var source = new DocumentPoint(1.5, 1.5);
+        var sourceView = session.Viewport.DocumentToViewport(source);
+        router.PointerDown(new(sourceView, CanvasPointerButton.Left, 1, CanvasModifiers.Alt));
+        session.Viewport.PanBy(17, -9);
+        session.Viewport.ZoomAt(new(80, 40), 1.75);
+
+        var start = new DocumentPoint(4.5, 1.5);
+        var end = new DocumentPoint(6.5, 1.5);
+        router.PointerDown(new(session.Viewport.DocumentToViewport(start),
+            CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        router.PointerMove(session.Viewport.DocumentToViewport(end), CanvasModifiers.None);
+        router.PointerUp(new(session.Viewport.DocumentToViewport(end),
+            CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        DrainPending(tool);
+
+        var repair = session.Document.Layers.OfType<RepairLayer>().Single();
+        Assert.AreEqual(new DocumentRect(4, 1, 3, 1), repair.Bounds);
+        for (var x = 4; x <= 6; x++)
+            CollectionAssert.AreEqual(session.Document.Original.PixelAt(x - 3, 1).ToArray(),
+                repair.PixelAt(x, 1).ToArray());
+        var actualSource = tool.Snapshot().SourceAnchor;
+        Assert.IsNotNull(actualSource);
+        Assert.AreEqual(source.X, actualSource.Value.X, 1e-9);
+        Assert.AreEqual(source.Y, actualSource.Value.Y, 1e-9);
+        Assert.AreEqual(1, session.UndoCount);
+        CollectionAssert.AreEqual(beforeOriginal, session.Document.Original.CopyPixelBytes());
     }
 
     private static void DrainPending(ICanvasDeferredWork tool)

@@ -35,9 +35,9 @@ public sealed class FlimgValidationTests
     public void FutureVersionDispatchDoesNotRequireV1Shape()
     {
         AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
-            """{"format":"flamoris-cutwork","schemaVersion":2,"future":{"mode":"new"}}"""));
+            """{"format":"flamoris-cutwork","schemaVersion":3,"future":{"mode":"new"}}"""));
         AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
-            """{"format":"flamoris-cutwork","schemaVersion":2}"""));
+            """{"format":"flamoris-cutwork","schemaVersion":3}"""));
         AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
             """{"format":"flamoris-cutwork","schemaVersion":0,"legacyShape":true}"""));
     }
@@ -54,7 +54,7 @@ public sealed class FlimgValidationTests
     }
 
     [TestMethod]
-    public void ValidV1StillUsesStrictV1Deserializer()
+    public void CurrentSchemaUsesStrictDeserializer()
     {
         var expected = FlimgRoundTripTests.FullDocument();
         var valid = FlimgRoundTripTests.Write(expected);
@@ -63,6 +63,54 @@ public sealed class FlimgValidationTests
 
         AssertRejected(FlimgError.MalformedManifest, MutateManifest(root =>
             root["unknownV1Property"] = true));
+    }
+
+    [TestMethod]
+    public void FrozenV1MigratesPartCreationOrderWithoutInventingRepairOwnership()
+    {
+        var restored = FlimgRoundTripTests.Read(LegacyV1());
+        var stackParts = restored.Layers.OfType<PartLayer>().ToArray();
+
+        Assert.AreEqual(1, stackParts[0].PartOrder);
+        Assert.AreEqual(0, stackParts[1].PartOrder);
+        CollectionAssert.AreEqual(stackParts.Reverse().Select(part => part.Id).ToArray(),
+            Flamoris.Cutwork.App.PartLayerProjection.Create(restored).Select(part => part.Id).ToArray());
+        Assert.IsTrue(restored.Layers.OfType<RepairLayer>().All(repair => repair.OwnerPartId is null));
+    }
+
+    [TestMethod]
+    public void V2RejectsInvalidPartOrderAndRepairOwnership()
+    {
+        AssertRejected(FlimgError.InvalidLayer, MutateManifest(root =>
+        {
+            var parts = root["layers"]!.AsArray()
+                .Where(node => node!["kind"]!.GetValue<string>() == "part").ToArray();
+            parts[1]!["partOrder"] = parts[0]!["partOrder"]!.GetValue<int>();
+        }));
+        AssertRejected(FlimgError.InvalidLayer, MutateManifest(root =>
+        {
+            var repair = root["layers"]!.AsArray()
+                .Single(node => node!["kind"]!.GetValue<string>() == "repair");
+            repair!["ownerPartId"] = Guid.NewGuid().ToString("D");
+        }));
+    }
+
+    [TestMethod]
+    public void V2BaseRejectsPartOrderAndRepairOwnershipMetadata()
+    {
+        AssertRejected(FlimgError.InvalidLayer, MutateManifest(root =>
+        {
+            var baseLayer = root["layers"]!.AsArray()
+                .Single(node => node!["kind"]!.GetValue<string>() == "base");
+            baseLayer!["partOrder"] = 0;
+        }));
+        AssertRejected(FlimgError.InvalidLayer, MutateManifest(root =>
+        {
+            var layers = root["layers"]!.AsArray();
+            var baseLayer = layers.Single(node => node!["kind"]!.GetValue<string>() == "base");
+            var part = layers.First(node => node!["kind"]!.GetValue<string>() == "part");
+            baseLayer!["ownerPartId"] = part!["id"]!.GetValue<string>();
+        }));
     }
 
     [TestMethod]
@@ -284,6 +332,16 @@ public sealed class FlimgValidationTests
         return Archive(Replace(valid, "manifest.json", Encoding.UTF8.GetBytes(manifest.ToJsonString(
             new JsonSerializerOptions { WriteIndented = true }))));
     }
+
+    private static byte[] LegacyV1() => MutateManifest(root =>
+    {
+        root["schemaVersion"] = 1;
+        foreach (var layer in root["layers"]!.AsArray())
+        {
+            layer!.AsObject().Remove("partOrder");
+            layer.AsObject().Remove("ownerPartId");
+        }
+    });
 
     private static byte[] ManifestOnly(string json) =>
         Archive([("manifest.json", Encoding.UTF8.GetBytes(json))]);

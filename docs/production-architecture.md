@@ -442,14 +442,14 @@ The root manifest contains at minimum:
 ```json
 {
   "format": "flamoris-cutwork",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "documentId": "uuid",
   "canvas": { "width": 3840, "height": 2160, "colorSpace": "srgb8" },
   "original": { "asset": "assets/original.png", "sha256": "...", "source": "assets/source.bin" },
   "layers": [
-    { "id": "uuid", "kind": "part", "name": "left eye", "semanticName": "eye_left", "visible": true, "mask": "layers/uuid/mask.png" },
+    { "id": "uuid", "kind": "part", "name": "left eye", "semanticName": "eye_left", "partOrder": 0, "visible": true, "mask": "layers/uuid/mask.png" },
     { "id": "uuid", "kind": "base", "name": "base", "visible": true },
-    { "id": "uuid", "kind": "repair", "name": "repair", "visible": true, "content": "layers/uuid/content.png" }
+    { "id": "uuid", "kind": "repair", "name": "repair", "ownerPartId": "uuid", "visible": true, "content": "layers/uuid/content.png" }
   ]
 }
 ```

@@ -35,17 +35,22 @@ public sealed class PartLayer : Layer
     private byte[] _mask;
     private DocumentRect _maskBounds;
     public PartLayer(DocumentRect bounds, ReadOnlySpan<byte> mask, string name = "")
-        : this(Guid.NewGuid(), bounds, mask, name)
+        : this(Guid.NewGuid(), bounds, mask, name, -1)
     {
     }
-    internal PartLayer(Guid id, DocumentRect bounds, ReadOnlySpan<byte> mask, string name = "")
+    internal PartLayer(Guid id, DocumentRect bounds, ReadOnlySpan<byte> mask, string name = "",
+        int partOrder = -1)
         : base(LayerKind.Part, bounds, name, id)
     {
+        if (partOrder < -1) throw new ArgumentOutOfRangeException(nameof(partOrder));
         if (mask.Length != checked(bounds.Width * bounds.Height))
             throw new ArgumentException("Mask size mismatch.", nameof(mask));
         _mask = mask.ToArray();
         _maskBounds = bounds;
+        PartOrder = partOrder;
     }
+    /// <summary>Semantic creation order. It is independent from compositor stack position.</summary>
+    public int PartOrder { get; internal set; }
     public override DocumentRect Bounds => _maskBounds;
     public byte MaskAt(int x, int y) => x < Bounds.X || y < Bounds.Y || x >= Bounds.Right || y >= Bounds.Bottom
         ? (byte)0 : _mask[(y - Bounds.Y) * Bounds.Width + x - Bounds.X];
@@ -246,10 +251,18 @@ public sealed class PatchLayer : RasterLayer
 
 public sealed class RepairLayer : RasterLayer
 {
-    public RepairLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
-        : this(Guid.NewGuid(), bounds, bgra, name) { }
-    internal RepairLayer(Guid id, DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "")
-        : base(LayerKind.Repair, bounds, bgra, name, id) { }
+    public RepairLayer(DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "",
+        Guid? ownerPartId = null)
+        : this(Guid.NewGuid(), bounds, bgra, name, ownerPartId) { }
+    internal RepairLayer(Guid id, DocumentRect bounds, ReadOnlySpan<byte> bgra, string name = "",
+        Guid? ownerPartId = null)
+        : base(LayerKind.Repair, bounds, bgra, name, id)
+    {
+        if (ownerPartId == Guid.Empty) throw new ArgumentException("Empty Part identity.", nameof(ownerPartId));
+        OwnerPartId = ownerPartId;
+    }
+    /// <summary>The semantic Part whose excluded region this underpaint repairs, when authored.</summary>
+    public Guid? OwnerPartId { get; }
     public override DocumentRect Bounds => PixelBounds;
 }
 
