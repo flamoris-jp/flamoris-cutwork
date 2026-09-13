@@ -65,4 +65,5 @@ stable identity, stack index, owner link, bounds, and raster byte. Base remains 
 
 Layer handoff continues to use compositor `order`, and additionally exports `partOrder` for
 Parts and `ownerPartId` for owned Repairs. This preserves both semantic ownership and draw order
-without introducing a second layer stack or document model.
+without introducing a second layer stack or document model. Handoff writers emit version 2 so
+strict version-1 consumers never silently misinterpret the added ownership metadata.

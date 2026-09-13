@@ -98,6 +98,11 @@ public sealed class Phase91WorkflowTests
         CollectionAssert.AreEqual(ownedPixels, restoredRepair.CopyPixels(restoredRepair.Bounds));
         CollectionAssert.AreEqual(layerOrder, session.Document.Layers.Select(layer => layer.Id).ToArray());
         Assert.AreEqual(part.Id, session.SelectedLayerId);
+
+        session.Redo();
+        Assert.IsFalse(session.Document.Layers.Any(layer => layer.Id == part.Id));
+        Assert.IsFalse(session.Document.Layers.Any(layer => layer.Id == owned.Id));
+        Assert.IsTrue(session.Document.Layers.Any(layer => layer.Id == global.Id));
     }
 
     [TestMethod]

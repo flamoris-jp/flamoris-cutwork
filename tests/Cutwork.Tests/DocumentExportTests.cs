@@ -60,6 +60,7 @@ public sealed class DocumentExportTests
         Assert.IsTrue(assetNames.All(path => !path.Contains("eye / left", StringComparison.Ordinal)));
 
         using var json = JsonDocument.Parse(firstEntries["handoff.json"]);
+        Assert.AreEqual(2, json.RootElement.GetProperty("version").GetInt32());
         var layers = json.RootElement.GetProperty("layers").EnumerateArray().ToArray();
         CollectionAssert.AreEqual(Enumerable.Range(0, layers.Length).ToArray(),
             layers.Select(layer => layer.GetProperty("order").GetInt32()).ToArray());

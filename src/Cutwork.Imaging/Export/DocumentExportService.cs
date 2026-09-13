@@ -46,7 +46,7 @@ public sealed class DocumentExportService
         var manifest = new HandoffManifest
         {
             Format = "flamoris-cutwork-handoff",
-            Version = 1,
+            Version = 2,
             DocumentId = document.Id.ToString("D").ToLowerInvariant(),
             Canvas = new() { Width = document.Dimensions.Width, Height = document.Dimensions.Height },
         };
