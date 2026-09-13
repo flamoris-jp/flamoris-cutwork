@@ -213,7 +213,7 @@ public sealed class BitmapPresentationTests
             canvas.Measure(new Size(640, 480));
             canvas.Arrange(new Rect(0, 0, 640, 480));
             canvas.ActualSize();
-            var revision = session.Document.Revision;
+            var revision = session.Document!.Revision;
             var history = session.UndoCount;
 
             router.SetActiveTool(maskTool);
