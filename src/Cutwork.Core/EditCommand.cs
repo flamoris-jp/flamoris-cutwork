@@ -8,9 +8,13 @@ public abstract class EditCommand
 }
 
 internal sealed record AppliedEdit(Action Undo, Action Redo, Layer Layer,
-    DocumentRect Dirty, DocumentRect Holes, long RetainedBytes)
+    DocumentRect Dirty, DocumentRect Holes, long RetainedBytes,
+    IReadOnlyList<Layer>? AdditionalTouchedLayers = null)
 {
-    internal void Publish(CutworkDocument document) => document.Publish(Dirty, Holes, [Layer]);
+    internal IEnumerable<Layer> TouchedLayers() => AdditionalTouchedLayers is null
+        ? [Layer] : AdditionalTouchedLayers.Prepend(Layer);
+    internal void Publish(CutworkDocument document) =>
+        document.Publish(Dirty, Holes, TouchedLayers());
 }
 
 public sealed class RenameLayer(Guid layerId, string name) : EditCommand
@@ -24,6 +28,21 @@ public sealed class RenameLayer(Guid layerId, string name) : EditCommand
         layer.Name = name;
         return new(() => layer.Name = before, () => layer.Name = name,
             layer, default, default, 128L + (before.Length + name.Length) * 2L);
+    }
+}
+
+public sealed class SetLayerSemanticName(Guid layerId, string? semanticName) : EditCommand
+{
+    internal override AppliedEdit? Apply(CutworkDocument document)
+    {
+        var layer = document.GetLayer(layerId);
+        var normalized = string.IsNullOrWhiteSpace(semanticName) ? null : semanticName.Trim();
+        var before = layer.SemanticName;
+        if (StringComparer.Ordinal.Equals(before, normalized)) return null;
+        layer.SemanticName = normalized;
+        return new(() => layer.SemanticName = before, () => layer.SemanticName = normalized,
+            layer, default, default,
+            128L + (before?.Length ?? 0) * 2L + (normalized?.Length ?? 0) * 2L);
     }
 }
 
@@ -58,10 +77,32 @@ public sealed class DeleteLayer(Guid layerId) : EditCommand
     internal override AppliedEdit Apply(CutworkDocument document)
     {
         var layer = document.GetLayer(layerId);
-        var index = document.IndexOf(layer);
-        document.Remove(layer);
-        return new(() => document.Insert(layer, index), () => document.Remove(layer), layer,
-            layer.Bounds, layer is PartLayer ? layer.Bounds : default, layer.RetainedBytes);
+        var cascade = new List<Layer> { layer };
+        if (layer is PartLayer) cascade.AddRange(document.OwnedRepairs(layer.Id));
+        var removed = cascade
+            .Select(item => (Layer: item, Index: document.IndexOf(item)))
+            .OrderBy(item => item.Index)
+            .ToArray();
+        var dirty = removed.Aggregate(default(DocumentRect),
+            (region, item) => region.Union(item.Layer.Bounds));
+        var retainedBytes = removed.Aggregate(0L,
+            (bytes, item) => checked(bytes + item.Layer.RetainedBytes));
+
+        RemoveAll();
+        return new AppliedEdit(InsertAll, RemoveAll, layer, dirty,
+            layer is PartLayer ? layer.Bounds : default, retainedBytes,
+            removed.Where(item => item.Layer != layer).Select(item => item.Layer).ToArray());
+
+        void InsertAll()
+        {
+            foreach (var item in removed) document.Insert(item.Layer, item.Index);
+        }
+
+        void RemoveAll()
+        {
+            for (var index = removed.Length - 1; index >= 0; index--)
+                document.Remove(removed[index].Layer);
+        }
     }
 }
 

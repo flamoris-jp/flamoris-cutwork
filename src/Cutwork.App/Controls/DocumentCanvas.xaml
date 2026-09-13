@@ -11,6 +11,12 @@
                RenderTransformOrigin="0,0"
                RenderOptions.BitmapScalingMode="HighQuality" />
         <Canvas x:Name="OverlaySurface" IsHitTestVisible="False">
+            <Image x:Name="SelectedMaskOverlay"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   Stretch="Fill"
+                   RenderTransformOrigin="0,0"
+                   Visibility="Collapsed" />
             <Image x:Name="PartMaskOverlay"
                    HorizontalAlignment="Left"
                    VerticalAlignment="Top"
@@ -47,9 +53,31 @@
                      Fill="#1800AEEF"
                      IsHitTestVisible="False"
                      Visibility="Collapsed" />
+            <Ellipse x:Name="CloneSampleMarker"
+                     Width="12"
+                     Height="12"
+                     Stroke="#FFD20B3A"
+                     StrokeThickness="1.5"
+                     StrokeDashArray="2,2"
+                     Fill="#18D20B3A"
+                     IsHitTestVisible="False"
+                     Visibility="Collapsed" />
             <Line x:Name="CrosshairHorizontal" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
             <Line x:Name="CrosshairVertical" Stroke="#F1C453" StrokeThickness="1" Visibility="Collapsed" />
         </Canvas>
+        <Border x:Name="MaskTargetBadgeBorder"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="10"
+                Padding="8,4"
+                Background="#E6290A14"
+                BorderBrush="#FFD20B3A"
+                BorderThickness="1"
+                CornerRadius="3"
+                IsHitTestVisible="False"
+                Visibility="Collapsed">
+            <TextBlock x:Name="MaskTargetBadge" Foreground="White" FontWeight="SemiBold" />
+        </Border>
         <TextBlock x:Name="EmptyMessage"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"

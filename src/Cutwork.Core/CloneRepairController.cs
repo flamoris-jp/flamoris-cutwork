@@ -11,8 +11,19 @@ public sealed record CloneRepairSnapshot(
     DocumentPoint? SourceAnchor,
     DocumentPoint? DestinationAnchor,
     DocumentPoint? StrokeOffset,
+    DocumentPoint? SampleSource,
     double Radius,
     CloneRepairStatus Status);
+
+/// <summary>Immutable mapping captured once at pointer-down for one clone stroke.</summary>
+public readonly record struct CloneStrokeMapping(DocumentPoint SourceAnchor, DocumentPoint DestinationAnchor)
+{
+    public DocumentPoint Offset => new(SourceAnchor.X - DestinationAnchor.X,
+        SourceAnchor.Y - DestinationAnchor.Y);
+
+    public DocumentPoint SourceFor(DocumentPoint destination) =>
+        new(destination.X + Offset.X, destination.Y + Offset.Y);
+}
 
 /// <summary>Point-source Clone Repair. Source and stroke geometry are document-space only.</summary>
 public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWork
@@ -29,8 +40,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
     private DocumentPoint? _hover;
     private DocumentPoint? _sourceAnchor;
     private Guid? _sourceDocumentId;
-    private DocumentPoint? _destinationAnchor;
-    private DocumentPoint? _strokeOffset;
+    private CloneStrokeMapping? _strokeMapping;
     private bool _createdRepair;
     private bool _hasRasterChange;
     private bool _finishPending;
@@ -95,19 +105,20 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         }
 
         _transaction = _session.BeginTransaction();
-        _repair = _session.SelectedLayerId is { } selected
-            && document.GetLayer(selected) is RepairLayer existing ? existing : null;
+        var selectedLayer = _session.SelectedLayerId is { } selected
+            ? document.GetLayer(selected) : null;
+        _repair = selectedLayer as RepairLayer;
         if (_repair is null)
         {
             var x = Math.Clamp((int)Math.Floor(point.X), 0, document.Dimensions.Width - 1);
             var y = Math.Clamp((int)Math.Floor(point.Y), 0, document.Dimensions.Height - 1);
-            _repair = new RepairLayer(new DocumentRect(x, y, 1, 1), new byte[4]);
+            _repair = new RepairLayer(new DocumentRect(x, y, 1, 1), new byte[4],
+                ownerPartId: (selectedLayer as PartLayer)?.Id);
             _createdRepair = true;
             _transaction.Apply(new AddLayer(_repair));
         }
 
-        _destinationAnchor = point;
-        _strokeOffset = new(source.X - point.X, source.Y - point.Y);
+        _strokeMapping = new CloneStrokeMapping(source, point);
         _sampler = new StrokeSampler(Radius);
         State = CloneRepairState.Painting;
         Status = new(CloneRepairMessage.Painting);
@@ -202,14 +213,19 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         NotifyChanged();
     }
 
-    public CloneRepairSnapshot Snapshot() => new(State, _hover, CurrentSource,
-        _destinationAnchor, _strokeOffset, Radius, Status);
+    public CloneRepairSnapshot Snapshot()
+    {
+        var mapping = _strokeMapping;
+        return new(State, _hover, CurrentSource, mapping?.DestinationAnchor, mapping?.Offset,
+            mapping is { } value && _hover is { } hover ? value.SourceFor(hover) : null,
+            Radius, Status);
+    }
 
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples)
     {
         if (samples.Count > StrokeSampler.MaximumBatchSamples)
             throw new ArgumentOutOfRangeException(nameof(samples));
-        if (samples.Count == 0 || _repair is null || _transaction is null || _strokeOffset is not { } offset)
+        if (samples.Count == 0 || _repair is null || _transaction is null || _strokeMapping is not { } mapping)
             return;
         var repair = _repair;
         var transaction = _transaction;
@@ -218,7 +234,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             transaction.ApplyBatch(() =>
             {
                 var patch = _kernel.CreatePatch(_session.Document!.Original, repair,
-                    samples, offset, Radius);
+                    samples, mapping.Offset, Radius);
                 if (patch.Region.IsEmpty || !patch.HasChanges) return;
                 transaction.Apply(new RasterPatch(repair.Id, patch.Region,
                     patch.StraightBgra.Span));
@@ -240,8 +256,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         _transaction = null;
         _repair = null;
         _sampler = null;
-        _destinationAnchor = null;
-        _strokeOffset = null;
+        _strokeMapping = null;
         _createdRepair = false;
         _hasRasterChange = false;
         _finishPending = false;

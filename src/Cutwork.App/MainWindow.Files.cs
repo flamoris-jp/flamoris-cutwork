@@ -142,6 +142,8 @@ public partial class MainWindow
         var enabled = _session.Document is not null;
         SaveMenuItem.IsEnabled = enabled;
         SaveAsMenuItem.IsEnabled = enabled;
+        SaveToolbarButton.IsEnabled = enabled;
+        SaveAsToolbarButton.IsEnabled = enabled;
         ExportCompositeMenuItem.IsEnabled = enabled;
         ExportHandoffMenuItem.IsEnabled = enabled;
     }

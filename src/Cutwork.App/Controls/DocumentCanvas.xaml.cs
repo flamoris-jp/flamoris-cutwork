@@ -29,6 +29,10 @@ public partial class DocumentCanvas : UserControl
     private readonly List<Ellipse> _partFencePoints = [];
     private readonly List<Ellipse> _patchFencePoints = [];
     private long _presentedPartMaskRevision = -1;
+    private WriteableBitmap? _selectedMaskBitmap;
+    private Guid? _selectedMaskLayerId;
+    private DocumentRect _selectedMaskBounds;
+    private DocumentRect _pendingMaskOverlayDirty;
     private FrozenPatchSource? _presentedPatchSource;
     private bool _autoFit = true;
     private bool _deferredToolWorkQueued;
@@ -66,6 +70,13 @@ public partial class DocumentCanvas : UserControl
     public long BitmapGeneration => _bitmapSurface.Generation;
 
     public double Zoom => _session?.Viewport.Zoom ?? 1.0;
+
+    public void SetMaskTargetLabel(string? label)
+    {
+        MaskTargetBadge.Text = label ?? "";
+        MaskTargetBadgeBorder.Visibility = string.IsNullOrEmpty(label)
+            ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     public void AttachSession(EditorSession session)
     {
@@ -112,6 +123,7 @@ public partial class DocumentCanvas : UserControl
         {
             _refreshQueued = false;
             RefreshPreview();
+            RenderToolOverlays();
         }));
     }
 
@@ -134,9 +146,15 @@ public partial class DocumentCanvas : UserControl
     public void Present(CutworkDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        if (_presentedDocument is not null) _presentedDocument.Changed -= PresentedDocumentChanged;
         _composite?.Dispose();
         _presentedDocument = document;
+        _presentedDocument.Changed += PresentedDocumentChanged;
         _composite = new CompositeCache(document);
+        _selectedMaskBitmap = null;
+        _selectedMaskLayerId = null;
+        _selectedMaskBounds = default;
+        _pendingMaskOverlayDirty = default;
         _originalSurface.Clear();
         _bitmapSurface.Initialize(document.Dimensions);
         RefreshPreview();
@@ -418,7 +436,11 @@ public partial class DocumentCanvas : UserControl
     private void RenderMaskOverlay()
     {
         BrushCursor.Visibility = Visibility.Collapsed;
+        SelectedMaskOverlay.Visibility = Visibility.Collapsed;
         if (_session is null || _maskTool is null || !_maskTool.IsActive) return;
+        if (_session.SelectedLayerId is not { } selected
+            || _session.Document?.GetLayer(selected) is not PartLayer part) return;
+        RenderSelectedMask(part);
         var snapshot = _maskTool.Snapshot();
         if (snapshot.HoverPoint is not { } hover) return;
         var center = _session.Viewport.DocumentToViewport(hover);
@@ -432,9 +454,66 @@ public partial class DocumentCanvas : UserControl
         BrushCursor.Visibility = Visibility.Visible;
     }
 
+    private void RenderSelectedMask(PartLayer part)
+    {
+        var recreate = _selectedMaskBitmap is null || _selectedMaskLayerId != part.Id
+            || _selectedMaskBounds != part.Bounds;
+        if (recreate)
+        {
+            _selectedMaskBitmap = new WriteableBitmap(part.Bounds.Width, part.Bounds.Height,
+                96, 96, PixelFormats.Pbgra32, null);
+            _selectedMaskLayerId = part.Id;
+            _selectedMaskBounds = part.Bounds;
+            SelectedMaskOverlay.Source = _selectedMaskBitmap;
+            SelectedMaskOverlay.Width = part.Bounds.Width;
+            SelectedMaskOverlay.Height = part.Bounds.Height;
+            WriteSelectedMaskRegion(part, part.Bounds);
+            _pendingMaskOverlayDirty = default;
+        }
+        else if (!_pendingMaskOverlayDirty.IsEmpty)
+        {
+            var dirty = _pendingMaskOverlayDirty.Intersect(part.Bounds);
+            if (!dirty.IsEmpty) WriteSelectedMaskRegion(part, dirty);
+            _pendingMaskOverlayDirty = default;
+        }
+
+        var projection = _session!.Viewport.Projection;
+        SelectedMaskOverlay.RenderTransform = new MatrixTransform(
+            projection.ScaleX, 0, 0, projection.ScaleY,
+            projection.OffsetX + part.Bounds.X * projection.ScaleX,
+            projection.OffsetY + part.Bounds.Y * projection.ScaleY);
+        SelectedMaskOverlay.Visibility = Visibility.Visible;
+    }
+
+    private void WriteSelectedMaskRegion(PartLayer part, DocumentRect region)
+    {
+        var mask = part.CopyMask(region);
+        var pixels = new byte[checked(mask.Length * 4)];
+        for (var index = 0; index < mask.Length; index++)
+        {
+            var alpha = (byte)(mask[index] * 80 / 255);
+            pixels[index * 4] = (byte)(58 * alpha / 255);
+            pixels[index * 4 + 1] = (byte)(11 * alpha / 255);
+            pixels[index * 4 + 2] = (byte)(210 * alpha / 255);
+            pixels[index * 4 + 3] = alpha;
+        }
+        // Packed ROI source with an explicit layer-local destination. Using the destination as
+        // a source rectangle would make WPF index beyond this intentionally small buffer.
+        _selectedMaskBitmap!.WritePixels(new Int32Rect(0, 0, region.Width, region.Height),
+            pixels, region.Width * 4, region.X - part.Bounds.X, region.Y - part.Bounds.Y);
+    }
+
+    private void PresentedDocumentChanged(object? sender, DocumentChange change)
+    {
+        if (change.HoleRegion.IsEmpty || _session?.SelectedLayerId is not { } selected
+            || _session.Document?.Layers.FirstOrDefault(layer => layer.Id == selected) is not PartLayer) return;
+        _pendingMaskOverlayDirty = _pendingMaskOverlayDirty.Union(change.HoleRegion);
+    }
+
     private void RenderCloneOverlay()
     {
         CloneSourceMarker.Visibility = Visibility.Collapsed;
+        CloneSampleMarker.Visibility = Visibility.Collapsed;
         if (_session is null || _cloneTool is null || !_cloneTool.IsActive) return;
         var snapshot = _cloneTool.Snapshot();
         if (snapshot.HoverPoint is { } hover)
@@ -453,6 +532,11 @@ public partial class DocumentCanvas : UserControl
         Canvas.SetLeft(CloneSourceMarker, marker.X - CloneSourceMarker.Width / 2);
         Canvas.SetTop(CloneSourceMarker, marker.Y - CloneSourceMarker.Height / 2);
         CloneSourceMarker.Visibility = Visibility.Visible;
+        if (snapshot.SampleSource is not { } sampleSource) return;
+        var sample = _session.Viewport.DocumentToViewport(sampleSource);
+        Canvas.SetLeft(CloneSampleMarker, sample.X - CloneSampleMarker.Width / 2);
+        Canvas.SetTop(CloneSampleMarker, sample.Y - CloneSampleMarker.Height / 2);
+        CloneSampleMarker.Visibility = Visibility.Visible;
     }
 
     private void RenderFinishingOverlay()
