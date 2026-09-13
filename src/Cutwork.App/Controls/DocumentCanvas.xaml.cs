@@ -497,9 +497,10 @@ public partial class DocumentCanvas : UserControl
             pixels[index * 4 + 2] = (byte)(210 * alpha / 255);
             pixels[index * 4 + 3] = alpha;
         }
-        _selectedMaskBitmap!.WritePixels(new Int32Rect(
-            region.X - part.Bounds.X, region.Y - part.Bounds.Y, region.Width, region.Height),
-            pixels, region.Width * 4, 0);
+        // Packed ROI source with an explicit layer-local destination. Using the destination as
+        // a source rectangle would make WPF index beyond this intentionally small buffer.
+        _selectedMaskBitmap!.WritePixels(new Int32Rect(0, 0, region.Width, region.Height),
+            pixels, region.Width * 4, region.X - part.Bounds.X, region.Y - part.Bounds.Y);
     }
 
     private void PresentedDocumentChanged(object? sender, DocumentChange change)
