@@ -49,6 +49,8 @@
             <Setter Property="Width" Value="30" />
             <Setter Property="Height" Value="27" />
             <Setter Property="Padding" Value="5" />
+            <Setter Property="Background" Value="#FFF6F3F1" />
+            <Setter Property="BorderBrush" Value="#FF777A7E" />
         </Style>
         <Style x:Key="DirectNameEditor" TargetType="{x:Type TextBox}">
             <Setter Property="Background" Value="Transparent" />
