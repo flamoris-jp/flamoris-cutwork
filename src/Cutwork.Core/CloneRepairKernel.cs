@@ -9,5 +9,5 @@ public readonly record struct CloneRepairPatch(
 public interface ICloneRepairKernel
 {
     CloneRepairPatch CreatePatch(OriginalAsset original, RepairLayer target,
-        IReadOnlyList<DocumentPoint> destinationSamples, DocumentPoint offset, double radius);
+        IReadOnlyList<DocumentPoint> destinationSamples, CloneStrokeMapping mapping, double radius);
 }

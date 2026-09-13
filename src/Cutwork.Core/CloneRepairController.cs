@@ -2,6 +2,7 @@ namespace Flamoris.Cutwork.Core;
 
 public enum CloneRepairState { Idle, Painting }
 public enum CloneRepairMessage { Ready, SourceRequired, SourceSet, Painting, Cancelled, Committed }
+public enum CloneSamplingMode { Fixed, Offset }
 
 public readonly record struct CloneRepairStatus(CloneRepairMessage Message);
 
@@ -12,17 +13,41 @@ public sealed record CloneRepairSnapshot(
     DocumentPoint? DestinationAnchor,
     DocumentPoint? StrokeOffset,
     DocumentPoint? SampleSource,
+    CloneSamplingMode SamplingMode,
+    CloneSamplingMode? StrokeSamplingMode,
     double Radius,
     CloneRepairStatus Status);
 
 /// <summary>Immutable mapping captured once at pointer-down for one clone stroke.</summary>
-public readonly record struct CloneStrokeMapping(DocumentPoint SourceAnchor, DocumentPoint DestinationAnchor)
+public readonly record struct CloneStrokeMapping(
+    CloneSamplingMode Mode,
+    DocumentPoint SourceAnchor,
+    DocumentPoint DestinationAnchor)
 {
+    public CloneStrokeMapping(DocumentPoint sourceAnchor, DocumentPoint destinationAnchor)
+        : this(CloneSamplingMode.Offset, sourceAnchor, destinationAnchor) { }
+
     public DocumentPoint Offset => new(SourceAnchor.X - DestinationAnchor.X,
         SourceAnchor.Y - DestinationAnchor.Y);
 
-    public DocumentPoint SourceFor(DocumentPoint destination) =>
-        new(destination.X + Offset.X, destination.Y + Offset.Y);
+    public DocumentPoint SourceCenterFor(DocumentPoint destinationSample) => Mode switch
+    {
+        CloneSamplingMode.Fixed => SourceAnchor,
+        CloneSamplingMode.Offset => new(destinationSample.X + Offset.X,
+            destinationSample.Y + Offset.Y),
+        _ => throw new InvalidOperationException($"Unsupported clone sampling mode: {Mode}."),
+    };
+
+    public DocumentPoint SourceFor(DocumentPoint destinationSample) =>
+        SourceCenterFor(destinationSample);
+
+    public DocumentPoint SourceFor(DocumentPoint destinationPixelCenter,
+        DocumentPoint destinationSampleCenter)
+    {
+        var center = SourceCenterFor(destinationSampleCenter);
+        return new(center.X + destinationPixelCenter.X - destinationSampleCenter.X,
+            center.Y + destinationPixelCenter.Y - destinationSampleCenter.Y);
+    }
 }
 
 /// <summary>Point-source Clone Repair. Source and stroke geometry are document-space only.</summary>
@@ -54,11 +79,22 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
 
     public bool IsActive { get; private set; }
     public CloneRepairState State { get; private set; }
+    public CloneSamplingMode SamplingMode { get; private set; } = CloneSamplingMode.Fixed;
     public double Radius { get; private set; } = 12;
     public CloneRepairStatus Status { get; private set; } = new(CloneRepairMessage.Ready);
     public bool HasPendingWork => State == CloneRepairState.Painting
         && _sampler is { HasPendingSamples: true };
     public event EventHandler? Changed;
+
+    public void SetSamplingMode(CloneSamplingMode mode)
+    {
+        if (!Enum.IsDefined(mode)) throw new ArgumentOutOfRangeException(nameof(mode));
+        if (State != CloneRepairState.Idle)
+            throw new InvalidOperationException("Clone sampling mode cannot change during a stroke.");
+        if (SamplingMode == mode) return;
+        SamplingMode = mode;
+        NotifyChanged();
+    }
 
     public void SetRadius(double radius)
     {
@@ -118,7 +154,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             _transaction.Apply(new AddLayer(_repair));
         }
 
-        _strokeMapping = new CloneStrokeMapping(source, point);
+        _strokeMapping = new CloneStrokeMapping(SamplingMode, source, point);
         _sampler = new StrokeSampler(Radius);
         State = CloneRepairState.Painting;
         Status = new(CloneRepairMessage.Painting);
@@ -217,8 +253,8 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
     {
         var mapping = _strokeMapping;
         return new(State, _hover, CurrentSource, mapping?.DestinationAnchor, mapping?.Offset,
-            mapping is { } value && _hover is { } hover ? value.SourceFor(hover) : null,
-            Radius, Status);
+            mapping is { } value && _hover is { } hover ? value.SourceCenterFor(hover) : null,
+            SamplingMode, mapping?.Mode, Radius, Status);
     }
 
     private void ApplySamples(IReadOnlyList<DocumentPoint> samples)
@@ -234,7 +270,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             transaction.ApplyBatch(() =>
             {
                 var patch = _kernel.CreatePatch(_session.Document!.Original, repair,
-                    samples, mapping.Offset, Radius);
+                    samples, mapping, Radius);
                 if (patch.Region.IsEmpty || !patch.HasChanges) return;
                 transaction.Apply(new RasterPatch(repair.Id, patch.Region,
                     patch.StraightBgra.Span));
