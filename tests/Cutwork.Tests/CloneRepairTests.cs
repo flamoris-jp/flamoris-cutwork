@@ -309,6 +309,42 @@ public sealed class CloneRepairTests
         Assert.AreEqual(1, dense.Session.UndoCount);
     }
 
+    [TestMethod]
+    public void ViewportMappedStrokeUsesFixedDocumentOffsetAndWritesOnlyExpectedPixels()
+    {
+        var session = OpenSession(8, 4);
+        var beforeOriginal = session.Document!.Original.CopyPixelBytes();
+        var tool = new CloneRepairController(session, new CloneRepairKernel());
+        tool.SetRadius(0.5);
+        var router = new CanvasInputRouter(session);
+        router.SetActiveTool(tool);
+        session.Viewport.Fit(session.Document.Dimensions, new(160, 80));
+
+        var source = new DocumentPoint(1.5, 1.5);
+        var sourceView = session.Viewport.DocumentToViewport(source);
+        router.PointerDown(new(sourceView, CanvasPointerButton.Left, 1, CanvasModifiers.Alt));
+        session.Viewport.PanBy(17, -9);
+        session.Viewport.ZoomAt(new(80, 40), 1.75);
+
+        var start = new DocumentPoint(4.5, 1.5);
+        var end = new DocumentPoint(6.5, 1.5);
+        router.PointerDown(new(session.Viewport.DocumentToViewport(start),
+            CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        router.PointerMove(session.Viewport.DocumentToViewport(end), CanvasModifiers.None);
+        router.PointerUp(new(session.Viewport.DocumentToViewport(end),
+            CanvasPointerButton.Left, 1, CanvasModifiers.None));
+        DrainPending(tool);
+
+        var repair = session.Document.Layers.OfType<RepairLayer>().Single();
+        Assert.AreEqual(new DocumentRect(4, 1, 3, 1), repair.Bounds);
+        for (var x = 4; x <= 6; x++)
+            CollectionAssert.AreEqual(session.Document.Original.PixelAt(x - 3, 1).ToArray(),
+                repair.PixelAt(x, 1).ToArray());
+        Assert.AreEqual(source, tool.Snapshot().SourceAnchor);
+        Assert.AreEqual(1, session.UndoCount);
+        CollectionAssert.AreEqual(beforeOriginal, session.Document.Original.CopyPixelBytes());
+    }
+
     private static void DrainPending(ICanvasDeferredWork tool)
     {
         var slices = 0;

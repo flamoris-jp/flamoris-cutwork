@@ -188,6 +188,60 @@ public sealed class BitmapPresentationTests
         });
     }
 
+    [TestMethod]
+    public void SelectedPartMaskOverlayReusesBitmapAndTracksViewportWithoutAuthoredState()
+    {
+        RunSta(() =>
+        {
+            var pixels = Enumerable.Repeat(new byte[] { 30, 60, 90, 255 }, 16 * 16)
+                .SelectMany(pixel => pixel).ToArray();
+            var session = new EditorSession();
+            session.Open(new CutworkDocument(new OriginalAsset("fixture.png", new(16, 16), 64, pixels)));
+            var part = new PartLayer(new(2, 2, 12, 12), Enumerable.Repeat((byte)255, 12 * 12).ToArray(), "Face");
+            session.Execute(new AddLayer(part));
+            session.Open(session.Document!);
+            session.SelectLayer(part.Id);
+            var partTool = new PartToolController(session, new GuriguriPartFitter());
+            var maskTool = new MaskBrushController(session);
+            maskTool.SetRadius(1);
+            maskTool.SetPrimaryPolarity(MaskPolarity.Erase);
+            var router = new CanvasInputRouter(session);
+            var canvas = new DocumentCanvas();
+            canvas.AttachSession(session);
+            canvas.AttachInputRouter(router, partTool, maskTool);
+            canvas.Present(session.Document!);
+            canvas.Measure(new Size(640, 480));
+            canvas.Arrange(new Rect(0, 0, 640, 480));
+            canvas.ActualSize();
+            var revision = session.Document.Revision;
+            var history = session.UndoCount;
+
+            router.SetActiveTool(maskTool);
+            var overlay = (Image)canvas.FindName("SelectedMaskOverlay");
+            Assert.AreEqual(Visibility.Visible, overlay.Visibility);
+            Assert.IsInstanceOfType(overlay.Source, typeof(WriteableBitmap));
+            var bitmap = overlay.Source;
+            var actualTransform = (System.Windows.Media.MatrixTransform)overlay.RenderTransform;
+            Assert.AreEqual(session.Viewport.Projection.OffsetX + part.Bounds.X, actualTransform.Matrix.OffsetX, 0.001);
+            Assert.AreEqual(session.Viewport.Projection.OffsetY + part.Bounds.Y, actualTransform.Matrix.OffsetY, 0.001);
+
+            canvas.Fit();
+            actualTransform = (System.Windows.Media.MatrixTransform)overlay.RenderTransform;
+            Assert.AreEqual(session.Viewport.Projection.OffsetX
+                + part.Bounds.X * session.Viewport.Projection.ScaleX, actualTransform.Matrix.OffsetX, 0.001);
+            Assert.AreEqual(session.Viewport.Projection.OffsetY
+                + part.Bounds.Y * session.Viewport.Projection.ScaleY, actualTransform.Matrix.OffsetY, 0.001);
+            Assert.AreSame(bitmap, overlay.Source);
+            Assert.AreEqual(revision, session.Document.Revision);
+            Assert.AreEqual(history, session.UndoCount);
+
+            maskTool.PointerDown(new(7.5, 7.5), 1, CanvasModifiers.None);
+            maskTool.PointerUp(new(7.5, 7.5), CanvasPointerButton.Left, CanvasModifiers.None);
+            Assert.AreSame(bitmap, overlay.Source);
+            Assert.AreEqual(history + 1, session.UndoCount);
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? failure = null;
