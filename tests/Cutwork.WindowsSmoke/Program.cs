@@ -130,7 +130,15 @@ internal static class Program
             }
             Console.WriteLine("PASS: published editor+bridge outside source with System32-only PATH; official SDK 1.0.0 / MCP 2025-03-26; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
         }
+        catch { DumpUi(process.Id); throw; }
         finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){} }
+    }
+    private static void DumpUi(int pid)
+    {
+        foreach(var e in AutomationElement.RootElement.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ProcessIdProperty,pid)).Cast<AutomationElement>().Take(160))
+        {
+            try{Console.WriteLine($"UI: {e.Current.ControlType.ProgrammaticName} / {e.Current.AutomationId} / {e.Current.Name}");}catch(ElementNotAvailableException){}
+        }
     }
     private static void CopyDirectory(string from,string to){Directory.CreateDirectory(to);foreach(var file in Directory.GetFiles(from))File.Copy(file,Path.Combine(to,Path.GetFileName(file)));foreach(var dir in Directory.GetDirectories(from))CopyDirectory(dir,Path.Combine(to,Path.GetFileName(dir)));}
     private static CancellationToken Deadline()=>new CancellationTokenSource(Limit).Token;
@@ -151,8 +159,9 @@ internal static class Program
     {
         AutomationElement? filename=null;await Until(()=>(filename=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new OrCondition(new PropertyCondition(AutomationElement.AutomationIdProperty,"1148"),new PropertyCondition(AutomationElement.AutomationIdProperty,"1001")))))is not null);
         var edit=filename!.TryGetCurrentPattern(ValuePattern.Pattern,out _)?filename:filename.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit));
+        Console.WriteLine("Native filename field: "+edit.Current.AutomationId+" / "+edit.Current.Name+" / "+edit.Current.ClassName);
         ((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).SetValue(path);AutomationElement? dialog=edit;
-        while(dialog is not null&&dialog.Current.ClassName!="#32770")dialog=TreeWalker.ControlViewWalker.GetParent(dialog);await Invoke(Find(dialog!,"1"));
+        while(dialog is not null&&dialog.Current.ClassName!="#32770")dialog=TreeWalker.ControlViewWalker.GetParent(dialog);var accept=Find(dialog!,"1");Console.WriteLine("Native accept button: "+accept.Current.Name);await Invoke(accept);
     }
     private static async Task<string> Connection(int pid)
     {
