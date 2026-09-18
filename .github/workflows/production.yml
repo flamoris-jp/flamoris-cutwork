@@ -30,6 +30,11 @@ jobs:
       - name: Publish and verify portable Windows package
         shell: pwsh
         run: ./eng/package-windows.ps1
+      - name: Published editor and bridge with official MCP client
+        shell: pwsh
+        run: |
+          dotnet run --project tests/Cutwork.WindowsSmoke -c Release -- artifacts/package/FLAMORIS-Cutwork-v0.1.0-win-x64
+          if ($LASTEXITCODE -ne 0) { throw "Published MCP acceptance failed." }
       - name: Upload portable Windows package
         uses: actions/upload-artifact@v4
         with:
