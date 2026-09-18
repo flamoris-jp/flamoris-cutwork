@@ -14,6 +14,7 @@ public sealed class BoundedProtocolStream(Stream inner, CancellationToken leaseT
     private readonly object gate = new();
     private byte[] input = [];
     private int inputOffset, notifications;
+    private bool disposed;
     public CancellationToken Closed => closed.Token;
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
@@ -106,7 +107,12 @@ public sealed class BoundedProtocolStream(Stream inner, CancellationToken leaseT
     }
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { closed.Cancel(); inner.Dispose(); output.Dispose(); }
+        if (disposing && !disposed)
+        {
+            disposed = true;
+            closed.Cancel(); inner.Dispose(); output.Dispose(); closed.Dispose();
+            input = [];
+        }
         base.Dispose(disposing);
     }
     public override bool CanRead => true;

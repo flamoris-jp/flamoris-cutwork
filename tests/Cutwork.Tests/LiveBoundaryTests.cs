@@ -57,6 +57,14 @@ public sealed class LiveBoundaryTests
         Assert.AreEqual(0,await empty.ReadAsync(new byte[1]));Assert.IsTrue(empty.Closed.IsCancellationRequested);
     }
     [TestMethod]
+    public void ProtocolStreamDisposalCancelsAndIsIdempotent()
+    {
+        using var lease = new CancellationTokenSource();
+        var stream = new BoundedProtocolStream(new MemoryStream(),lease.Token);
+        var closed = stream.Closed; stream.Dispose(); stream.Dispose(); lease.Cancel();
+        Assert.IsTrue(closed.IsCancellationRequested);
+    }
+    [TestMethod]
     public async Task BlockedWriteIsCancelledByRevocation()
     {
         using var revoked = new CancellationTokenSource();
