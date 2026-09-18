@@ -38,6 +38,7 @@ internal static class Program
             await Until(()=>{process.Refresh();if(process.HasExited)throw new Exception("Editor exited.");if(process.MainWindowHandle==0)return false;main=AutomationElement.FromHandle(process.MainWindowHandle);return main is not null;});
             var window=main!;
             await FileMenu(window,process.Id,"OpenMenuItem",image);
+            Console.WriteLine("Opened synthetic artwork through WPF.");
             await Menu(window,"McpMenu","McpReadMenu"); string readPipe=await Connection(process.Id);
             await using(var read=new ClientHandle(await Connect(bridge,readPipe)))
             {
@@ -48,6 +49,7 @@ internal static class Program
                 Check(preview.Content.OfType<ImageContentBlock>().Single().DecodedData.Span.StartsWith(new byte[]{137,80,78,71}),"No PNG result.");
                 var denied=await Edit(read.Client,context,new{type="layer.rename",target=Guid.NewGuid().ToString(),name="forbidden"});Check(denied.IsError==true,"Read-only direct edit accepted.");
             }
+            Console.WriteLine("Read-only official client image and direct denial: PASS");
             await Menu(window,"McpMenu","McpEditMenu"); await OldPipeRejected(readPipe); string pipe=await Connection(process.Id);
             await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
             {
@@ -62,13 +64,14 @@ internal static class Program
                 Check(edit.IsError!=true,Text(edit).ToString());
                 var layers=await Layers(client);Check(layers.GetArrayLength()==4,"Part/mask/repair/patch batch failed.");
                 await Until(()=>VisibleValue(window,"MCP Face")&&VisibleValue(window,"MCP Patch"));
+                Console.WriteLine("Part/Mask/Clone/Patch and automatic WPF projection: PASS");
                 var repaired=await Composite(client);
                 await ClickReady(window,"UndoToolbarButton");Check((await Layers(client)).GetArrayLength()==1,"WPF Undo failed.");
                 await ClickReady(window,"RedoToolbarButton");Check((await Layers(client)).GetArrayLength()==4,"WPF Redo failed.");
-                Check(repaired.SequenceEqual(await Composite(client)),"WPF history did not restore pixels.");
+                Check(Enumerable.SequenceEqual(repaired, await Composite(client)),"WPF history did not restore pixels.");
                 var stale=await Edit(client,before,new{type="layer.rename",target=layers[0].GetProperty("id").GetString(),name="stale"});Check(stale.IsError==true,"Stale write accepted.");
                 var context=await Context(client);var failed=await Edit(client,context,new{type="part.create",fence,step=1,name="Rollback"},new{type="layer.delete",target=Guid.NewGuid().ToString()});
-                Check(failed.IsError==true&&(await Layers(client)).GetArrayLength()==4,"Failed batch leaked state.");Check(repaired.SequenceEqual(await Composite(client)),"Failed batch changed pixels.");
+                Check(failed.IsError==true&&(await Layers(client)).GetArrayLength()==4,"Failed batch leaked state.");Check(Enumerable.SequenceEqual(repaired, await Composite(client)),"Failed batch changed pixels.");
                 // An ordinary WPF visibility edit must be observable by the external client.
                 var check=Find(window,"LayerList").FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.CheckBox));
                 Check(check is not null,"Layer visibility checkbox missing.");
