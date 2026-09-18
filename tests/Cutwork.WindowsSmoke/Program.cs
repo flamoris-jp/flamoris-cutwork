@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using System.Windows.Automation;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -39,6 +40,7 @@ internal static class Program
             var window=main!;
             await FileMenu(window,process.Id,"OpenMenuItem",image);
             Console.WriteLine("Opened synthetic artwork through WPF.");
+            await Menu(window,"ViewMenu","ActualSizeMenuItem");
             await Menu(window,"McpMenu","McpReadMenu"); string readPipe=await Connection(process.Id);
             await using(var read=new ClientHandle(await Connect(bridge,readPipe)))
             {
@@ -54,20 +56,24 @@ internal static class Program
             await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
             {
                 var client=handle.Client; var before=await Context(client);
+                uint beforeScreen=ScreenPixel(window,13,10);
                 object[] fence=[new{x=4,y=4},new{x=20,y=4},new{x=20,y=20},new{x=4,y=20}];
                 var preview=await client.CallToolAsync("part_preview",new Dictionary<string,object?>{{"fence",fence},{"step",0},{"maxEdge",32}},cancellationToken:Deadline());
                 Check(preview.IsError!=true&&preview.Content.OfType<ImageContentBlock>().Any(),"Fitting preview failed.");Check((await Context(client)).GetProperty("revision").GetString()==before.GetProperty("revision").GetString(),"Preview mutated document.");
                 var edit=await Edit(client,before,new{type="part.create",fence,step=0,name="MCP Face"},
-                    new{type="mask.stroke",target="@0",points=new[]{new{x=10.5,y=10.5},new{x=15.5,y=10.5}},radius=2,polarity="Erase"},
+                    new{type="mask.stroke",target="@0",points=new[]{new{x=8.5,y=8.5},new{x=9.5,y=8.5}},radius=1,polarity="Erase"},
                     new{type="clone.stroke",target=(string?)null,ownerPart="@0",global=false,source=new{x=4.5,y=4.5},points=new[]{new{x=10.5,y=10.5},new{x=15.5,y=10.5}},radius=2,mode="Fixed"},
-                    new{type="patch.create",fence,transform=new{centerX=12.5,centerY=12.5,scale=1,rotationDegrees=0},name="MCP Patch"});
+                    new{type="patch.create",fence,transform=new{centerX=12.5,centerY=12.5,scale=1,rotationDegrees=0},name="MCP Patch"}, new{type="layer.visible",target="@0",visible=false});
                 Check(edit.IsError!=true,Text(edit).ToString());
                 var layers=await Layers(client);Check(layers.GetArrayLength()==4,"Part/mask/repair/patch batch failed.");
                 await Until(()=>VisibleValue(window,"MCP Face")&&VisibleValue(window,"MCP Patch"));
                 Console.WriteLine("Part/Mask/Clone/Patch and automatic WPF projection: PASS");
                 var repaired=await Composite(client);
+                await Until(()=>ScreenPixel(window,13,10)!=beforeScreen);uint repairedScreen=ScreenPixel(window,13,10);
                 await ClickReady(window,"UndoToolbarButton");Check((await Layers(client)).GetArrayLength()==1,"WPF Undo failed.");
+                await Until(()=>ScreenPixel(window,13,10)==beforeScreen);
                 await ClickReady(window,"RedoToolbarButton");Check((await Layers(client)).GetArrayLength()==4,"WPF Redo failed.");
+                await Until(()=>ScreenPixel(window,13,10)==repairedScreen);Console.WriteLine("Published canvas pixels update and restore through WPF Undo/Redo: PASS");
                 Check(Enumerable.SequenceEqual(repaired, await Composite(client)),"WPF history did not restore pixels.");
                 var stale=await Edit(client,before,new{type="layer.rename",target=layers[0].GetProperty("id").GetString(),name="stale"});Check(stale.IsError==true,"Stale write accepted.");
                 var context=await Context(client);var failed=await Edit(client,context,new{type="part.create",fence,step=1,name="Rollback"},new{type="layer.delete",target=Guid.NewGuid().ToString()});
@@ -122,7 +128,7 @@ internal static class Program
     private static JsonElement Text(CallToolResult result)=>JsonDocument.Parse(result.Content.OfType<TextContentBlock>().First().Text).RootElement.Clone();
     private static async Task<JsonElement> Context(McpClient c)=>Text(await c.CallToolAsync("context",new Dictionary<string,object?>(),cancellationToken:Deadline()));
     private static async Task<JsonElement> Layers(McpClient c)=>Text(await c.CallToolAsync("layers",new Dictionary<string,object?>{{"offset",0},{"count",64}},cancellationToken:Deadline())).GetProperty("layers");
-    private static async Task<CallToolResult> Edit(McpClient c,JsonElement context,params object[] ops)=>await c.CallToolAsync("edit",new Dictionary<string,object?>{{"documentToken",context.GetProperty("documentToken").GetString()},{"expectedRevision",context.GetProperty("revision").GetString()},{"operations",ops}},cancellationToken:Deadline());
+    private static async Task<CallToolResult> Edit(McpClient c,JsonElement context,params object[] ops)=>await c.CallToolAsync("edit",new Dictionary<string,object?>{{"documentToken",context.GetProperty("documentToken").GetString()},{"expectedRevision",context.GetProperty("revision").GetString()},{"operations",JsonSerializer.SerializeToElement(ops)}},cancellationToken:Deadline());
     private static async Task<byte[]> Composite(McpClient c)=>(await c.CallToolAsync("image",new Dictionary<string,object?>{{"source","Composite"},{"target",null},{"roi",null},{"maxEdge",32}},cancellationToken:Deadline())).Content.OfType<ImageContentBlock>().Single().DecodedData.ToArray();
     private static AutomationElement Find(AutomationElement root,string id)=>root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id))??throw new Exception("Missing UI control: "+id);
     private static Task Invoke(AutomationElement e)=>Task.Run(()=>((InvokePattern)e.GetCurrentPattern(InvokePattern.Pattern)).Invoke());
@@ -153,5 +159,14 @@ internal static class Program
     }
     private sealed class ClientHandle(McpClient client):IAsyncDisposable{public McpClient Client=>client;public async ValueTask DisposeAsync(){try{await client.DisposeAsync();}catch(IOException){}}}
     private static async Task Until(Func<bool> predicate){var watch=Stopwatch.StartNew();while(!predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI condition not observed.");await Task.Delay(100);}}
+    private static uint ScreenPixel(AutomationElement root,int x,int y)
+    {
+        var bounds=Find(root,"ImageSurface").Current.BoundingRectangle;
+        Check(bounds.Width>0&&bounds.Height>0,"Canvas image has no screen bounds.");
+        IntPtr dc=GetDC(IntPtr.Zero);try{return GetPixel(dc,(int)Math.Floor(bounds.X+(x+0.5)*bounds.Width/32),(int)Math.Floor(bounds.Y+(y+0.5)*bounds.Height/32));}finally{ReleaseDC(IntPtr.Zero,dc);}
+    }
+    [DllImport("user32.dll")]private static extern IntPtr GetDC(IntPtr window);
+    [DllImport("user32.dll")]private static extern int ReleaseDC(IntPtr window,IntPtr dc);
+    [DllImport("gdi32.dll")]private static extern uint GetPixel(IntPtr dc,int x,int y);
     private static void Check(bool value,string message){if(!value)throw new Exception(message);}
 }
