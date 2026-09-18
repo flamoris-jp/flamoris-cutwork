@@ -131,6 +131,17 @@ public sealed class LiveMcpTests
         Assert.ThrowsExactly<LiveException>(() => LiveLimits.Fence([new(0,0),new(1000,0),new(1000,1000)], new(2000,2000), new()));
     }
     [TestMethod]
+    public async Task RemoteRedoPreflightsRestoredLayersBeforeHistoryTravel()
+    {
+        var s = new EditorSession(); s.Open(new(new("large.png",new(1000,1000),4000,new byte[4_000_000])));
+        s.Execute(Enumerable.Range(0,5).Select(i => (EditCommand)new AddLayer(new PartLayer(new(0,0,1000,1000),new byte[1_000_000]))).ToArray());
+        s.Undo(); using var access = new LiveAccess(s,LivePermission.Edit);
+        var result = await Adapter(s,access).CallAsync("redo",Args(new{documentToken=s.DocumentToken,expectedRevision=s.Document!.Revision.ToString()}));
+        Assert.AreEqual("work_limit",Text(result).GetProperty("error").GetString());
+        Assert.AreEqual(1,s.Document.Layers.Count); Assert.AreEqual(1,s.RedoCount);
+        s.Redo(); Assert.AreEqual(6,s.Document.Layers.Count);
+    }
+    [TestMethod]
     public void CountRadiusCoordinateAndHistoryBoundariesAreClosed()
     {
         object Rename(int length) => new { type="layer.rename", target=Guid.NewGuid().ToString(), name=new string('n',length) };

@@ -91,13 +91,20 @@ public sealed class EditorSession
         transaction.Commit();
     }
     /// <summary>Read-only cost projection of the next ordinary history entry.</summary>
-    public (DocumentRect DirtyRegion, long RetainedBytes, int EditCount) NextHistoryWork(bool redo)
+    public (DocumentRect DirtyRegion, long RetainedBytes, int EditCount, int TouchedLayerCount, long SurfaceBytes) NextHistoryWork(bool redo)
     {
         var entries = redo ? _redo : _undo;
-        if (entries.Count == 0) return (default, 0, 0);
+        if (entries.Count == 0) return (default, 0, 0, 0, 0);
         var entry = entries[^1];
-        return (entry.Edits.Aggregate(default(DocumentRect), (r, e) => r.Union(e.Dirty)),
-            entry.RetainedBytes, entry.Edits.Length);
+        var dirty = entry.Edits.Aggregate(default(DocumentRect), (r, e) => r.Union(e.Dirty));
+        var layers = entry.Edits.SelectMany(e => e.TouchedLayers()).DistinctBy(l => l.Id).ToArray();
+        // History may restore deleted layers or resize an ROI-backed surface on replay.
+        var surfaceBytes = dirty.IsEmpty ? 0 : layers.Sum(l =>
+        {
+            var bounds = l.Bounds.Union(dirty);
+            return (long)bounds.Width * bounds.Height * (l is PartLayer ? 2 : 8);
+        });
+        return (dirty, entry.RetainedBytes, entry.Edits.Length, layers.Length, surfaceBytes);
     }
 
     public void Undo()

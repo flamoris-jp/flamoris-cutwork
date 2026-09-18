@@ -68,7 +68,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
                     {
                         var cost = session.NextHistoryWork(name == "redo");
                         if (cost.EditCount > LiveLimits.Dabs * LiveLimits.Operations) throw new LiveException("history_work_limit");
-                        new LiveBudget().Add(LiveLimits.Area(cost.DirtyRegion) * Math.Max(1, Document.Layers.Count * 2), cost.RetainedBytes * 2);
+                        new LiveBudget().Add(LiveLimits.Area(cost.DirtyRegion) * Math.Max(1L, (Document.Layers.Count + (long)cost.TouchedLayerCount) * 2), cost.RetainedBytes * 2 + cost.SurfaceBytes);
                         Guard(ct, true);
                         if (name == "undo") session.Undo(); else session.Redo();
                         return Result(Context());
