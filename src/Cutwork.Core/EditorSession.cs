@@ -36,12 +36,17 @@ public sealed class EditorSession
     public long HistoryBudgetBytes { get; }
     public long HistoryBytes => _undo.Sum(entry => entry.RetainedBytes) + _redo.Sum(entry => entry.RetainedBytes);
     public event EventHandler? Changed;
+    public event EventHandler? DocumentReplacing;
+    public string DocumentToken { get; private set; } = Guid.NewGuid().ToString("N");
+    public bool HasActiveTransaction => _active is not null;
 
     public void Open(CutworkDocument document)
     {
         EnsureIdle();
         ArgumentNullException.ThrowIfNull(document);
         document.Claim(this);
+        DocumentReplacing?.Invoke(this, EventArgs.Empty);
+        DocumentToken = Guid.NewGuid().ToString("N");
         if (!ReferenceEquals(Document, document)) Document?.Release(this);
         Document = document;
         PreviewSource = PreviewSource.Composite;
