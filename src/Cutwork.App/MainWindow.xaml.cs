@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         _smudgeTool = new RepairFinishingController(_session, finishingKernel, RepairFinishingKind.Smudge);
         _inputRouter = new CanvasInputRouter(_session);
         InitializeLayerEditing();
+        InitializeMcp();
         CanvasView.AttachSession(_session);
         CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool, _cloneTool,
             _blurTool, _smudgeTool);
@@ -114,11 +115,13 @@ public partial class MainWindow : Window
         JapaneseMenuItem.IsChecked = text.Culture.Name == "ja-JP";
         EnglishMenuItem.IsChecked = text.Culture.Name == "en-US";
         LocalizeLayerEditing();
+        LocalizeMcp();
         UpdatePartToolUi();
     }
 
     private void OpenMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        using var coordination = CoordinateFiles();
         var dialog = new OpenFileDialog
         {
             Filter = LocalizationService.Current["Dialog_ImageFilter"],

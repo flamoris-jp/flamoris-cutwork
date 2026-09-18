@@ -18,9 +18,9 @@ public partial class MainWindow
     private void InitializeLayerEditing()
     {
         CommandBindings.Add(new CommandBinding(UndoEdit, (_, _) => _session.Undo(),
-            (_, e) => e.CanExecute = _session.CanUndo));
+            (_, e) => e.CanExecute = !_remoteEditing && _session.CanUndo));
         CommandBindings.Add(new CommandBinding(RedoEdit, (_, _) => _session.Redo(),
-            (_, e) => e.CanExecute = _session.CanRedo));
+            (_, e) => e.CanExecute = !_remoteEditing && _session.CanRedo));
         UndoMenuItem.Command = UndoEdit;
         UndoMenuItem.CommandTarget = this;
         RedoMenuItem.Command = RedoEdit;
@@ -243,6 +243,7 @@ public partial class MainWindow
         // authored name so merely pressing Enter cannot persist localized UI prose.
         if (editor.Tag is Guid id && _session.Document is { } document)
             editor.Text = document.GetLayer(id).Name;
+        _inlineName = editor;
         editor.IsReadOnly = false;
         editor.Focus();
         editor.SelectAll();
@@ -250,12 +251,14 @@ public partial class MainWindow
 
     private void CommitNameEdit(TextBox editor)
     {
+        _inlineName = null;
         editor.IsReadOnly = true;
         if (editor.Tag is Guid id) ExecuteEdit(new RenameLayer(id, editor.Text));
     }
 
     private void RestoreNameEdit(TextBox editor)
     {
+        _inlineName = null;
         editor.IsReadOnly = true;
         if (editor.Tag is Guid id && _session.Document is { } document)
             editor.Text = DisplayName(document.GetLayer(id), LocalizationService.Current);

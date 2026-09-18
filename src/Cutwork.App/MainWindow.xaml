@@ -99,13 +99,21 @@
                 <MenuItem x:Name="ExportCompositeMenuItem" IsEnabled="False" Click="ExportCompositeMenuItem_Click" />
                 <MenuItem x:Name="ExportHandoffMenuItem" IsEnabled="False" Click="ExportHandoffMenuItem_Click" />
             </MenuItem>
+            <MenuItem x:Name="McpMenu" SubmenuOpened="McpMenu_Opened">
+                <MenuItem x:Name="McpReadMenu" IsCheckable="True" Click="McpRead_Click" />
+                <MenuItem x:Name="McpEditMenu" IsCheckable="True" Click="McpEdit_Click" />
+                <MenuItem x:Name="McpStopMenu" Click="McpStop_Click" />
+                <MenuItem x:Name="McpCopyMenu" Click="McpCopy_Click" />
+                <Separator />
+                <MenuItem x:Name="McpNotice" IsEnabled="False" />
+            </MenuItem>
             <MenuItem x:Name="HelpMenu">
                 <MenuItem x:Name="DeveloperFixtureMenuItem" Visibility="Collapsed" IsEnabled="False"
                           Click="DeveloperFixture_Click" />
             </MenuItem>
         </Menu>
 
-        <ToolBarTray DockPanel.Dock="Top" IsLocked="True" Background="#FFF6F3F1">
+        <ToolBarTray x:Name="MainToolbar" DockPanel.Dock="Top" IsLocked="True" Background="#FFF6F3F1">
             <ToolBar Background="#FFF6F3F1" BorderBrush="#FFD8D3D0" BorderThickness="0,0,0,1">
                 <Button x:Name="OpenToolbarButton" Style="{StaticResource CommandIconButton}"
                         Click="OpenMenuItem_Click">
@@ -189,7 +197,7 @@
             <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
         </Border>
 
-        <Grid>
+        <Grid x:Name="WorkArea">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="58" />
                 <ColumnDefinition Width="*" />
