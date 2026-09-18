@@ -90,6 +90,16 @@ public sealed class EditorSession
         foreach (var command in commands) transaction.Apply(command);
         transaction.Commit();
     }
+    /// <summary>Read-only cost projection of the next ordinary history entry.</summary>
+    public (DocumentRect DirtyRegion, long RetainedBytes, int EditCount) NextHistoryWork(bool redo)
+    {
+        var entries = redo ? _redo : _undo;
+        if (entries.Count == 0) return (default, 0, 0);
+        var entry = entries[^1];
+        return (entry.Edits.Aggregate(default(DocumentRect), (r, e) => r.Union(e.Dirty)),
+            entry.RetainedBytes, entry.Edits.Length);
+    }
+
     public void Undo()
     {
         EnsureIdle();

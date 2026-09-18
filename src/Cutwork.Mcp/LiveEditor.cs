@@ -66,6 +66,10 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
                     Guard(ct, true);
                     if (name is "undo" or "redo")
                     {
+                        var cost = session.NextHistoryWork(name == "redo");
+                        if (cost.EditCount > LiveLimits.Dabs * LiveLimits.Operations) throw new LiveException("history_work_limit");
+                        new LiveBudget().Add(LiveLimits.Area(cost.DirtyRegion) * Math.Max(1, Document.Layers.Count * 2), cost.RetainedBytes * 2);
+                        Guard(ct, true);
                         if (name == "undo") session.Undo(); else session.Redo();
                         return Result(Context());
                     }
@@ -118,11 +122,20 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
     {
         string type = op.GetProperty("type").GetString()!;
         Guid Target() => Resolve(op.GetProperty("target"), ids);
+        // Notifications drive the real WPF compositor too. Bound dirty-area work on metadata
+        // operations, not only the brush kernel's own buffers.
+        if (type is "layer.visible" or "layer.reorder" or "layer.delete" or "patch.transform")
+        {
+            var layer = Document.GetLayer(Target());
+            budget.Add(LiveLimits.Area(layer.Bounds) * Math.Max(1, Document.Layers.Count * 2), 0);
+        }
+        if (Document.Layers.Count >= 4096 && type is "part.create" or "patch.create" or "clone.stroke") throw new LiveException("layer_limit");
         switch (type)
         {
             case "part.create":
                 var fit = await Fit(op, budget, ct);
                 var part = new PartLayer(fit.Bounds, fit.Mask, op.GetProperty("name").GetString()!);
+                budget.Add(LiveLimits.Area(part.Bounds) * (Document.Layers.Count + 1L) * 2, 0);
                 tx.Apply(new AddLayer(part)); return part.Id;
             case "layer.rename": tx.Apply(new RenameLayer(Target(), op.GetProperty("name").GetString()!)); return Target();
             case "layer.semantic": tx.Apply(new SetLayerSemanticName(Target(), op.GetProperty("semanticName").GetString())); return Target();
@@ -152,11 +165,13 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
                 LiveLimits.Fence(fence, Document.Dimensions, budget);
                 var source = new PatchSourceSampler().Freeze(Document.Original, fence);
                 var patch = new PatchLayer(source.SourceBounds, source.StraightBgra.Span, Transform(op), source.SourcePolygon, op.GetProperty("name").GetString()!);
-                LiveLimits.Surface(patch.Bounds); tx.Apply(new AddLayer(patch)); return patch.Id;
+                LiveLimits.Surface(patch.Bounds); budget.Add(LiveLimits.Area(patch.Bounds) * (Document.Layers.Count + 1L) * 2, 0); tx.Apply(new AddLayer(patch)); return patch.Id;
             case "patch.transform":
                 var oldPatch = Document.GetLayer(Target()) as PatchLayer ?? throw new LiveException("invalid_target");
                 var transform = Transform(op);
-                LiveLimits.Surface(PatchLayer.CalculateBounds(oldPatch.SourceSize, transform));
+                var transformedBounds = PatchLayer.CalculateBounds(oldPatch.SourceSize, transform);
+                LiveLimits.Surface(transformedBounds);
+                budget.Add(LiveLimits.Area(oldPatch.Bounds.Union(transformedBounds)) * Math.Max(1, Document.Layers.Count * 2), 0);
                 tx.Apply(new SetPatchTransform(oldPatch.Id, transform)); return oldPatch.Id;
             default: throw new LiveException("unknown_operation");
         }
@@ -168,6 +183,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             var roi = batch.Aggregate(default(DocumentRect), (r, p) => r.Union(MaskBrushKernel.DabBounds(p, radius, Document.Dimensions)));
             var next = bounds.Union(roi); LiveLimits.Surface(next);
             if (next != bounds) budget.Add(LiveLimits.Area(next), LiveLimits.Area(next) * channels * 2);
+            budget.Add(LiveLimits.Area(roi) * Math.Max(1, Document.Layers.Count * 2), 0);
             bounds = next;
         }
     }

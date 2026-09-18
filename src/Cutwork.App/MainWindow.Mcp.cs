@@ -29,6 +29,8 @@ public partial class MainWindow
         || _cloneTool.State != CloneRepairState.Idle || _inputRouter.HasPendingToolWork
         || _patchTool.HasPending || _blurTool.State != RepairFinishingState.Idle || _smudgeTool.State != RepairFinishingState.Idle
         || SemanticNameEditor.IsKeyboardFocusWithin
+        || (_session.SelectedLayerId is { } selected && _session.Document?.GetLayer(selected) is PartLayer currentPart
+            && SemanticNameEditor.Text != (currentPart.SemanticName ?? ""))
         || !IsEnabled;
     private void SetRemoteEditing(bool active)
     {
