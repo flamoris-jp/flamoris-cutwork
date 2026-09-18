@@ -215,7 +215,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
         var repair = target is { } id ? Document.GetLayer(id) as RepairLayer ?? throw new LiveException("invalid_target")
             : new RepairLayer(new((int)Math.Floor(points[0].X), (int)Math.Floor(points[0].Y), 1, 1), new byte[4], ownerPartId: owner);
         ValidateGrowth(repair.Bounds, batches, radius, budget, 4);
-        if (target is null) budget.ReserveHistory(132);
+        if (target is null) budget.ReserveHistory(132 + repair.Name.Length * 2L);
         bool added = target.HasValue;
         var kernel = new CloneRepairKernel();
         foreach (var batch in batches)

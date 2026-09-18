@@ -57,6 +57,17 @@ public sealed class LiveBoundaryTests
         Assert.AreEqual(0,await empty.ReadAsync(new byte[1]));Assert.IsTrue(empty.Closed.IsCancellationRequested);
     }
     [TestMethod]
+    public async Task BlockedWriteIsCancelledByRevocation()
+    {
+        using var revoked = new CancellationTokenSource();
+        using var blocked = new WaitingStream();
+        using var stream = new BoundedProtocolStream(blocked, revoked.Token);
+        var write = stream.WriteAsync(Encoding.UTF8.GetBytes("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}\n")).AsTask();
+        await blocked.Entered.Task; revoked.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await write);
+        Assert.IsTrue(stream.Closed.IsCancellationRequested);
+    }
+    [TestMethod]
     public async Task PipeliningAndDeepFramesCloseOnlyConnection()
     {
         string input=string.Join("\n",Enumerable.Range(0,9).Select(i=>$"{{\"jsonrpc\":\"2.0\",\"id\":{i},\"method\":\"ping\"}}"))+"\n";
@@ -72,7 +83,8 @@ public sealed class LiveBoundaryTests
     {
         public TaskCompletionSource Entered {get;}=new(TaskCreationOptions.RunContinuationsAsynchronously);
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer,CancellationToken token=default){Entered.TrySetResult();await Task.Delay(Timeout.Infinite,token);return 0;}
-        public override bool CanRead=>true;public override bool CanWrite=>false;public override bool CanSeek=>false;
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,CancellationToken token=default){Entered.TrySetResult();await Task.Delay(Timeout.Infinite,token);}
+        public override bool CanRead=>true;public override bool CanWrite=>true;public override bool CanSeek=>false;
         public override long Length=>throw new NotSupportedException();public override long Position{get=>throw new NotSupportedException();set=>throw new NotSupportedException();}
         public override int Read(byte[] b,int o,int c)=>throw new NotSupportedException();public override void Write(byte[] b,int o,int c)=>throw new NotSupportedException();
         public override void Flush(){}public override long Seek(long o,SeekOrigin s)=>throw new NotSupportedException();public override void SetLength(long v)=>throw new NotSupportedException();

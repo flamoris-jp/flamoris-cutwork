@@ -27,7 +27,7 @@ contract, rather than claiming 2026 support from framing alone. The official SDK
 owns initialize, cancellation, protocol errors and discovery. No HTTP, Node,
 Hub/Relay, filesystem tool, raw command dispatcher or editable snapshot exists.
 
-Primary sources inspected 2026-09-19: current stdio specification
+Primary sources inspected 2026-09-18: current stdio specification
 https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio ;
 official SDK and pinned StreamServerTransport/McpServerOptions sources
 https://github.com/modelcontextprotocol/csharp-sdk/tree/v1.0.0 ; native pipe flags
@@ -90,7 +90,11 @@ payload also obeys the existing (default 128 MiB) history budget. Metadata strin
 256 chars, previews at most 1024 longest edge / 1 MiB PNG, one image per call.
 Image work ≤8 million output-pixel/layer visits. No full-canvas copy is required.
 Fitting estimate reserves 256 bytes/ROI pixel for boundary/queue work; brush cost
-counts bounded batch ROI × sample count and growth copies. Validation precedes
+counts bounded batch ROI × sample count and growth copies. Dirty-region unions
+also reserve compositor work for cancellation and shared history, including gaps
+between distant operations and owned-repair cascade deletion. Retained history
+cost accumulates before fitter/raster preparation; the session remains the final
+history-budget authority. Validation precedes
 kernel allocation; budgets accumulate over the batch. Read deadline 120 s,
 request 15 s, write 5 s; partial/slow frames terminate the connection. Malformed
 UTF-8, duplicate/unknown properties, depth, enums and non-object roots fail closed.
