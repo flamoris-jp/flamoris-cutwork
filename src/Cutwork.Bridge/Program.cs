@@ -22,7 +22,7 @@ try
     catch (Exception e) when (e is OperationCanceledException or TimeoutException or IOException or ObjectDisposedException) { }
     return 0;
 }
-catch (Exception e) when (e is IOException or TimeoutException or OperationCanceledException)
+catch (Exception e) when (e is IOException or TimeoutException or OperationCanceledException or UnauthorizedAccessException or System.Security.SecurityException)
 {
     Console.Error.WriteLine("MCP bridge connection closed or unavailable."); return 1;
 }
