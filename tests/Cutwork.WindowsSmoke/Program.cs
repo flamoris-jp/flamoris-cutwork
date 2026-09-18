@@ -78,6 +78,7 @@ internal static class Program
                 var stale=await Edit(client,before,new{type="layer.rename",target=layers[0].GetProperty("id").GetString(),name="stale"});Check(stale.IsError==true,"Stale write accepted.");
                 var context=await Context(client);var failed=await Edit(client,context,new{type="part.create",fence,step=1,name="Rollback"},new{type="layer.delete",target=Guid.NewGuid().ToString()});
                 Check(failed.IsError==true&&(await Layers(client)).GetArrayLength()==4,"Failed batch leaked state.");Check(Enumerable.SequenceEqual(repaired, await Composite(client)),"Failed batch changed pixels.");
+                Console.WriteLine("Stale revision and mixed-batch rollback: PASS");
                 // An ordinary WPF visibility edit must be observable by the external client.
                 var check=Find(window,"LayerList").FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.CheckBox));
                 Check(check is not null,"Layer visibility checkbox missing.");
@@ -85,6 +86,7 @@ internal static class Program
                 ((TogglePattern)check!.GetCurrentPattern(TogglePattern.Pattern)).Toggle();
                 Check((await Context(client)).GetProperty("revision").GetString()!=oldRevision,"UI edit not visible to MCP.");
                 await ClickReady(window,"UndoToolbarButton");
+                Console.WriteLine("Ordinary WPF visibility edit visible to MCP: PASS");
                 // Save through real file dialog, then load independently to compare durable authored content.
                 await FileMenu(window,process.Id,"SaveAsMenuItem",project);
                 var store=new FlimgProjectStore(); var loaded=store.Load(project);
@@ -120,7 +122,7 @@ internal static class Program
             }
             Console.WriteLine("PASS: published editor+bridge outside source with System32-only PATH; official SDK 1.0.0 / MCP 2025-03-26; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
         }
-        finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(IOException){} }
+        finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){} }
     }
     private static void CopyDirectory(string from,string to){Directory.CreateDirectory(to);foreach(var file in Directory.GetFiles(from))File.Copy(file,Path.Combine(to,Path.GetFileName(file)));foreach(var dir in Directory.GetDirectories(from))CopyDirectory(dir,Path.Combine(to,Path.GetFileName(dir)));}
     private static CancellationToken Deadline()=>new CancellationTokenSource(Limit).Token;
