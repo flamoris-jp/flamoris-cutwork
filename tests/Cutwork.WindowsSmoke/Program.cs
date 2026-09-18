@@ -148,7 +148,7 @@ internal static class Program
     private static async Task FileMenu(AutomationElement root,int pid,string item,string path){var opening=Menu(root,"FileMenu",item);await ChooseFile(pid,path);await opening;}
     private static async Task ChooseFile(int pid,string path)
     {
-        AutomationElement? filename=null;await Until(()=>(filename=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new PropertyCondition(AutomationElement.AutomationIdProperty,"1148"))))is not null);
+        AutomationElement? filename=null;await Until(()=>(filename=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new OrCondition(new PropertyCondition(AutomationElement.AutomationIdProperty,"1148"),new PropertyCondition(AutomationElement.AutomationIdProperty,"1001")))))is not null);
         var edit=filename!.TryGetCurrentPattern(ValuePattern.Pattern,out _)?filename:filename.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit));
         ((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).SetValue(path);AutomationElement? dialog=edit;
         while(dialog is not null&&dialog.Current.ClassName!="#32770")dialog=TreeWalker.ControlViewWalker.GetParent(dialog);await Invoke(Find(dialog!,"1"));
