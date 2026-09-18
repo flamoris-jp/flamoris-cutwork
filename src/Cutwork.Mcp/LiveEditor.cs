@@ -73,7 +73,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
                         if (name == "undo") session.Undo(); else session.Redo();
                         return Result(Context());
                     }
-                    var budget = new LiveBudget();
+                    var budget = new LiveBudget(session.HistoryBudgetBytes);
                     var ids = new List<Guid?>();
                     using var transaction = session.BeginTransaction();
                     foreach (var op in args.GetProperty("operations").EnumerateArray())
@@ -102,10 +102,11 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
         canUndo = session.CanUndo, canRedo = session.CanRedo, undoCount = session.UndoCount, redoCount = session.RedoCount };
     private string Revision() => Document.Revision.ToString(CultureInfo.InvariantCulture);
     private static string? Bound(string? s) => s is { Length: > 256 } ? s[..256] : s;
-    private async Task<(DocumentRect Bounds, byte[] Mask)> Fit(JsonElement op, LiveBudget budget, CancellationToken ct)
+    private async Task<(DocumentRect Bounds, byte[] Mask)> Fit(JsonElement op, LiveBudget budget, CancellationToken ct, bool authored = false)
     {
         var points = Points(op.GetProperty("fence"));
-        LiveLimits.Fence(points, Document.Dimensions, budget);
+        var bounds = LiveLimits.Fence(points, Document.Dimensions, budget);
+        if (authored) budget.ReserveHistory(128 + LiveLimits.Area(bounds) + op.GetProperty("name").GetString()!.Length * 2L);
         var original = Document.Original; int step = op.GetProperty("step").GetInt32();
         var result = await Task.Run(() =>
         {
@@ -130,10 +131,18 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             budget.Add(LiveLimits.Area(layer.Bounds) * Math.Max(1, Document.Layers.Count * 2), 0);
         }
         if (Document.Layers.Count >= 4096 && type is "part.create" or "patch.create" or "clone.stroke") throw new LiveException("layer_limit");
+        if (type is "layer.rename" or "layer.semantic")
+        {
+            var existing = Document.GetLayer(Target());
+            long bytes = 128 + ((long)existing.Name.Length + (existing.SemanticName?.Length ?? 0) + 256) * 2;
+            budget.Add(0, bytes); budget.ReserveHistory(bytes);
+        }
+        else if (type is "layer.visible" or "layer.reorder") budget.ReserveHistory(128);
+        else if (type == "patch.transform") budget.ReserveHistory(192);
         switch (type)
         {
             case "part.create":
-                var fit = await Fit(op, budget, ct);
+                var fit = await Fit(op, budget, ct, authored: true);
                 var part = new PartLayer(fit.Bounds, fit.Mask, op.GetProperty("name").GetString()!);
                 budget.Add(LiveLimits.Area(part.Bounds) * (Document.Layers.Count + 1L) * 2, 0);
                 tx.Apply(new AddLayer(part)); return part.Id;
@@ -145,7 +154,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
                 var doomed = Document.GetLayer(Target());
                 var retained = Document.Layers.Where(l => l.Id == doomed.Id || (l as RepairLayer)?.OwnerPartId == doomed.Id)
                     .Sum(l => LiveLimits.Area(l is PatchLayer p ? p.SourceBounds : l.Bounds) * (l is PartLayer ? 1L : 4L));
-                budget.Add(0, retained); tx.Apply(new DeleteLayer(doomed.Id)); return doomed.Id;
+                budget.Add(0, retained); budget.ReserveHistory(retained + Document.Layers.Sum(l => 192L + l.Name.Length * 2L + (l.SemanticName?.Length ?? 0) * 2L)); tx.Apply(new DeleteLayer(doomed.Id)); return doomed.Id;
             case "mask.stroke":
                 var maskPart = Document.GetLayer(Target()) as PartLayer ?? throw new LiveException("invalid_target");
                 double radius = op.GetProperty("radius").GetDouble();
@@ -162,7 +171,8 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             case "clone.stroke": return await Clone(op, ids, tx, budget, ct);
             case "patch.create":
                 var fence = Points(op.GetProperty("fence"));
-                LiveLimits.Fence(fence, Document.Dimensions, budget);
+                var sourceBounds = LiveLimits.Fence(fence, Document.Dimensions, budget);
+                budget.ReserveHistory(192 + LiveLimits.Area(sourceBounds) * 4 + fence.Length * 16L + op.GetProperty("name").GetString()!.Length * 2L);
                 var source = new PatchSourceSampler().Freeze(Document.Original, fence);
                 var patch = new PatchLayer(source.SourceBounds, source.StraightBgra.Span, Transform(op), source.SourcePolygon, op.GetProperty("name").GetString()!);
                 LiveLimits.Surface(patch.Bounds); budget.Add(LiveLimits.Area(patch.Bounds) * (Document.Layers.Count + 1L) * 2, 0); tx.Apply(new AddLayer(patch)); return patch.Id;
@@ -181,6 +191,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
         foreach (var batch in batches)
         {
             var roi = batch.Aggregate(default(DocumentRect), (r, p) => r.Union(MaskBrushKernel.DabBounds(p, radius, Document.Dimensions)));
+            budget.ReserveHistory(128 + LiveLimits.Area(roi) * channels * 2);
             var next = bounds.Union(roi); LiveLimits.Surface(next);
             if (next != bounds) budget.Add(LiveLimits.Area(next), LiveLimits.Area(next) * channels * 2);
             budget.Add(LiveLimits.Area(roi) * Math.Max(1, Document.Layers.Count * 2), 0);
@@ -201,6 +212,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
         var repair = target is { } id ? Document.GetLayer(id) as RepairLayer ?? throw new LiveException("invalid_target")
             : new RepairLayer(new((int)Math.Floor(points[0].X), (int)Math.Floor(points[0].Y), 1, 1), new byte[4], ownerPartId: owner);
         ValidateGrowth(repair.Bounds, batches, radius, budget, 4);
+        if (target is null) budget.ReserveHistory(132);
         bool added = target.HasValue;
         var kernel = new CloneRepairKernel();
         foreach (var batch in batches)

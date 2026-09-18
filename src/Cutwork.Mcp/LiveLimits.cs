@@ -63,8 +63,14 @@ public static class LiveLimits
     }
 }
 
-public sealed class LiveBudget
+public sealed class LiveBudget(long historyLimit = long.MaxValue)
 {
+    public long History { get; private set; }
+    public void ReserveHistory(long bytes)
+    {
+        History = checked(History + bytes);
+        if (History > historyLimit) throw new LiveException("history_limit");
+    }
     public long Work { get; private set; }
     public long Bytes { get; private set; }
     public void Add(long work, long bytes)
