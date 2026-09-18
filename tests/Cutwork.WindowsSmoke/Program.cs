@@ -93,6 +93,7 @@ internal static class Program
                 durablePart=layers[0].GetProperty("id").GetGuid();
                 durableMask=await Mask(client,durablePart);
                 await FileMenu(window,process.Id,"SaveAsMenuItem",project);
+                await Until(() => File.Exists(project));
                 var store=new FlimgProjectStore(); var loaded=store.Load(project);
                 Check(loaded.Layers.Count==4,"v2 save lost authored layers.");
                 Check(loaded.Layers.OfType<Flamoris.Cutwork.Core.RepairLayer>().Single().OwnerPartId.HasValue,"Save lost repair ownership.");
@@ -145,7 +146,7 @@ internal static class Program
     private static async Task ClickReady(AutomationElement root,string id){await Until(()=>Find(root,id).Current.IsEnabled);await Invoke(Find(root,id));}
     private static async Task Menu(AutomationElement root,string parent,string child){((ExpandCollapsePattern)Find(root,parent).GetCurrentPattern(ExpandCollapsePattern.Pattern)).Expand();await Invoke(Find(root,child));}
     private static bool VisibleValue(AutomationElement root,string text)=>root.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit)).Cast<AutomationElement>().Any(e=>e.TryGetCurrentPattern(ValuePattern.Pattern,out var p)&&((ValuePattern)p).Current.Value==text);
-    private static async Task FileMenu(AutomationElement root,int pid,string item,string path){var opening=Menu(root,"FileMenu",item);await ChooseFile(pid,path);await opening;}
+    private static async Task FileMenu(AutomationElement root,int pid,string item,string path){var opening=Menu(root,"FileMenu",item);await ChooseFile(pid,path);await opening;await Until(()=>root.Current.IsEnabled);}
     private static async Task ChooseFile(int pid,string path)
     {
         AutomationElement? filename=null;await Until(()=>(filename=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new OrCondition(new PropertyCondition(AutomationElement.AutomationIdProperty,"1148"),new PropertyCondition(AutomationElement.AutomationIdProperty,"1001")))))is not null);
