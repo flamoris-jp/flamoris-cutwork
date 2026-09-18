@@ -55,6 +55,22 @@ public sealed class LiveImageTests
             Assert.IsTrue(r.IsError==true);Assert.IsFalse(r.Content.OfType<ImageContentBlock>().Any());Assert.IsFalse(old.IsActive);fresh?.Dispose();
         }
     });
+    [TestMethod]
+    public Task PreviewEdgeAndEncodedPngBudgetRejectOversizedReadback() => Sta(async () =>
+    {
+        var pixels = new byte[1024*1024*4]; new Random(33).NextBytes(pixels);
+        var s = new EditorSession(); s.Open(new(new("noise.png",new(1024,1024),4096,pixels)));
+        using var access = new LiveAccess(s,LivePermission.ReadOnly);
+        var e = new LiveEditor(s,access,()=>false,()=>Task.CompletedTask,_=>{});
+        var small = await e.CallAsync("image",JsonSerializer.SerializeToElement(new{source="Original",target=(string?)null,roi=(object?)null,maxEdge=256}));
+        Assert.IsFalse(small.IsError==true); Assert.IsTrue(small.Content.OfType<ImageContentBlock>().Single().DecodedData.Length <= LiveLimits.PngBytes);
+        foreach(int edge in new[]{1024,1025})
+        {
+            var large = await e.CallAsync("image",JsonSerializer.SerializeToElement(new{source="Original",target=(string?)null,roi=(object?)null,maxEdge=edge}));
+            Assert.IsTrue(large.IsError==true); Assert.IsFalse(large.Content.OfType<ImageContentBlock>().Any());
+        }
+        Assert.AreEqual(0L,s.Document!.Revision); Assert.AreEqual(0,s.UndoCount);
+    });
     private static byte[] Decode(byte[] png)
     {
         using var stream=new MemoryStream(png);var frame=new PngBitmapDecoder(stream,BitmapCreateOptions.None,BitmapCacheOption.OnLoad).Frames[0];

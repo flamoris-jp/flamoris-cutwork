@@ -131,6 +131,29 @@ public sealed class LiveMcpTests
         Assert.ThrowsExactly<LiveException>(() => LiveLimits.Fence([new(0,0),new(1000,0),new(1000,1000)], new(2000,2000), new()));
     }
     [TestMethod]
+    public void CountRadiusCoordinateAndHistoryBoundariesAreClosed()
+    {
+        object Rename(int length) => new { type="layer.rename", target=Guid.NewGuid().ToString(), name=new string('n',length) };
+        JsonElement Batch(object[] ops) => Args(new { documentToken=new string('a',32), expectedRevision="0", operations=ops });
+        LiveSchema.Validate("edit", Batch(Enumerable.Repeat(Rename(256),64).ToArray()));
+        Assert.ThrowsExactly<LiveException>(() => LiveSchema.Validate("edit", Batch(Enumerable.Repeat(Rename(256),65).ToArray())));
+        Assert.ThrowsExactly<LiveException>(() => LiveSchema.Validate("edit", Batch([Rename(257)])));
+        object Stroke(int count, double radius) => new { type="mask.stroke", target=Guid.NewGuid().ToString(), points=Enumerable.Repeat(new{x=1,y=1},count).ToArray(), radius, polarity="Add" };
+        LiveSchema.Validate("edit", Batch([Stroke(4096,64)]));
+        Assert.ThrowsExactly<LiveException>(() => LiveSchema.Validate("edit", Batch([Stroke(4097,64)])));
+        Assert.ThrowsExactly<LiveException>(() => LiveSchema.Validate("edit", Batch([Stroke(1,64.01)])));
+        LiveLimits.Point(new(31.99,31.99), new(32,32));
+        Assert.ThrowsExactly<LiveException>(() => LiveLimits.Point(new(32,1), new(32,32)));
+        Assert.ThrowsExactly<LiveException>(() => LiveLimits.Point(new(double.NaN,1), new(32,32)));
+        var history = new LiveBudget(256); history.ReserveHistory(256);
+        Assert.ThrowsExactly<LiveException>(() => history.ReserveHistory(1));
+        var fence = Enumerable.Range(0,64).Select(i => new DocumentPoint(16+8*Math.Cos(i*Math.PI/32),16+8*Math.Sin(i*Math.PI/32))).ToArray();
+        LiveLimits.Fence(fence, new(32,32), new());
+        Assert.ThrowsExactly<LiveException>(() => LiveLimits.Fence(fence.Append(fence[0]).ToArray(), new(32,32), new()));
+        LiveLimits.Stroke([new(1,1), new(512.5,1)], 0.5, new(600,32), new());
+        Assert.ThrowsExactly<LiveException>(() => LiveLimits.Stroke([new(1,1), new(513,1)], 0.5, new(600,32), new()));
+    }
+    [TestMethod]
     public async Task DistantEditsBoundRollbackUnionAndRestorePriorHistory()
     {
         var s = new EditorSession();
