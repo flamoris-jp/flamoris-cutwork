@@ -83,8 +83,8 @@ internal static class Program
                 var check=Find(window,"LayerList").FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.CheckBox));
                 Check(check is not null,"Layer visibility checkbox missing.");
                 string oldRevision=(await Context(client)).GetProperty("revision").GetString()!;
-                ((TogglePattern)check!.GetCurrentPattern(TogglePattern.Pattern)).Toggle();
-                Check((await Context(client)).GetProperty("revision").GetString()!=oldRevision,"UI edit not visible to MCP.");
+                Click(check!);
+                await UntilAsync(async () => (await Context(client)).GetProperty("revision").GetString()!=oldRevision);
                 await ClickReady(window,"UndoToolbarButton");
                 Console.WriteLine("Ordinary WPF visibility edit visible to MCP: PASS");
                 // Save through real file dialog, then load independently to compare durable authored content.
@@ -161,6 +161,15 @@ internal static class Program
     }
     private sealed class ClientHandle(McpClient client):IAsyncDisposable{public McpClient Client=>client;public async ValueTask DisposeAsync(){try{await client.DisposeAsync();}catch(IOException){}}}
     private static async Task Until(Func<bool> predicate){var watch=Stopwatch.StartNew();while(!predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI condition not observed.");await Task.Delay(100);}}
+    private static async Task UntilAsync(Func<Task<bool>> predicate){var watch=Stopwatch.StartNew();while(!await predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI change not observed by MCP.");await Task.Delay(100);}}
+    private static void Click(AutomationElement element)
+    {
+        // WPF TogglePattern only changes IsChecked; it does not raise the ordinary Click command.
+        var p = element.GetClickablePoint(); Check(SetCursorPos((int)p.X,(int)p.Y),"Cannot position mouse.");
+        MouseEvent(2,0,0,0,UIntPtr.Zero); MouseEvent(4,0,0,0,UIntPtr.Zero);
+    }
+    [DllImport("user32.dll")]private static extern bool SetCursorPos(int x,int y);
+    [DllImport("user32.dll",EntryPoint="mouse_event")]private static extern void MouseEvent(uint flags,uint x,uint y,uint data,UIntPtr extra);
     private static uint ScreenPixel(AutomationElement root,int x,int y)
     {
         var bounds=Find(root,"ImageSurface").Current.BoundingRectangle;
