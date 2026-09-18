@@ -38,6 +38,7 @@ internal static class Program
             AutomationElement? main=null;
             await Until(()=>{process.Refresh();if(process.HasExited)throw new Exception("Editor exited.");if(process.MainWindowHandle==0)return false;main=AutomationElement.FromHandle(process.MainWindowHandle);return main is not null;});
             var window=main!;
+            string? durableLayers=null; byte[]? durableComposite=null; byte[]? durableMask=null; Guid durablePart=default;
             await FileMenu(window,process.Id,"OpenMenuItem",image);
             Console.WriteLine("Opened synthetic artwork through WPF.");
             await Menu(window,"ViewMenu","ActualSizeMenuItem");
@@ -88,6 +89,9 @@ internal static class Program
                 await ClickReady(window,"UndoToolbarButton");
                 Console.WriteLine("Ordinary WPF visibility edit visible to MCP: PASS");
                 // Save through real file dialog, then load independently to compare durable authored content.
+                durableLayers=(await Layers(client)).GetRawText(); durableComposite=await Composite(client);
+                durablePart=layers[0].GetProperty("id").GetGuid();
+                durableMask=await Mask(client,durablePart);
                 await FileMenu(window,process.Id,"SaveAsMenuItem",project);
                 var store=new FlimgProjectStore(); var loaded=store.Load(project);
                 Check(loaded.Layers.Count==4,"v2 save lost authored layers.");
@@ -103,7 +107,10 @@ internal static class Program
             await Menu(window,"McpMenu","McpReadMenu");pipe=await Connection(process.Id);
             await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
             {
-                Check((await Layers(handle.Client)).GetArrayLength()==4,"Reopen lost edits.");
+                Check((await Layers(handle.Client)).GetRawText()==durableLayers,"Reopen changed stable IDs, order, ownership, visibility or metadata.");
+                Check(Enumerable.SequenceEqual(durableComposite!,await Composite(handle.Client)),"Reopen changed composed repair pixels.");
+                Check(Enumerable.SequenceEqual(durableMask!,await Mask(handle.Client,durablePart)),"Reopen changed authored mask pixels.");
+                Console.WriteLine("UI Save/v2 reopen preserves IDs, ownership/order, mask and composite pixels: PASS");
                 // Reopen exact same persistent document identity.
                 await FileMenu(window,process.Id,"OpenProjectMenuItem",project);await Rejected(handle.Client);
             }
@@ -132,6 +139,7 @@ internal static class Program
     private static async Task<JsonElement> Layers(McpClient c)=>Text(await c.CallToolAsync("layers",new Dictionary<string,object?>{{"offset",0},{"count",64}},cancellationToken:Deadline())).GetProperty("layers");
     private static async Task<CallToolResult> Edit(McpClient c,JsonElement context,params object[] ops)=>await c.CallToolAsync("edit",new Dictionary<string,object?>{{"documentToken",context.GetProperty("documentToken").GetString()},{"expectedRevision",context.GetProperty("revision").GetString()},{"operations",JsonSerializer.SerializeToElement(ops)}},cancellationToken:Deadline());
     private static async Task<byte[]> Composite(McpClient c)=>(await c.CallToolAsync("image",new Dictionary<string,object?>{{"source","Composite"},{"target",null},{"roi",null},{"maxEdge",32}},cancellationToken:Deadline())).Content.OfType<ImageContentBlock>().Single().DecodedData.ToArray();
+    private static async Task<byte[]> Mask(McpClient c,Guid id)=>(await c.CallToolAsync("image",new Dictionary<string,object?>{{"source","Mask"},{"target",id.ToString()},{"roi",null},{"maxEdge",32}},cancellationToken:Deadline())).Content.OfType<ImageContentBlock>().Single().DecodedData.ToArray();
     private static AutomationElement Find(AutomationElement root,string id)=>root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id))??throw new Exception("Missing UI control: "+id);
     private static Task Invoke(AutomationElement e)=>Task.Run(()=>((InvokePattern)e.GetCurrentPattern(InvokePattern.Pattern)).Invoke());
     private static async Task ClickReady(AutomationElement root,string id){await Until(()=>Find(root,id).Current.IsEnabled);await Invoke(Find(root,id));}
