@@ -160,7 +160,8 @@ internal static class Program
         AutomationElement? filename=null;await Until(()=>(filename=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new OrCondition(new PropertyCondition(AutomationElement.AutomationIdProperty,"1148"),new PropertyCondition(AutomationElement.AutomationIdProperty,"1001")))))is not null);
         var edit=filename!.TryGetCurrentPattern(ValuePattern.Pattern,out _)?filename:filename.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit));
         Console.WriteLine("Native filename field: "+edit.Current.AutomationId+" / "+edit.Current.Name+" / "+edit.Current.ClassName);
-        ((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).SetValue(path);AutomationElement? dialog=edit;
+        TypeText(edit,path);
+        await Until(()=>((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).Current.Value==path);AutomationElement? dialog=edit;
         while(dialog is not null&&dialog.Current.ClassName!="#32770")dialog=TreeWalker.ControlViewWalker.GetParent(dialog);var accept=Find(dialog!,"1");Console.WriteLine("Native accept button: "+accept.Current.Name);await Invoke(accept);
     }
     private static async Task<string> Connection(int pid)
@@ -180,6 +181,22 @@ internal static class Program
     private sealed class ClientHandle(McpClient client):IAsyncDisposable{public McpClient Client=>client;public async ValueTask DisposeAsync(){try{await client.DisposeAsync();}catch(IOException){}}}
     private static async Task Until(Func<bool> predicate){var watch=Stopwatch.StartNew();while(!predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI condition not observed.");await Task.Delay(100);}}
     private static async Task UntilAsync(Func<Task<bool>> predicate){var watch=Stopwatch.StartNew();while(!await predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI change not observed by MCP.");await Task.Delay(100);}}
+    private static void TypeText(AutomationElement edit,string text)
+    {
+        edit.SetFocus();
+        var input = new List<KeyboardInput> { new(){Type=1,VirtualKey=0x11},new(){Type=1,VirtualKey=0x41},new(){Type=1,VirtualKey=0x41,Flags=2},new(){Type=1,VirtualKey=0x11,Flags=2} };
+        foreach(char c in text){input.Add(new(){Type=1,ScanCode=c,Flags=4});input.Add(new(){Type=1,ScanCode=c,Flags=6});}
+        Check(SendInput((uint)input.Count,input.ToArray(),Marshal.SizeOf<KeyboardInput>())==input.Count,"Native filename input failed.");
+    }
+    // The published acceptance target is Windows x64; INPUT has a 32-byte union at offset 8.
+    [StructLayout(LayoutKind.Explicit,Size=40)]private struct KeyboardInput
+    {
+        [FieldOffset(0)]public uint Type;
+        [FieldOffset(8)]public ushort VirtualKey;
+        [FieldOffset(10)]public ushort ScanCode;
+        [FieldOffset(12)]public uint Flags;
+    }
+    [DllImport("user32.dll",SetLastError=true)]private static extern uint SendInput(uint count,KeyboardInput[] inputs,int size);
     private static void Click(AutomationElement element)
     {
         // WPF TogglePattern only changes IsChecked; it does not raise the ordinary Click command.
