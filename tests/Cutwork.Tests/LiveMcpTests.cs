@@ -131,6 +131,22 @@ public sealed class LiveMcpTests
         Assert.ThrowsExactly<LiveException>(() => LiveLimits.Fence([new(0,0),new(1000,0),new(1000,1000)], new(2000,2000), new()));
     }
     [TestMethod]
+    public async Task DistantEditsBoundRollbackUnionAndRestorePriorHistory()
+    {
+        var s = new EditorSession();
+        s.Open(new(new("large.png", new(2000,2000), 8000, new byte[2000*2000*4])));
+        var first = new PartLayer(new(0,0,10,10), new byte[100], "first");
+        var last = new PartLayer(new(1900,1900,10,10), new byte[100], "last");
+        s.Execute(new AddLayer(first)); s.Execute(new AddLayer(last));
+        using var access = new LiveAccess(s, LivePermission.Edit);
+        var result = await Edit(Adapter(s, access),
+            new { type = "layer.visible", target = first.Id.ToString(), visible = false },
+            new { type = "layer.visible", target = last.Id.ToString(), visible = false });
+        Assert.AreEqual("work_limit", Text(result).GetProperty("error").GetString());
+        Assert.IsTrue(first.Visible); Assert.IsTrue(last.Visible);
+        Assert.AreEqual(2, s.UndoCount); Assert.IsFalse(s.HasActiveTransaction);
+    }
+    [TestMethod]
     public async Task FrameLimitsUtf8TruncationAndDuplicateEnvelopeAreContained()
     {
         foreach (var pair in new[] { (new byte[] { 255, 10 }, McpFrameStatus.InvalidUtf8), (Encoding.UTF8.GetBytes("12345\n"), McpFrameStatus.Oversized),

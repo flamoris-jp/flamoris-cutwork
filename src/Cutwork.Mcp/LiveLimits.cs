@@ -65,6 +65,18 @@ public static class LiveLimits
 
 public sealed class LiveBudget(long historyLimit = long.MaxValue)
 {
+    private DocumentRect dirty;
+    private int maximumLayers;
+    private long redrawCost;
+    // Rollback and shared Undo publish the union, including the gap between distant edits.
+    public void Dirty(DocumentRect region, int layerCount)
+    {
+        dirty = dirty.Union(region);
+        maximumLayers = Math.Max(maximumLayers, layerCount);
+        long cost = LiveLimits.Area(dirty) * Math.Max(1L, maximumLayers * 2L);
+        Add(cost - redrawCost, 0);
+        redrawCost = cost;
+    }
     public long History { get; private set; }
     public void ReserveHistory(long bytes)
     {

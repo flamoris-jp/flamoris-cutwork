@@ -128,7 +128,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
         if (type is "layer.visible" or "layer.reorder" or "layer.delete" or "patch.transform")
         {
             var layer = Document.GetLayer(Target());
-            budget.Add(LiveLimits.Area(layer.Bounds) * Math.Max(1, Document.Layers.Count * 2), 0);
+            budget.Dirty(layer.Bounds, Document.Layers.Count);
         }
         if (Document.Layers.Count >= 4096 && type is "part.create" or "patch.create" or "clone.stroke") throw new LiveException("layer_limit");
         if (type is "layer.rename" or "layer.semantic")
@@ -144,7 +144,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             case "part.create":
                 var fit = await Fit(op, budget, ct, authored: true);
                 var part = new PartLayer(fit.Bounds, fit.Mask, op.GetProperty("name").GetString()!);
-                budget.Add(LiveLimits.Area(part.Bounds) * (Document.Layers.Count + 1L) * 2, 0);
+                budget.Dirty(part.Bounds, Document.Layers.Count + 1);
                 tx.Apply(new AddLayer(part)); return part.Id;
             case "layer.rename": tx.Apply(new RenameLayer(Target(), op.GetProperty("name").GetString()!)); return Target();
             case "layer.semantic": tx.Apply(new SetLayerSemanticName(Target(), op.GetProperty("semanticName").GetString())); return Target();
@@ -152,9 +152,12 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             case "layer.reorder": tx.Apply(new ReorderLayer(Target(), op.GetProperty("index").GetInt32())); return Target();
             case "layer.delete":
                 var doomed = Document.GetLayer(Target());
-                var retained = Document.Layers.Where(l => l.Id == doomed.Id || (l as RepairLayer)?.OwnerPartId == doomed.Id)
-                    .Sum(l => LiveLimits.Area(l is PatchLayer p ? p.SourceBounds : l.Bounds) * (l is PartLayer ? 1L : 4L));
-                budget.Add(0, retained); budget.ReserveHistory(retained + Document.Layers.Sum(l => 192L + l.Name.Length * 2L + (l.SemanticName?.Length ?? 0) * 2L)); tx.Apply(new DeleteLayer(doomed.Id)); return doomed.Id;
+                var removed = Document.Layers.Where(l => l.Id == doomed.Id || (l as RepairLayer)?.OwnerPartId == doomed.Id).ToArray();
+                var retained = removed.Sum(l => 192L + l.Name.Length * 2L + (l.SemanticName?.Length ?? 0) * 2L
+                    + LiveLimits.Area(l is PatchLayer p ? p.SourceBounds : l.Bounds) * (l is PartLayer ? 1L : 4L)
+                    + (l is PatchLayer patchLayer ? patchLayer.SourcePolygon.Count * 16L : 0));
+                budget.Dirty(removed.Aggregate(default(DocumentRect), (r, l) => r.Union(l.Bounds)), Document.Layers.Count);
+                budget.Add(0, retained); budget.ReserveHistory(retained); tx.Apply(new DeleteLayer(doomed.Id)); return doomed.Id;
             case "mask.stroke":
                 var maskPart = Document.GetLayer(Target()) as PartLayer ?? throw new LiveException("invalid_target");
                 double radius = op.GetProperty("radius").GetDouble();
@@ -175,13 +178,13 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
                 budget.ReserveHistory(192 + LiveLimits.Area(sourceBounds) * 4 + fence.Length * 16L + op.GetProperty("name").GetString()!.Length * 2L);
                 var source = new PatchSourceSampler().Freeze(Document.Original, fence);
                 var patch = new PatchLayer(source.SourceBounds, source.StraightBgra.Span, Transform(op), source.SourcePolygon, op.GetProperty("name").GetString()!);
-                LiveLimits.Surface(patch.Bounds); budget.Add(LiveLimits.Area(patch.Bounds) * (Document.Layers.Count + 1L) * 2, 0); tx.Apply(new AddLayer(patch)); return patch.Id;
+                LiveLimits.Surface(patch.Bounds); budget.Dirty(patch.Bounds, Document.Layers.Count + 1); tx.Apply(new AddLayer(patch)); return patch.Id;
             case "patch.transform":
                 var oldPatch = Document.GetLayer(Target()) as PatchLayer ?? throw new LiveException("invalid_target");
                 var transform = Transform(op);
                 var transformedBounds = PatchLayer.CalculateBounds(oldPatch.SourceSize, transform);
                 LiveLimits.Surface(transformedBounds);
-                budget.Add(LiveLimits.Area(oldPatch.Bounds.Union(transformedBounds)) * Math.Max(1, Document.Layers.Count * 2), 0);
+                budget.Dirty(oldPatch.Bounds.Union(transformedBounds), Document.Layers.Count);
                 tx.Apply(new SetPatchTransform(oldPatch.Id, transform)); return oldPatch.Id;
             default: throw new LiveException("unknown_operation");
         }
@@ -194,7 +197,7 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             budget.ReserveHistory(128 + LiveLimits.Area(roi) * channels * 2);
             var next = bounds.Union(roi); LiveLimits.Surface(next);
             if (next != bounds) budget.Add(LiveLimits.Area(next), LiveLimits.Area(next) * channels * 2);
-            budget.Add(LiveLimits.Area(roi) * Math.Max(1, Document.Layers.Count * 2), 0);
+            budget.Dirty(roi, Document.Layers.Count + 1);
             bounds = next;
         }
     }
