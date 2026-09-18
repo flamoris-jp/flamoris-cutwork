@@ -62,11 +62,11 @@ public sealed class LiveBoundaryTests
         string input=string.Join("\n",Enumerable.Range(0,9).Select(i=>$"{{\"jsonrpc\":\"2.0\",\"id\":{i},\"method\":\"ping\"}}"))+"\n";
         using var stream=new BoundedProtocolStream(new MemoryStream(Encoding.UTF8.GetBytes(input)),default);
         var buffer=new byte[4096];for(int i=0;i<8;i++)Assert.IsTrue(await stream.ReadAsync(buffer)>0);
-        await Assert.ThrowsExactlyAsync<IOException>(async()=>await stream.ReadAsync(buffer));
+        await Assert.ThrowsExactlyAsync<IOException>(async()=>{ _ = await stream.ReadAsync(buffer); });
         Assert.IsTrue(stream.Closed.IsCancellationRequested);
         string deep="{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"params\":{\"deep\":"+new string('[',65)+"0"+new string(']',65)+"}}\n";
         using var nested=new BoundedProtocolStream(new MemoryStream(Encoding.UTF8.GetBytes(deep)),default);
-        await Assert.ThrowsAsync<JsonException>(async()=>await nested.ReadAsync(buffer));
+        await Assert.ThrowsAsync<JsonException>(async()=>{ _ = await nested.ReadAsync(buffer); });
     }
     private sealed class WaitingStream:Stream
     {
