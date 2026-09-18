@@ -158,7 +158,7 @@ internal static class Program
     private static async Task ChooseFile(int pid,string path)
     {
         AutomationElement? filename=null;await Until(()=>(filename=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new OrCondition(new PropertyCondition(AutomationElement.AutomationIdProperty,"1148"),new PropertyCondition(AutomationElement.AutomationIdProperty,"1001")))))is not null);
-        var edit=filename!.TryGetCurrentPattern(ValuePattern.Pattern,out _)?filename:filename.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit));
+        var edit=filename!.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit))\n            ?? (filename.TryGetCurrentPattern(ValuePattern.Pattern,out _)?filename:null)\n            ?? throw new Exception("Native filename edit missing.");
         Console.WriteLine("Native filename field: "+edit.Current.AutomationId+" / "+edit.Current.Name+" / "+edit.Current.ClassName);
         TypeText(edit,path);
         await Until(()=>((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).Current.Value==path);AutomationElement? dialog=edit;
