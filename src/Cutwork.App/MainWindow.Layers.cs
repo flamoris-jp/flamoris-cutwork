@@ -288,6 +288,13 @@ public partial class MainWindow
 
     private void ShowEditError(EditException exception)
     {
+        CutworkLog.Current.Error("command.failure", "Edit command failed", exception,
+            new Dictionary<string, object?>
+            {
+                ["error"] = exception.Error.ToString(),
+                ["documentToken"] = _session.DocumentToken,
+                ["revision"] = _session.Document?.Revision,
+            });
         var text = LocalizationService.Current;
         MessageBox.Show(this, text[$"EditError_{exception.Error}"], text["Edit_ErrorTitle"],
             MessageBoxButton.OK, MessageBoxImage.Warning);

@@ -28,7 +28,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _workspace = new ProjectWorkspace(_session);
+        _workspace = new ProjectWorkspace(_session, logger: CutworkLog.Current);
         _exporter = new DocumentExportService();
         _partTool = new PartToolController(_session, new GuriguriPartFitter());
         _maskTool = new MaskBrushController(_session);
@@ -136,6 +136,12 @@ public partial class MainWindow : Window
         var result = _imageImporter.Import(dialog.FileName);
         if (!result.IsSuccess)
         {
+            CutworkLog.Current.Error("document.open", "Artwork import failed", properties: new Dictionary<string, object?>
+            {
+                ["operation"] = "import",
+                ["format"] = Path.GetExtension(dialog.FileName),
+                ["error"] = result.Error?.ToString(),
+            });
             ShowImportError(result.Error ?? ImageImportError.InvalidImage);
             return;
         }
