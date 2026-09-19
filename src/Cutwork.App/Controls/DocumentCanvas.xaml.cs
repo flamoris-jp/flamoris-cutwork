@@ -130,16 +130,30 @@ public partial class DocumentCanvas : UserControl
     public void RefreshPreview()
     {
         if (_session?.Document is null || !ReferenceEquals(_session.Document, _presentedDocument)) return;
-        if (_session.PreviewSource == PreviewSource.Original)
+        try
         {
-            if (_originalSurface.Bitmap is null) _originalSurface.PresentOriginal(_presentedDocument.Original);
-            ImageSurface.Source = _originalSurface.Bitmap;
+            if (_session.PreviewSource == PreviewSource.Original)
+            {
+                if (_originalSurface.Bitmap is null) _originalSurface.PresentOriginal(_presentedDocument.Original);
+                ImageSurface.Source = _originalSurface.Bitmap;
+            }
+            else
+            {
+                var update = _composite?.RenderPending();
+                if (update is not null) _bitmapSurface.Apply(update);
+                ImageSurface.Source = _bitmapSurface.Bitmap;
+            }
         }
-        else
+        catch (Exception exception)
         {
-            var update = _composite?.RenderPending();
-            if (update is not null) _bitmapSurface.Apply(update);
-            ImageSurface.Source = _bitmapSurface.Bitmap;
+            global::Flamoris.Cutwork.App.CutworkLog.Current.Error(
+                "preview", "Preview refresh failed", exception, new Dictionary<string, object?>
+                {
+                    ["source"] = _session.PreviewSource.ToString(),
+                    ["documentToken"] = _session.DocumentToken,
+                    ["revision"] = _session.Document.Revision,
+                });
+            throw;
         }
     }
 

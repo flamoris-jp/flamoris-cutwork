@@ -49,6 +49,7 @@ See [connection and operation guide](docs/live-mcp.md) and
 - [`docs/production-architecture.md`](docs/production-architecture.md) — application, document, tools, rendering, persistence, i18n, and migration architecture
 - [`docs/roadmap.md`](docs/roadmap.md) — phased implementation and hands-on acceptance roadmap
 - [`docs/python-prototype-benchmark.md`](docs/python-prototype-benchmark.md) — Phase 0 performance baseline
+- [`docs/logging.md`](docs/logging.md) — shared structured logging configuration and category contract
 
 ## Production application
 

@@ -28,7 +28,10 @@ public partial class MainWindow
             _workspace.OpenProject(dialog.FileName);
             CompleteDocumentOpen(_session.Document!);
         }
-        catch (FlimgException exception) { ShowProjectError(exception); }
+        catch (FlimgException exception)
+        {
+            ShowProjectError(exception);
+        }
     }
 
     private void SaveMenuItem_Click(object sender, RoutedEventArgs e) => SaveProject(forceSaveAs: false);
@@ -81,7 +84,7 @@ public partial class MainWindow
             FileName = SuggestedFileName(document.Original.SourceName) + "-composite",
         };
         if (dialog.ShowDialog(this) != true) return;
-        TryExport(() => _exporter.ExportComposite(document, dialog.FileName));
+        TryExport("composite", () => _exporter.ExportComposite(document, dialog.FileName));
     }
 
     private void ExportHandoffMenuItem_Click(object sender, RoutedEventArgs e)
@@ -97,13 +100,41 @@ public partial class MainWindow
             FileName = SuggestedFileName(document.Original.SourceName) + "-layers",
         };
         if (dialog.ShowDialog(this) != true) return;
-        TryExport(() => _exporter.ExportLayerHandoff(document, dialog.FileName));
+        TryExport("handoff", () => _exporter.ExportLayerHandoff(document, dialog.FileName));
     }
 
-    private void TryExport(Action export)
+    private void TryExport(string kind, Action export)
     {
-        try { export(); }
-        catch (FlimgException exception) { ShowProjectError(exception); }
+        try
+        {
+            export();
+            CutworkLog.Current.Info("render", "Export completed", new Dictionary<string, object?>
+            {
+                ["kind"] = kind,
+                ["documentToken"] = _session.DocumentToken,
+                ["revision"] = _session.Document?.Revision,
+            });
+        }
+        catch (FlimgException exception)
+        {
+            CutworkLog.Current.Error("render", "Export failed", exception, new Dictionary<string, object?>
+            {
+                ["kind"] = kind,
+                ["error"] = exception.Error.ToString(),
+                ["documentToken"] = _session.DocumentToken,
+            });
+            ShowProjectError(exception);
+        }
+        catch (Exception exception)
+        {
+            CutworkLog.Current.Error("render", "Export failed", exception, new Dictionary<string, object?>
+            {
+                ["kind"] = kind,
+                ["documentToken"] = _session.DocumentToken,
+                ["revision"] = _session.Document?.Revision,
+            });
+            throw;
+        }
     }
 
     private bool ConfirmUnsavedChanges()
@@ -186,4 +217,5 @@ public partial class MainWindow
         }
         _closeApproved = true;
     }
+
 }

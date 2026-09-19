@@ -14,5 +14,6 @@
     <ProjectReference Include="..\..\src\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.Imaging\Cutwork.Imaging.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.App\Cutwork.App.csproj" />
+    <ProjectReference Include="..\..\src\Cutwork.Bridge\Cutwork.Bridge.csproj" />
   </ItemGroup>
 </Project>
