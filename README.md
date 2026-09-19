@@ -207,3 +207,33 @@ flamoris-jp/flamoris-2D       -> 2D animation / rigging / clip authoring
 ```
 
 Cutwork may export or hand off prepared assets to FLAMORIS 2D, but it must not become an embedded editor panel or depend on FLAMORIS 2D runtime internals.
+
+
+## License, support, and philosophy
+
+The software source code in this repository is licensed under the [Apache License 2.0](LICENSE), unless otherwise noted.
+
+Commercial use is welcome and does not require permission. If you'd like, we'd be happy to hear what you used FLAMORIS for. This is completely optional.
+
+FLAMORIS software is provided as-is. We do not provide guaranteed individual support. If you run into trouble, we encourage you to let your AI assistant read the repository, documentation, Issues, tests, logs, and source code and help you solve it.
+
+If FLAMORIS helps you or you find it interesting, your support helps fund development and keeps the project growing. 🌱  
+<sub>Mostly GPU bills.</sub>
+
+FLAMORIS characters, character designs, artwork, illustrations, PSD source assets, music, audio, logos, trademarks, branding, video, and other creative assets are **not automatically licensed under Apache-2.0**. Their applicable licenses or rights statements must be provided separately.
+
+### 方針
+
+このリポジトリのソフトウェアソースコードは、特に明記がない限り [Apache License 2.0](LICENSE) で提供されます。
+
+勝手に使ってください。改造しても、組み込んでも、商用利用してもOKです。
+
+商用作品や製品で使う場合も、許可は不要です。もしよければ「こんなのに使ったよ」と教えてもらえるとうれしいです。もちろん強制ではありません。
+
+FLAMORISのソフトウェアは現状のまま提供されます。個別サポートや動作保証はありません。困ったときは、README、ドキュメント、Issue、テスト、ログ、ソースコードをあなたのAIに読ませて、自己サポートしてもらってください。
+
+もし、あなたのお役に立てたり、面白いと思っていただけたなら、開発費用をご支援いただけるとうれしいです。  
+FLAMORISは元気になって育ちます。🌱  
+<sub>主にGPU代とか。</sub>
+
+FLAMORISのキャラクター、キャラクターデザイン、イラスト、PSD素材、音楽・音声、ロゴ、商標・ブランド、映像その他のクリエイティブ素材は、**Apache-2.0によって自動的にライセンスされるものではありません**。各素材に適用されるライセンスや権利表示を別途確認してください。
