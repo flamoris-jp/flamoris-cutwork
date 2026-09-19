@@ -2,15 +2,17 @@ using System.Globalization;
 using System.Text.Json;
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging;
+using Flamoris.Logging;
 using ModelContextProtocol.Protocol;
 
 namespace Flamoris.Cutwork.Mcp;
 
 /// <summary>All entry/continuation calls run on the shared application dispatcher.</summary>
 public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bool> humanBusy,
-    Func<Task> yield, Action<bool> editing)
+    Func<Task> yield, Action<bool> editing, FlamorisLogger? logger = null)
 {
     private bool running;
+    private readonly FlamorisLogger? log = logger ?? access.Logger;
     public EditorSession Session => session;
     private CutworkDocument Document => session.Document ?? throw new LiveException("no_document");
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -89,11 +91,43 @@ public sealed class LiveEditor(EditorSession session, LiveAccess access, Func<bo
             }
             finally { running = false; }
         }
-        catch (LiveException e) { return Error(e.Code); }
-        catch (OperationCanceledException) { return Error("cancelled"); }
-        catch (EditException e) { return Error(e.Error.ToString()); }
+        catch (LiveException e)
+        {
+            LogFailure(name, e.Code, e, e.Code is "revision_conflict" or "document_conflict" or "read_only" ? LogLevel.Warn : LogLevel.Debug);
+            return Error(e.Code);
+        }
+        catch (OperationCanceledException e)
+        {
+            LogFailure(name, "cancelled", e, LogLevel.Warn);
+            return Error("cancelled");
+        }
+        catch (EditException e)
+        {
+            LogFailure(name, e.Error.ToString(), e, LogLevel.Error);
+            return Error(e.Error.ToString());
+        }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or OverflowException or FormatException)
-        { return Error("invalid_operation"); }
+        {
+            LogFailure(name, "invalid_operation", e, LogLevel.Error);
+            return Error("invalid_operation");
+        }
+    }
+
+    private void LogFailure(string tool, string code, Exception exception, LogLevel level)
+    {
+        var category = LiveSchema.IsEdit(tool) ? "mcp.command" : "mcp.query";
+        var safeTool = tool is "context" or "layers" or "image" or "part_preview" or "edit" or "undo" or "redo"
+            ? tool : "unknown";
+        var properties = new Dictionary<string, object?>
+        {
+            ["tool"] = safeTool,
+            ["error"] = code,
+            ["documentToken"] = session.DocumentToken,
+            ["revision"] = session.Document?.Revision,
+        };
+        if (level == LogLevel.Error) log?.Error(category, "MCP operation failed", exception, properties);
+        else if (level == LogLevel.Warn) log?.Warn(category, "MCP operation rejected", properties);
+        else log?.Debug(category, "MCP operation rejected", properties);
     }
     private object Context() => new { documentToken = session.DocumentToken, revision = Revision(), historyStateRevision = session.CurrentRevision.ToString(CultureInfo.InvariantCulture),
         permission = access.Permission.ToString(), width = Document.Dimensions.Width, height = Document.Dimensions.Height,

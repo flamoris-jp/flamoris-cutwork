@@ -76,8 +76,14 @@ public partial class MainWindow
     {
         if (_session.Document is null) return;
         StopMcp();
-        var access = new LiveAccess(_session, permission);
+        var access = new LiveAccess(_session, permission, CutworkLog.Current);
         _mcpAccess = access; _mcpPipe = "cutwork-" + Guid.NewGuid().ToString("N");
+        CutworkLog.Current.Info("mcp", "MCP server enabled", new Dictionary<string, object?>
+        {
+            ["permission"] = permission.ToString(),
+            ["transport"] = "same-user-named-pipe",
+            ["documentToken"] = _session.DocumentToken,
+        });
         var text = new TextBox { Text = Connection(), IsReadOnly = true, Margin = new Thickness(16), MinWidth = 620 };
         System.Windows.Automation.AutomationProperties.SetAutomationId(text, "McpConnection");
         _mcpInfo = new Window { Owner = this, Title = LocalizationService.Current["Mcp_Connection"], Content = text,
@@ -89,10 +95,20 @@ public partial class MainWindow
     {
         var old = _mcpAccess; _mcpAccess = null; _mcpPipe = null;
         old?.Revoke(); _mcpInfo?.Close(); _mcpInfo = null;
+        if (old is not null)
+            CutworkLog.Current.Info("mcp", "MCP server disabled", new Dictionary<string, object?>
+            {
+                ["permission"] = old.Permission.ToString(),
+                ["transport"] = "same-user-named-pipe",
+            });
         UpdateMcp();
     }
     private async Task ServeMcp(string name, LiveAccess access)
     {
+        CutworkLog.Current.Info("mcp.transport", "Named-pipe server started", new Dictionary<string, object?>
+        {
+            ["transport"] = "same-user-named-pipe",
+        });
         try
         {
             while (access.IsActive)
@@ -102,16 +118,55 @@ public partial class MainWindow
                 try
                 {
                     await pipe.WaitForConnectionAsync(access.Token);
+                    CutworkLog.Current.Info("mcp.transport", "Client connected", new Dictionary<string, object?>
+                    {
+                        ["transport"] = "same-user-named-pipe",
+                    });
+                    CutworkLog.Current.Info("mcp.auth", "Same-user transport accepted client", new Dictionary<string, object?>
+                    {
+                        ["policy"] = "current-user-only",
+                        ["permission"] = access.Permission.ToString(),
+                    });
                     var editor = new LiveEditor(_session, access, HumanBusy,
-                        async () => await Dispatcher.Yield(DispatcherPriority.Background), SetRemoteEditing);
+                        async () => await Dispatcher.Yield(DispatcherPriority.Background), SetRemoteEditing,
+                        CutworkLog.Current);
                     await Task.Run(() => LiveProtocol.ServeAsync(pipe, access,
-                        action => Dispatcher.InvokeAsync(action, DispatcherPriority.Background).Task.Unwrap(), editor));
+                        action => Dispatcher.InvokeAsync(action, DispatcherPriority.Background).Task.Unwrap(), editor,
+                        CutworkLog.Current));
+                    CutworkLog.Current.Info("mcp.transport", "Client disconnected", new Dictionary<string, object?>
+                    {
+                        ["transport"] = "same-user-named-pipe",
+                    });
                 }
-                catch (Exception) { /* Connection failure is contained; never log artwork/arguments. */ }
+                catch (OperationCanceledException) when (!access.IsActive) { }
+                catch (ObjectDisposedException) when (!access.IsActive) { }
+                catch (UnauthorizedAccessException exception)
+                {
+                    CutworkLog.Current.Warn("mcp.auth", "Named-pipe access denied", new Dictionary<string, object?>
+                    {
+                        ["transport"] = "same-user-named-pipe",
+                        ["exceptionType"] = exception.GetType().Name,
+                    });
+                }
+                catch (Exception exception)
+                {
+                    LiveDiagnostics.TransportFailure(CutworkLog.Current, exception, recoverable: true);
+                }
             }
         }
-        catch (Exception) { StatusText.Text = LocalizationService.Current["Mcp_Unavailable"]; }
-        finally { if (ReferenceEquals(access, _mcpAccess)) StopMcp(); else access.Revoke(); }
+        catch (Exception exception)
+        {
+            LiveDiagnostics.TransportFailure(CutworkLog.Current, exception, recoverable: false);
+            StatusText.Text = LocalizationService.Current["Mcp_Unavailable"];
+        }
+        finally
+        {
+            CutworkLog.Current.Info("mcp.transport", "Named-pipe server stopped", new Dictionary<string, object?>
+            {
+                ["transport"] = "same-user-named-pipe",
+            });
+            if (ReferenceEquals(access, _mcpAccess)) StopMcp(); else access.Revoke();
+        }
     }
     private IDisposable CoordinateFiles()
     {

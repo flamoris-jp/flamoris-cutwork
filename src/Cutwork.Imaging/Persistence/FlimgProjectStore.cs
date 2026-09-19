@@ -1,5 +1,6 @@
 using System.IO;
 using Flamoris.Cutwork.Core;
+using Flamoris.Logging;
 
 namespace Flamoris.Cutwork.Imaging.Persistence;
 
@@ -56,11 +57,14 @@ public sealed class FlimgProjectStore
 public sealed class ProjectWorkspace
 {
     private readonly FlimgProjectStore _store;
+    private readonly FlamorisLogger? _logger;
 
-    public ProjectWorkspace(EditorSession session, FlimgProjectStore? store = null)
+    public ProjectWorkspace(EditorSession session, FlimgProjectStore? store = null,
+        FlamorisLogger? logger = null)
     {
         Session = session ?? throw new ArgumentNullException(nameof(session));
         _store = store ?? new FlimgProjectStore();
+        _logger = logger;
     }
 
     public EditorSession Session { get; }
@@ -70,25 +74,68 @@ public sealed class ProjectWorkspace
     {
         Session.Open(document ?? throw new ArgumentNullException(nameof(document)));
         ProjectPath = null;
+        _logger?.Info("document.open", "Artwork opened", Properties("import"));
     }
 
     public void OpenProject(string path)
     {
-        var fullPath = Path.GetFullPath(path);
-        var document = _store.Load(fullPath);
-        Session.Open(document);
-        ProjectPath = fullPath;
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var document = _store.Load(fullPath);
+            Session.Open(document);
+            ProjectPath = fullPath;
+            _logger?.Info("document.open", "Project opened", Properties("open"));
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("document.open", "Project open failed",
+                properties: FailureProperties("open", exception));
+            throw;
+        }
     }
 
     public void Save(string? path = null)
     {
-        var destination = path is null ? ProjectPath : Path.GetFullPath(path);
-        if (destination is null || Session.Document is null)
-            throw new InvalidOperationException("A document and project path are required.");
-        _store.Save(Session.Document, destination);
-        ProjectPath = destination;
-        Session.MarkSaved();
+        try
+        {
+            var destination = path is null ? ProjectPath : Path.GetFullPath(path);
+            if (destination is null || Session.Document is null)
+                throw new InvalidOperationException("A document and project path are required.");
+            _store.Save(Session.Document, destination);
+            ProjectPath = destination;
+            Session.MarkSaved();
+            _logger?.Info("document.save", "Project saved", Properties("save"));
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("document.save", "Project save failed",
+                properties: FailureProperties("save", exception));
+            throw;
+        }
     }
+
+    private Dictionary<string, object?> FailureProperties(string operation, Exception exception)
+    {
+        var properties = Properties(operation);
+        properties["format"] = ".flimg";
+        properties["exceptionType"] = exception.GetType().Name;
+        if (exception is FlimgException flimgException)
+        {
+            properties["error"] = flimgException.Error.ToString();
+            properties["innerExceptionType"] = flimgException.InnerException?.GetType().Name;
+        }
+        return properties;
+    }
+
+    private Dictionary<string, object?> Properties(string operation) => new()
+    {
+        ["operation"] = operation,
+        ["documentToken"] = Session.DocumentToken,
+        ["revision"] = Session.Document?.Revision,
+        ["width"] = Session.Document?.Dimensions.Width,
+        ["height"] = Session.Document?.Dimensions.Height,
+    };
 }
 
 internal sealed class LocalAtomicProjectFileSystem : IAtomicProjectFileSystem
