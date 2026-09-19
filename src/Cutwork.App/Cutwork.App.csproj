@@ -15,6 +15,7 @@
     <Copyright>Copyright © 2026 FLAMORIS contributors</Copyright>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cutwork.Mcp\Cutwork.Mcp.csproj" />
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
   </ItemGroup>

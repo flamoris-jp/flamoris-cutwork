@@ -36,6 +36,13 @@ Current milestone:
 - Phase 7: `.flimg` persistence and export complete;
 - current: Phase 8, self-contained Windows packaging.
 
+## Live MCP / AI
+
+The running editor can grant a local client bounded artwork inspection and ordinary
+Part/Mask/Clone/Patch editing through the same Undo/Redo. Access starts disabled.
+See [connection and operation guide](docs/live-mcp.md) and
+[ADR 0002](docs/decisions/0002-live-mcp.md). No filesystem tools are exposed.
+
 ## Design authority
 
 - [`docs/decisions/0001-production-stack.md`](docs/decisions/0001-production-stack.md) — production stack decision and evaluated alternatives

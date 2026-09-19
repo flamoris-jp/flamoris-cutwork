@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
+    <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
+    <PackageReference Include="ModelContextProtocol.Core" Version="1.0.0" />
+  </ItemGroup>
+</Project>

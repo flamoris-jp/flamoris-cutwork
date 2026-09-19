@@ -63,6 +63,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE."
 }
 
+$bridgeProject = Join-Path $repositoryRoot "src\Cutwork.Bridge\Cutwork.Bridge.csproj"
+$bridgePath = Join-Path $publishPath "mcp"
+& dotnet publish $bridgeProject -c Release -r win-x64 --self-contained true -o $bridgePath /p:DebugType=None /p:DebugSymbols=false
+if ($LASTEXITCODE -ne 0) { throw "Bridge publish failed." }
+if (-not (Test-Path (Join-Path $bridgePath "Cutwork.Bridge.exe"))) { throw "Bridge missing." }
+Copy-Item (Join-Path $repositoryRoot "packaging\MCP-SDK-LICENSE.txt") (Join-Path $publishPath "MCP-SDK-LICENSE.txt")
+
 # Referenced projects can still contribute PDBs even when the app publish profile
 # disables symbol copying. They are not required to run the portable release.
 Get-ChildItem -LiteralPath $publishPath -Filter "*.pdb" -File -Recurse |
@@ -96,9 +103,9 @@ if ($wpfNativeFiles.Count -lt 2) {
 $productLaunchers = @(Get-ChildItem -LiteralPath $publishPath -Filter "*.exe" -File -Recurse | Where-Object {
     $_.Name -match '(?i)(cutwork|flamoris)'
 })
-if ($productLaunchers.Count -ne 1 -or $productLaunchers[0].Name -cne "Cutwork.exe") {
+if ($productLaunchers.Count -ne 2 -or @($productLaunchers | Where-Object Name -eq "Cutwork.exe").Count -ne 1 -or @($productLaunchers | Where-Object Name -eq "Cutwork.Bridge.exe").Count -ne 1) {
     $names = ($productLaunchers | ForEach-Object Name) -join ", "
-    throw "Expected exactly one Cutwork product launcher named Cutwork.exe; found: $names"
+    throw "Expected editor and bridge launchers; found: $names"
 }
 
 $forbiddenPublishFiles = @(Get-ChildItem -LiteralPath $publishPath -File -Recurse | Where-Object {
@@ -161,8 +168,8 @@ try {
     $zipProductLaunchers = @($entryNames | Where-Object {
         $_ -match '(?i)[^/]*(cutwork|flamoris)[^/]*\.exe$'
     })
-    if ($zipProductLaunchers.Count -ne 1 -or $zipProductLaunchers[0] -cne "Cutwork.exe") {
-        throw "ZIP must expose exactly one Cutwork product launcher named Cutwork.exe."
+    if ($zipProductLaunchers.Count -ne 2 -or "Cutwork.exe" -cnotin $zipProductLaunchers -or "mcp/Cutwork.Bridge.exe" -cnotin $zipProductLaunchers) {
+        throw "ZIP must expose Cutwork.exe and mcp/Cutwork.Bridge.exe only."
     }
 
     $forbiddenEntries = @($entryNames | Where-Object {
