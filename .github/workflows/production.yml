@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: >-
           dotnet nuget update source flamoris
-          --username flamoris-jp
+          --username "${{ github.actor }}"
           --password "$env:NUGET_AUTH_TOKEN"
           --store-password-in-clear-text
           --configfile NuGet.config
