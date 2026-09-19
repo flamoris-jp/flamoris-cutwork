@@ -4,9 +4,11 @@ using Flamoris.Logging;
 
 internal static class BridgeLogging
 {
-    internal static FlamorisLogger Create()
+    private static readonly object ConsoleFallbackGate = new();
+
+    internal static FlamorisLogger Create(LoggingOptions? configuredOptions = null, string? configuredBasePath = null)
     {
-        var options = Load();
+        var options = configuredOptions ?? Load();
         // stdout is the MCP protocol stream. A console sink would corrupt frames.
         options.Outputs = options.Outputs
             .Where(output => string.Equals(output.Type, "file", StringComparison.OrdinalIgnoreCase))
@@ -16,8 +18,24 @@ internal static class BridgeLogging
         foreach (var output in options.Outputs) output.Path = BridgePath(output.Path);
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(root)) root = Path.GetTempPath();
-        var basePath = Path.Combine(root, "FLAMORIS", "Cutwork");
-        return FlamorisLogger.Create(options, basePath, message => Debug.WriteLine(message));
+        var basePath = configuredBasePath ?? Path.Combine(root, "FLAMORIS", "Cutwork");
+
+        // Flamoris.Logging 1.0.0 falls back to a ConsoleLogSink when every
+        // configured sink fails. Capture that fallback on stderr so MCP frames
+        // on stdout remain valid even when the file sink cannot be constructed.
+        lock (ConsoleFallbackGate)
+        {
+            var protocolOutput = Console.Out;
+            try
+            {
+                Console.SetOut(Console.Error);
+                return FlamorisLogger.Create(options, basePath, message => Debug.WriteLine(message));
+            }
+            finally
+            {
+                Console.SetOut(protocolOutput);
+            }
+        }
     }
 
     private static LoggingOptions Load()
@@ -48,9 +66,18 @@ internal static class BridgeLogging
     private static string BridgePath(string? configuredPath)
     {
         var path = string.IsNullOrWhiteSpace(configuredPath) ? "logs/cutwork.log" : configuredPath;
-        var extension = Path.GetExtension(path);
-        return Path.Combine(Path.GetDirectoryName(path) ?? string.Empty,
-            Path.GetFileNameWithoutExtension(path) + "-mcp-bridge" + extension);
+        try
+        {
+            var extension = Path.GetExtension(path);
+            return Path.Combine(Path.GetDirectoryName(path) ?? string.Empty,
+                Path.GetFileNameWithoutExtension(path) + "-mcp-bridge" + extension);
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException)
+        {
+            // Leave invalid paths for FlamorisLogger.Create to reject. Its
+            // console fallback is redirected to stderr by Create above.
+            return path;
+        }
     }
 
     private sealed class Settings

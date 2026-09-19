@@ -73,19 +73,61 @@ public sealed class LoggingIntegrationTests
     }
 
     [TestMethod]
-    public void ProjectFailureRecordsCategoryExceptionAndStructuredOperation()
+    public void ProjectFailuresRecordSafeStructuredDiagnosticsWithoutFilesystemPaths()
     {
         using var directory = new TemporaryDirectory();
         var logger = LoggingBootstrap.Create(WriteFileOnlySettings(directory.Path), directory.Path);
-        var workspace = new ProjectWorkspace(new EditorSession(), logger: logger);
+        const string sensitivePath = @"C:\private\user\secret-project.flimg";
+        var session = new EditorSession();
+        var store = new FlimgProjectStore(files: new PathLeakingFileSystem(sensitivePath));
+        var workspace = new ProjectWorkspace(session, store, logger);
 
         Assert.ThrowsExactly<FlimgException>(() =>
             workspace.OpenProject(Path.Combine(directory.Path, "missing.flimg")));
+        session.Open(FlimgRoundTripTests.FullDocument());
+        Assert.ThrowsExactly<FlimgException>(() =>
+            workspace.Save(Path.Combine(directory.Path, "project.flimg")));
 
         var content = File.ReadAllText(Path.Combine(directory.Path, "logs", "cutwork.log"));
         StringAssert.Contains(content, "[ERROR] [document.open]");
+        StringAssert.Contains(content, "[ERROR] [document.save]");
         StringAssert.Contains(content, "operation=open");
-        StringAssert.Contains(content, "FlimgException");
+        StringAssert.Contains(content, "operation=save");
+        StringAssert.Contains(content, "exceptionType=FlimgException");
+        StringAssert.Contains(content, "innerExceptionType=IOException");
+        StringAssert.Contains(content, "error=IoFailure");
+        Assert.IsFalse(content.Contains(sensitivePath, StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    [DoNotParallelize]
+    public void BridgeFileSinkFailureFallsBackToStderrWithoutWritingProtocolStdout()
+    {
+        var options = new LoggingOptions
+        {
+            Level = "debug",
+            Outputs = [new() { Type = "file", Path = "\0" }],
+        };
+        var originalOut = Console.Out;
+        var originalError = Console.Error;
+        using var protocolOutput = new StringWriter();
+        using var diagnosticOutput = new StringWriter();
+        try
+        {
+            Console.SetOut(protocolOutput);
+            Console.SetError(diagnosticOutput);
+            var logger = BridgeLogging.Create(options, Path.GetTempPath());
+
+            logger.Info("mcp.transport", "Bridge remains protocol safe");
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+            Console.SetError(originalError);
+        }
+
+        Assert.AreEqual(string.Empty, protocolOutput.ToString());
+        StringAssert.Contains(diagnosticOutput.ToString(), "[mcp.transport]");
     }
 
     [TestMethod]
@@ -150,6 +192,18 @@ public sealed class LoggingIntegrationTests
             ] } }
             """);
         return path;
+    }
+
+    private sealed class PathLeakingFileSystem(string sensitivePath) : IAtomicProjectFileSystem
+    {
+        public Stream CreateNew(string path) =>
+            throw new IOException($"Cannot create {sensitivePath}");
+        public Stream OpenRead(string path) =>
+            throw new IOException($"Cannot read {sensitivePath}");
+        public bool Exists(string path) => false;
+        public void Replace(string temporaryPath, string destinationPath) =>
+            throw new IOException($"Cannot replace {sensitivePath}");
+        public void DeleteIfExists(string path) { }
     }
 
     private sealed class TemporaryDirectory : IDisposable

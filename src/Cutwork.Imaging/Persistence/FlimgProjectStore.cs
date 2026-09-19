@@ -89,8 +89,8 @@ public sealed class ProjectWorkspace
         }
         catch (Exception exception)
         {
-            _logger?.Error("document.open", "Project open failed", exception,
-                new Dictionary<string, object?> { ["operation"] = "open", ["format"] = ".flimg" });
+            _logger?.Error("document.open", "Project open failed",
+                properties: FailureProperties("open", exception));
             throw;
         }
     }
@@ -109,15 +109,23 @@ public sealed class ProjectWorkspace
         }
         catch (Exception exception)
         {
-            _logger?.Error("document.save", "Project save failed", exception,
-                new Dictionary<string, object?>
-                {
-                    ["operation"] = "save",
-                    ["documentToken"] = Session.DocumentToken,
-                    ["revision"] = Session.Document?.Revision,
-                });
+            _logger?.Error("document.save", "Project save failed",
+                properties: FailureProperties("save", exception));
             throw;
         }
+    }
+
+    private Dictionary<string, object?> FailureProperties(string operation, Exception exception)
+    {
+        var properties = Properties(operation);
+        properties["format"] = ".flimg";
+        properties["exceptionType"] = exception.GetType().Name;
+        if (exception is FlimgException flimgException)
+        {
+            properties["error"] = flimgException.Error.ToString();
+            properties["innerExceptionType"] = flimgException.InnerException?.GetType().Name;
+        }
+        return properties;
     }
 
     private Dictionary<string, object?> Properties(string operation) => new()

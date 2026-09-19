@@ -3,4 +3,7 @@
   <ItemGroup>
     <PackageReference Include="Flamoris.Logging" Version="1.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Cutwork.Tests" />
+  </ItemGroup>
 </Project>
