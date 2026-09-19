@@ -16,6 +16,10 @@ on:
       - ".github/workflows/production.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   build-and-test:
     runs-on: windows-latest
@@ -24,7 +28,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - name: Authenticate FLAMORIS package source
+        shell: pwsh
+        run: >-
+          dotnet nuget update source flamoris
+          --username flamoris-jp
+          --password "$env:NUGET_AUTH_TOKEN"
+          --store-password-in-clear-text
+          --configfile NuGet.config
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: dotnet restore Cutwork.sln
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: dotnet build Cutwork.sln --configuration Release --no-restore
       - run: dotnet test Cutwork.sln --configuration Release --no-build
       - name: Publish and verify portable Windows package

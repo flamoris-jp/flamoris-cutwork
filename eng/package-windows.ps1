@@ -68,6 +68,7 @@ $bridgePath = Join-Path $publishPath "mcp"
 & dotnet publish $bridgeProject -c Release -r win-x64 --self-contained true -o $bridgePath /p:DebugType=None /p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Bridge publish failed." }
 if (-not (Test-Path (Join-Path $bridgePath "Cutwork.Bridge.exe"))) { throw "Bridge missing." }
+if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Logging.dll"))) { throw "Bridge logging dependency missing." }
 Copy-Item (Join-Path $repositoryRoot "packaging\MCP-SDK-LICENSE.txt") (Join-Path $publishPath "MCP-SDK-LICENSE.txt")
 
 # Referenced projects can still contribute PDBs even when the app publish profile
@@ -80,6 +81,8 @@ $requiredPublishFiles = @(
     "Cutwork.dll",
     "Cutwork.deps.json",
     "Cutwork.runtimeconfig.json",
+    "appsettings.json",
+    "Flamoris.Logging.dll",
     "coreclr.dll",
     "hostfxr.dll",
     "hostpolicy.dll",
