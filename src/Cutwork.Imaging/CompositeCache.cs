@@ -61,29 +61,7 @@ public sealed class CompositeCache : IDisposable
         for (var x = region.X; x < region.Right; x++)
         {
             var destination = _pixels.AsSpan((y * width + x) * 4, 4);
-            destination.Clear();
-            for (var index = _document.Layers.Count - 1; index >= 0; index--)
-            {
-                var layer = _document.Layers[index];
-                if (!layer.Visible || x < layer.Bounds.X || y < layer.Bounds.Y ||
-                    x >= layer.Bounds.Right || y >= layer.Bounds.Bottom) continue;
-                switch (layer)
-                {
-                    case BaseLayer:
-                        SourceOver(destination, _document.Original.PixelAt(x, y), (byte)(255 - _holes[y * width + x]));
-                        break;
-                    case PartLayer part:
-                        SourceOver(destination, _document.Original.PixelAt(x, y), part.MaskAt(x, y));
-                        break;
-                    case PatchLayer patch:
-                        var transformed = patch.SampleAt(x, y);
-                        if (!transformed.IsEmpty) SourceOver(destination, transformed, 255);
-                        break;
-                    case RasterLayer raster:
-                        SourceOver(destination, raster.PixelAt(x, y), 255);
-                        break;
-                }
-            }
+            CompositePixel(document: _document, x, y, _holes[y * width + x], destination);
             destination.CopyTo(output.AsSpan(((y - region.Y) * region.Width + x - region.X) * 4, 4));
             CompositedPixelCount++;
         }
@@ -102,6 +80,41 @@ public sealed class CompositeCache : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return (byte[])_holes.Clone();
+    }
+
+    public static byte HoleAt(CutworkDocument document, int x, int y)
+    {
+        byte hole = 0;
+        foreach (var layer in document.Layers)
+            if (layer is PartLayer part) hole = Math.Max(hole, part.MaskAt(x, y));
+        return hole;
+    }
+
+    public static void CompositePixel(CutworkDocument document, int x, int y, byte hole, Span<byte> destination)
+    {
+            destination.Clear();
+            for (var index = document.Layers.Count - 1; index >= 0; index--)
+            {
+                var layer = document.Layers[index];
+                if (!layer.Visible || x < layer.Bounds.X || y < layer.Bounds.Y ||
+                    x >= layer.Bounds.Right || y >= layer.Bounds.Bottom) continue;
+                switch (layer)
+                {
+                    case BaseLayer:
+                        SourceOver(destination, document.Original.PixelAt(x, y), (byte)(255 - hole));
+                        break;
+                    case PartLayer part:
+                        SourceOver(destination, document.Original.PixelAt(x, y), part.MaskAt(x, y));
+                        break;
+                    case PatchLayer patch:
+                        var transformed = patch.SampleAt(x, y);
+                        if (!transformed.IsEmpty) SourceOver(destination, transformed, 255);
+                        break;
+                    case RasterLayer raster:
+                        SourceOver(destination, raster.PixelAt(x, y), 255);
+                        break;
+                }
+            }
     }
 
     private static void SourceOver(Span<byte> destination, ReadOnlySpan<byte> source, byte mask)

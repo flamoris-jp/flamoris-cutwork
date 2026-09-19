@@ -36,12 +36,17 @@ public sealed class EditorSession
     public long HistoryBudgetBytes { get; }
     public long HistoryBytes => _undo.Sum(entry => entry.RetainedBytes) + _redo.Sum(entry => entry.RetainedBytes);
     public event EventHandler? Changed;
+    public event EventHandler? DocumentReplacing;
+    public string DocumentToken { get; private set; } = Guid.NewGuid().ToString("N");
+    public bool HasActiveTransaction => _active is not null;
 
     public void Open(CutworkDocument document)
     {
         EnsureIdle();
         ArgumentNullException.ThrowIfNull(document);
         document.Claim(this);
+        DocumentReplacing?.Invoke(this, EventArgs.Empty);
+        DocumentToken = Guid.NewGuid().ToString("N");
         if (!ReferenceEquals(Document, document)) Document?.Release(this);
         Document = document;
         PreviewSource = PreviewSource.Composite;
@@ -85,6 +90,23 @@ public sealed class EditorSession
         foreach (var command in commands) transaction.Apply(command);
         transaction.Commit();
     }
+    /// <summary>Read-only cost projection of the next ordinary history entry.</summary>
+    public (DocumentRect DirtyRegion, long RetainedBytes, int EditCount, int TouchedLayerCount, long SurfaceBytes) NextHistoryWork(bool redo)
+    {
+        var entries = redo ? _redo : _undo;
+        if (entries.Count == 0) return (default, 0, 0, 0, 0);
+        var entry = entries[^1];
+        var dirty = entry.Edits.Aggregate(default(DocumentRect), (r, e) => r.Union(e.Dirty));
+        var layers = entry.Edits.SelectMany(e => e.TouchedLayers()).DistinctBy(l => l.Id).ToArray();
+        // History may restore deleted layers or resize an ROI-backed surface on replay.
+        var surfaceBytes = dirty.IsEmpty ? 0 : layers.Sum(l =>
+        {
+            var bounds = l.Bounds.Union(dirty);
+            return (long)bounds.Width * bounds.Height * (l is PartLayer ? 2 : 8);
+        });
+        return (dirty, entry.RetainedBytes, entry.Edits.Length, layers.Length, surfaceBytes);
+    }
+
     public void Undo()
     {
         EnsureIdle();

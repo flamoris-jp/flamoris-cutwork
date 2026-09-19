@@ -13,6 +13,7 @@ public partial class MainWindow
 
     private void OpenProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        using var coordination = CoordinateFiles();
         var dialog = new OpenFileDialog
         {
             Filter = LocalizationService.Current["Dialog_ProjectFilter"],
@@ -36,6 +37,7 @@ public partial class MainWindow
 
     private bool SaveProject(bool forceSaveAs)
     {
+        using var coordination = CoordinateFiles();
         if (_session.Document is null) return false;
         var path = forceSaveAs ? null : _workspace.ProjectPath;
         if (path is null)
@@ -68,6 +70,7 @@ public partial class MainWindow
 
     private void ExportCompositeMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        using var coordination = CoordinateFiles();
         if (_session.Document is not { } document) return;
         var dialog = new SaveFileDialog
         {
@@ -83,6 +86,7 @@ public partial class MainWindow
 
     private void ExportHandoffMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        using var coordination = CoordinateFiles();
         if (_session.Document is not { } document) return;
         var dialog = new SaveFileDialog
         {
@@ -172,6 +176,8 @@ public partial class MainWindow
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if (_remoteEditing) { StopMcp(); e.Cancel = true; return; }
+        using var coordination = CoordinateFiles();
         if (_closeApproved) return;
         if (!ConfirmUnsavedChanges())
         {

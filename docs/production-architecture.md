@@ -642,3 +642,11 @@ These should be resolved by the roadmap phase that first needs them:
 6. Whether Patch/Repair need controlled cross-Base movement; v0.1 defaults to fixed stack bands.
 
 None of these questions blocks the foundation or first real-image canvas. They must not be answered by scattered implementation defaults.
+
+## Live MCP attachment (Issue #33)
+
+[ADR 0002](decisions/0002-live-mcp.md) adds a bounded external adapter on the same
+WPF dispatcher/session. Core and Imaging remain independent of wire types.
+Mask dabs and per-pixel composition have shared helpers; the UI retains its
+controllers and cache. DocumentReplacing revokes before successful installation.
+No document/schema/history authority is duplicated.

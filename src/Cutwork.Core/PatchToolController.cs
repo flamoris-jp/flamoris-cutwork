@@ -203,7 +203,7 @@ public sealed class PatchToolController : ICanvasToolInput
     public PatchToolSnapshot Snapshot() => new(
         State, _sourceFence.ToArray(), _hover, _source, _transform, _dragStart is not null, Status);
 
-    private bool HasPending => _sourceFence.Count > 0 || _source is not null || _dragStart is not null;
+    public bool HasPending => _sourceFence.Count > 0 || _source is not null || _dragStart is not null;
 
     private void ResetPending()
     {
