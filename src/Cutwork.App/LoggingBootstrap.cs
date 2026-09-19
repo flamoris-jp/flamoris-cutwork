@@ -12,7 +12,7 @@ internal static class LoggingBootstrap
     internal static FlamorisLogger Create(string? settingsPath = null, string? basePath = null)
     {
         var options = LoadOptions(settingsPath ?? Path.Combine(AppContext.BaseDirectory, SettingsFileName));
-        return FlamorisLogger.Create(options, basePath ?? DefaultBasePath(), Debug.WriteLine);
+        return FlamorisLogger.Create(options, basePath ?? DefaultBasePath(), message => Debug.WriteLine(message));
     }
 
     internal static LoggingOptions LoadOptions(string path)

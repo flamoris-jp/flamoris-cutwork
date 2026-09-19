@@ -17,7 +17,7 @@ internal static class BridgeLogging
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(root)) root = Path.GetTempPath();
         var basePath = Path.Combine(root, "FLAMORIS", "Cutwork");
-        return FlamorisLogger.Create(options, basePath, Debug.WriteLine);
+        return FlamorisLogger.Create(options, basePath, message => Debug.WriteLine(message));
     }
 
     private static LoggingOptions Load()
