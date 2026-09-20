@@ -184,7 +184,21 @@ internal static class Program
         await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());return new(pipe,capability);
     }
     private static async Task Rejected(McpClient c){bool rejected=false;try{var r=await Context(c);rejected=r.TryGetProperty("error",out _);}catch(Exception e)when(e is IOException or ModelContextProtocol.McpException or OperationCanceledException){rejected=true;}Check(rejected,"Old client retained access.");}
-    private static async Task OldPipeRejected(string name){using var p=new NamedPipeClientStream(".",name,PipeDirection.InOut,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);bool denied=false;try{await p.ConnectAsync(300);}catch(TimeoutException){denied=true;}Check(denied,"Old endpoint accepted a connection.");}
+    private static async Task OldPipeRejected(string name)
+    {
+        // Revocation is synchronous, while the Core endpoint closes its pending listener
+        // asynchronously in response to cancellation. Allow that close to settle, then
+        // require the stale address itself to become unreachable.
+        var watch=Stopwatch.StartNew();
+        while(watch.Elapsed<TimeSpan.FromSeconds(5))
+        {
+            using var p=new NamedPipeClientStream(".",name,PipeDirection.InOut,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
+            try{await p.ConnectAsync(200);}
+            catch(TimeoutException){return;}
+            await Task.Delay(50);
+        }
+        throw new Exception("Old endpoint remained reachable after revocation.");
+    }
     private static async Task BridgeEof(string bridge,ConnectionInfo connection)
     {
         var start=new ProcessStartInfo(bridge){UseShellExecute=false,RedirectStandardInput=true,RedirectStandardOutput=true};start.ArgumentList.Add("--pipe");start.ArgumentList.Add(connection.Pipe);start.Environment["PATH"]=CleanPath;start.Environment[StdioBridge.CredentialEnvironmentVariable]=connection.Capability;
