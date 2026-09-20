@@ -1,5 +1,9 @@
 # ADR 0002: Cutwork live MCP
 
+Supersession note: Issue #36 moves the shared transport, capability and protocol
+infrastructure to `Flamoris.Mcp.Core` 1.0.0. Cutwork-specific authority and tool
+semantics below remain current; see [ADR 0003](0003-mcp-core-migration.md).
+
 Issue #33; reviewed baseline aec08a2. Implementation decision, subject to PR review.
 
 ## Inventory and authority
