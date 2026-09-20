@@ -141,7 +141,7 @@ public sealed class LoggingIntegrationTests
         {
             var result = await readOnly.CallAsync("edit", new
             {
-                operations = new[] { new { type = "layer.rename", target = session.Document.Base.Id.ToString(), name = "blocked" } },
+                operations = new[] { new { type = "layer.rename", target = session.Document!.Base.Id.ToString(), name = "blocked" } },
             });
             Assert.AreEqual(McpErrors.Forbidden, result.Error);
         }
