@@ -96,9 +96,10 @@ public partial class MainWindow
         bool available = status?.IsGreen == true;
         McpStatusDot.Fill = available ? Brushes.LimeGreen : Brushes.IndianRed;
         McpStatusLabel.Text = status?.ActivityVisible == true ? "MCP · AI" : "MCP";
+        var text = LocalizationService.Current;
         McpStatusPanel.ToolTip = available
-            ? status!.Connected ? "MCP connected" : "MCP available"
-            : enabled ? "MCP unavailable" : "MCP disabled";
+            ? text[status!.Connected ? "Mcp_StatusConnected" : "Mcp_StatusAvailable"]
+            : text[enabled ? "Mcp_StatusUnavailable" : "Mcp_StatusDisabled"];
         SetMcpActivity(status?.ActivityVisible == true);
     }
 
@@ -240,9 +241,8 @@ public partial class MainWindow
         _mcpLifetime = null;
         if (boundary is not null) boundary.Status.Changed -= McpStatusChanged;
         lifetime?.Cancel();
-        boundary?.Disable();
-        grant?.Dispose();
         boundary?.Dispose();
+        grant?.Dispose();
         lifetime?.Dispose();
         _mcpInfo?.Close();
         _mcpInfo = null;

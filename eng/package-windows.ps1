@@ -69,6 +69,7 @@ $bridgePath = Join-Path $publishPath "mcp"
 if ($LASTEXITCODE -ne 0) { throw "Bridge publish failed." }
 if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Mcp.Bridge.exe"))) { throw "Bridge missing." }
 if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Logging.dll"))) { throw "Bridge logging dependency missing." }
+if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Mcp.Core.dll"))) { throw "Bridge MCP Core dependency missing." }
 Copy-Item (Join-Path $repositoryRoot "packaging\MCP-SDK-LICENSE.txt") (Join-Path $publishPath "MCP-SDK-LICENSE.txt")
 
 # Referenced projects can still contribute PDBs even when the app publish profile
@@ -83,6 +84,7 @@ $requiredPublishFiles = @(
     "Cutwork.runtimeconfig.json",
     "appsettings.json",
     "Flamoris.Logging.dll",
+    "Flamoris.Mcp.Core.dll",
     "coreclr.dll",
     "hostfxr.dll",
     "hostpolicy.dll",

@@ -26,15 +26,17 @@ and never revive it on Redo. Failed file decoding leaves the grant intact.
 
 Local official MCP client → self-contained stdio bridge → explicitly chosen local
 named pipe → official C# SDK protocol server → typed adapter → existing session.
-Use ModelContextProtocol.Core **1.0.0**, with explicit **2025-03-26** compatibility
-contract, rather than claiming 2026 support from framing alone. The official SDK
+The original implementation used ModelContextProtocol.Core 1.0.0 with explicit
+2025-03-26 compatibility. Issue #36 replaces that local protocol layer with
+Flamoris.Mcp.Core 1.0.0 / official SDK 2.2.0 and its reviewed 2026-07-28 plus
+legacy initialization support. The official SDK
 owns initialize, cancellation, protocol errors and discovery. No HTTP, Node,
 Hub/Relay, filesystem tool, raw command dispatcher or editable snapshot exists.
 
 Primary sources inspected 2026-09-18: current stdio specification
 https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio ;
 official SDK and pinned StreamServerTransport/McpServerOptions sources
-https://github.com/modelcontextprotocol/csharp-sdk/tree/v1.0.0 ; native pipe flags
+https://github.com/modelcontextprotocol/csharp-sdk ; native pipe flags
 https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea .
 A bounded validating stream surrounds SDK framing; SDK logging is disabled.
 The bridge is byte transport only and never automatically retries an edit.
@@ -50,7 +52,7 @@ PIPE_REJECT_REMOTE_CLIENTS is separately applied in native dwPipeMode. A random
 pipe name is an address, not authentication. One connected client per enable.
 No external paths, import/Open/Save/MarkSaved/export/shell are admitted.
 
-Every mutation needs documentToken + decimal-string expectedRevision. Check on
+Every mutation needs Core's runtime/document guard plus decimal-string expectedRevision. Check on
 the dispatcher before opening a transaction; recheck lease/token/cancellation
 before each chunk and immediately before Commit (not the original revision after
 our own edits). One complete request owns one transaction; no cross-call cursor.
@@ -60,8 +62,8 @@ rollback legitimately advances Document.Revision. No-op changes add no history.
 Busy includes all human strokes/deferred work, fences/fitting/Patch previews,
 inline metadata editing and modal/file coordination. Reads except status reject
 busy. Remote chunked work disables human editing surfaces, leaves Stop enabled,
-and yields to dispatcher between chunks. Fitting uses immutable Original off-thread;
-late results recheck the original grant before installation or disclosure. All
+through the Core commit gate. Bounded operation/stroke stages check cancellation;
+Core rechecks the grant before installation or disclosure. All
 pixel readback is tagged with its captured token/revision. Cancellation after
 commit does not Undo; query before retrying an ambiguous response.
 
@@ -108,7 +110,7 @@ not a claim of exact CLR heap size or measured latency.
 
 ## Packaging and proof
 
-Existing Windows publish packages editor and mcp/Cutwork.Bridge.exe self-contained,
+Existing Windows publish packages editor and mcp/Flamoris.Mcp.Bridge.exe self-contained,
 with production SDK dependencies/notices only. Keep artifact retention 3 days.
 Use the actual published processes and official SDK client in Windows acceptance,
 not a mock editor or rename-only smoke. Unit/CI results, human visual/DPI/keyboard

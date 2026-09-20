@@ -4,7 +4,7 @@ Cutworkを起動して画像または`.flimg`を開き、上部の **MCP / AI** 
 「読み取り専用で有効」または「編集を許可して有効」を選びます。
 表示されたJSONを、同じWindowsユーザーで動くローカルMCPクライアントの
 サーバー設定へコピーしてください。ブリッジは配布物内の
-`mcp/Cutwork.Bridge.exe`です。起動済みの、このウィンドウだけに接続します。
+`mcp/Flamoris.Mcp.Bridge.exe`です。起動済みの、このウィンドウだけに接続します。
 
 読み取り専用でも現在の画像ピクセルをクライアントへ公開します。
 編集を許可すると、切り出し・補修・レイヤー編集と共有Undo/Redoが使えます。
@@ -21,48 +21,54 @@ Open/Save/書き出し先の指定、フォルダー閲覧、シェル実行は�
 
 ## Protocol / configuration
 
-Official C# SDK 1.0.0; explicit MCP **2025-03-26** compatibility, standard stdio.
-No claim of modern 2026 protocol support. The server owns SDK protocol objects;
-all editing stays in the existing running WPF session. Example configuration:
+`Flamoris.Mcp.Core` **1.0.0** / official C# SDK **2.2.0**; MCP
+**2026-07-28** with the Core-supported legacy initialization path, standard stdio.
+Core owns SDK protocol objects; all editing stays in the existing running WPF
+session. Example configuration (the UI supplies fresh exact values):
 
 ```json
-{"mcpServers":{"cutwork":{"command":"C:\\Cutwork\\mcp\\Cutwork.Bridge.exe","args":["--pipe","cutwork-<fresh address from UI>"]}}}
+{"mcpServers":{"cutwork":{"command":"C:\\Cutwork\\mcp\\Flamoris.Mcp.Bridge.exe","args":["--pipe","flamoris-cutwork-<fresh address>"],"env":{"FLAMORIS_MCP_CAPABILITY":"<fresh 256-bit capability>"}}}}
 ```
 
 Pipe authentication uses the same local Windows owner/elevation boundary as
 Kachinco: protected owner-only DACL plus kernel remote-client rejection. The
-address is not a password. Enabling trusts processes accepted by that local-user
-policy; no artwork/file permission is inherited by another document.
+address is not a password. A separate transient capability is passed only through
+the bridge environment, removed by the bridge at startup and never placed in argv
+or saved in `.flimg`/settings. Enabling trusts processes accepted by that local-user
+policy and capability; no artwork/file permission is inherited by another document.
 
 ## Tool workflow
 
-1. `context {}` returns `documentToken`, decimal-string `revision`, dimensions,
+1. `mcp.context {}` returns the common product/runtime/document identity, revision
+   and permission. Cutwork `context` returns dimensions,
    selection, busy, dirty and shared history state. `historyStateRevision` is a
    different value: it can go backward on Undo and must not qualify edits.
 2. `layers {"offset":0,"count":64}` returns bounded metadata, stable IDs,
    compositor indices, semantic `partOrder` and Repair `ownerPartId`.
-3. `image` returns one PNG and its captured token/revision, source bounds, crop,
-   dimensions and exact nearest-pixel mapping. Sources: Original, Composite,
+3. `image` returns one PNG as bounded `pngBase64` with `mimeType: image/png`, its
+   captured token/revision, source bounds, crop, dimensions and exact nearest-pixel mapping. Sources: Original, Composite,
    Part, Mask; specify the Part UUID for Part/Mask. Null ROI means source bounds.
 4. `part_preview` takes document-space fence, step and maxEdge. Repeat with
    different existing adjustment steps to compare; it never changes selection,
    dirty state, revision or history. Preview and create use the same fitter.
-5. `edit` takes token/revision and a complete atomic operation array. One accepted
+5. Core wraps each tool's Cutwork-owned `input` in a `guard` containing runtime ID,
+   document token and (for mutation) expected revision. `edit` takes a complete
+   atomic operation array. One accepted
    batch is one ordinary Undo entry. `@0` refers to the object returned by operation
    zero; only earlier results can be referenced. A no-op Clone may return null.
 6. WPF Ctrl+Z/Ctrl+Y and MCP `undo`/`redo` use the same history. MCP history calls
    also require token/revision. Query again after conflict or ambiguous disconnect.
 
-Example edit payload (coordinates are examples within a suitably sized image):
+Conceptual guarded edit payload (the MCP client library supplies it as tool arguments):
 
 ```json
 {
-  "documentToken":"<from context>","expectedRevision":"<from context>",
-  "operations":[
-    {"type":"part.create","fence":[{"x":10,"y":10},{"x":60,"y":10},{"x":60,"y":60},{"x":10,"y":60}],"step":0,"name":"Face"},
-    {"type":"mask.stroke","target":"@0","points":[{"x":25.5,"y":25.5},{"x":35.5,"y":25.5}],"radius":3,"polarity":"Erase"},
-    {"type":"clone.stroke","target":null,"ownerPart":"@0","global":false,"source":{"x":15.5,"y":15.5},"points":[{"x":25.5,"y":25.5},{"x":35.5,"y":25.5}],"radius":3,"mode":"Fixed"}
-  ]
+  "guard":{"runtimeId":"<mcp.context>","documentToken":"<mcp.context>","expectedRevision":"<mcp.context>"},
+  "input":{"operations":[
+      {"type":"part.create","fence":[{"x":10,"y":10},{"x":60,"y":10},{"x":60,"y":60},{"x":10,"y":60}],"step":0,"name":"Face"},
+      {"type":"mask.stroke","target":"@0","points":[{"x":25.5,"y":25.5},{"x":35.5,"y":25.5}],"radius":3,"polarity":"Erase"},
+      {"type":"clone.stroke","target":null,"ownerPart":"@0","global":false,"source":{"x":15.5,"y":15.5},"points":[{"x":25.5,"y":25.5},{"x":35.5,"y":25.5}],"radius":3,"mode":"Fixed"}
+  ]}
 }
 ```
 
@@ -76,8 +82,9 @@ then applies the ordinary scale/rotation/placement rules.
 Brushes use document pixels and shared StrokeSampler; UI zoom/DPI/radius does not
 change an external operation. Human strokes, pending fences/fitting/Patch and
 metadata/file coordination return `busy`; they are never silently committed or
-cancelled. While a remote batch runs, editing controls are disabled but MCP Stop
-and permission changes remain available. A cancelled precommit batch restores
+cancelled. A mutation enters Core's single synchronous commit gate on the WPF
+serialization lane; Cutwork checks cancellation at bounded operation/stroke and
+pre-commit boundaries. A cancelled precommit batch restores
 previous authored state and history. Rollback may increase the document revision.
 
 ## Bounds and dispositions
@@ -94,7 +101,7 @@ failures return bounded tool errors. Logs do not contain artwork or arguments.
 | Part fitting/create, mask Add/Erase, Fixed/Offset Clone, Patch create/transform | Exposed, bounded, explicit targets |
 | Rename, semanticName, visibility, legal reorder, Part cascade delete | Exposed through ordinary commands |
 | Atomic batch, shared Undo/Redo | Exposed with token/revision |
-| Original/Composite/Part/mask/ROI | PNG query, bounded; no disk write |
+| Original/Composite/Part/mask/ROI | Base64 PNG query, bounded; no disk write |
 | Blur/Smudge | UI only in this release |
 | Selection, tool settings, hover, pan/zoom | UI only |
 | Open/import/document replacement, Save/MarkSaved, export, filesystem/process | Denied; later exact-target file grant would require separate review |

@@ -59,9 +59,8 @@ internal sealed class McpCoreHarness : IDisposable
 
     public void Dispose()
     {
-        Boundary.Disable();
-        Grant?.Dispose();
         Boundary.Dispose();
+        Grant?.Dispose();
         Host.Dispose();
     }
 }

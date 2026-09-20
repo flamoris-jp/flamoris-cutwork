@@ -154,4 +154,8 @@
   <data name="Mcp_Connection" xml:space="preserve"><value>MCP接続設定</value></data>
   <data name="Mcp_CopyBusy" xml:space="preserve"><value>コピーできません。もう一度お試しください。</value></data>
   <data name="Mcp_Unavailable" xml:space="preserve"><value>MCP接続を開始できません。</value></data>
+  <data name="Mcp_StatusDisabled" xml:space="preserve"><value>MCPは無効です</value></data>
+  <data name="Mcp_StatusAvailable" xml:space="preserve"><value>MCPは接続可能です</value></data>
+  <data name="Mcp_StatusConnected" xml:space="preserve"><value>MCPクライアントが接続中です</value></data>
+  <data name="Mcp_StatusUnavailable" xml:space="preserve"><value>MCP接続を利用できません</value></data>
 </root>
