@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Flamoris.Cutwork.Imaging.Persistence;
+using Flamoris.Mcp.Core;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -28,7 +29,7 @@ internal static class Program
         var pixels = Enumerable.Range(0,32*32).SelectMany(i=>new byte[]{(byte)(i%32*7),(byte)(i/32*7),100,255}).ToArray();
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(32,32,96,96,PixelFormats.Bgra32,null,pixels,128)));
         using(var file=File.Create(image)) encoder.Save(file);
-        string editor=Path.Combine(package,"Cutwork.exe"), bridge=Path.Combine(package,"mcp","Cutwork.Bridge.exe");
+        string editor=Path.Combine(package,"Cutwork.exe"), bridge=Path.Combine(package,"mcp","Flamoris.Mcp.Bridge.exe");
         Check(File.Exists(editor)&&File.Exists(bridge),"Self-contained executables missing.");
         Check(!Directory.GetFiles(package,"*",SearchOption.AllDirectories).Any(p=>Path.GetFileName(p).Contains("Tests",StringComparison.Ordinal)||Path.GetFileName(p).Contains("WindowsSmoke",StringComparison.Ordinal)),"Test dependency in package.");
         var start=new ProcessStartInfo(editor){UseShellExecute=false,WorkingDirectory=temp}; start.Environment["PATH"]=CleanPath;
@@ -42,25 +43,25 @@ internal static class Program
             await FileMenu(window,process.Id,"OpenMenuItem",image);
             Console.WriteLine("Opened synthetic artwork through WPF.");
             await Menu(window,"ViewMenu","ActualSizeMenuItem");
-            await Menu(window,"McpMenu","McpReadMenu"); string readPipe=await Connection(process.Id);
-            await using(var read=new ClientHandle(await Connect(bridge,readPipe)))
+            await Menu(window,"McpMenu","McpReadMenu"); var readConnection=await Connection(process.Id);
+            await using(var read=new ClientHandle(await Connect(bridge,readConnection)))
             {
-                Check(read.Client.NegotiatedProtocolVersion=="2025-03-26","Protocol mismatch.");
+                Check(read.Client.NegotiatedProtocolVersion=="2026-07-28","Protocol mismatch.");
                 var tools=await read.Client.ListToolsAsync(cancellationToken:Deadline());Check(!tools.Any(t=>t.Name is "edit" or "undo"),"Read-only discovery exposed edits.");
                 var context=await Context(read.Client);Check(context.GetProperty("width").GetInt32()==32,"Wrong live document.");
-                var preview=await read.Client.CallToolAsync("image",new Dictionary<string,object?>{{"source","Original"},{"target",null},{"roi",null},{"maxEdge",32}},cancellationToken:Deadline());
-                Check(preview.Content.OfType<ImageContentBlock>().Single().DecodedData.Span.StartsWith(new byte[]{137,80,78,71}),"No PNG result.");
+                var preview=await Query(read.Client,"image",new {source="Original",target=(string?)null,roi=(object?)null,maxEdge=32});
+                Check(Png(preview).AsSpan().StartsWith(new byte[]{137,80,78,71}),"No PNG result.");
                 var denied=await Edit(read.Client,context,new{type="layer.rename",target=Guid.NewGuid().ToString(),name="forbidden"});Check(denied.IsError==true,"Read-only direct edit accepted.");
             }
             Console.WriteLine("Read-only official client image and direct denial: PASS");
-            await Menu(window,"McpMenu","McpEditMenu"); await OldPipeRejected(readPipe); string pipe=await Connection(process.Id);
-            await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
+            await Menu(window,"McpMenu","McpEditMenu"); await OldPipeRejected(readConnection.Pipe); var connection=await Connection(process.Id);
+            await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 var client=handle.Client; var before=await Context(client);
                 uint beforeScreen=ScreenPixel(window,13,10);
                 object[] fence=[new{x=4,y=4},new{x=20,y=4},new{x=20,y=20},new{x=4,y=20}];
-                var preview=await client.CallToolAsync("part_preview",new Dictionary<string,object?>{{"fence",fence},{"step",0},{"maxEdge",32}},cancellationToken:Deadline());
-                Check(preview.IsError!=true&&preview.Content.OfType<ImageContentBlock>().Any(),"Fitting preview failed.");Check((await Context(client)).GetProperty("revision").GetString()==before.GetProperty("revision").GetString(),"Preview mutated document.");
+                var preview=await Query(client,"part_preview",new {fence,step=0,maxEdge=32});
+                Check(preview.IsError!=true&&Png(preview).Length>0,"Fitting preview failed.");Check((await Context(client)).GetProperty("revision").GetString()==before.GetProperty("revision").GetString(),"Preview mutated document.");
                 var edit=await Edit(client,before,new{type="part.create",fence,step=0,name="MCP Face"},
                     new{type="mask.stroke",target="@0",points=new[]{new{x=8.5,y=8.5},new{x=9.5,y=8.5}},radius=1,polarity="Erase"},
                     new{type="clone.stroke",target=(string?)null,ownerPart="@0",global=false,source=new{x=4.5,y=4.5},points=new[]{new{x=10.5,y=10.5},new{x=15.5,y=10.5}},radius=2,mode="Fixed"},
@@ -99,14 +100,14 @@ internal static class Program
                 Check(loaded.Layers.OfType<Flamoris.Cutwork.Core.RepairLayer>().Single().OwnerPartId.HasValue,"Save lost repair ownership.");
                 await Menu(window,"McpMenu","McpReadMenu");await Rejected(client);
             }
-            await OldPipeRejected(pipe);pipe=await Connection(process.Id);
-            await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
+            await OldPipeRejected(connection.Pipe);connection=await Connection(process.Id);
+            await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 await FileMenu(window,process.Id,"OpenProjectMenuItem",project);await Rejected(handle.Client);
             }
-            await OldPipeRejected(pipe);
-            await Menu(window,"McpMenu","McpReadMenu");pipe=await Connection(process.Id);
-            await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
+            await OldPipeRejected(connection.Pipe);
+            await Menu(window,"McpMenu","McpReadMenu");connection=await Connection(process.Id);
+            await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 Check((await Layers(handle.Client)).GetRawText()==durableLayers,"Reopen changed stable IDs, order, ownership, visibility or metadata.");
                 Check(Enumerable.SequenceEqual(durableComposite!,await Composite(handle.Client)),"Reopen changed composed repair pixels.");
@@ -115,20 +116,20 @@ internal static class Program
                 // Reopen exact same persistent document identity.
                 await FileMenu(window,process.Id,"OpenProjectMenuItem",project);await Rejected(handle.Client);
             }
-            await OldPipeRejected(pipe);
-            await Menu(window,"McpMenu","McpEditMenu");pipe=await Connection(process.Id);
-            await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
+            await OldPipeRejected(connection.Pipe);
+            await Menu(window,"McpMenu","McpEditMenu");connection=await Connection(process.Id);
+            await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 await Context(handle.Client);await Menu(window,"McpMenu","McpStopMenu");await Rejected(handle.Client);
             }
-            await OldPipeRejected(pipe);
-            await Menu(window,"McpMenu","McpReadMenu");pipe=await Connection(process.Id);
-            await BridgeEof(bridge,pipe);
-            await using(var handle=new ClientHandle(await Connect(bridge,pipe)))
+            await OldPipeRejected(connection.Pipe);
+            await Menu(window,"McpMenu","McpReadMenu");connection=await Connection(process.Id);
+            await BridgeEof(bridge,connection);
+            await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 await Context(handle.Client);await Task.Run(()=>((WindowPattern)window.GetCurrentPattern(WindowPattern.Pattern)).Close());await process.WaitForExitAsync().WaitAsync(Limit);await Rejected(handle.Client);
             }
-            Console.WriteLine("PASS: published editor+bridge outside source with System32-only PATH; official SDK 1.0.0 / MCP 2025-03-26; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
+            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core 1.0.0 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
         }
         catch { DumpUi(process.Id); throw; }
         finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){} }
@@ -142,13 +143,22 @@ internal static class Program
     }
     private static void CopyDirectory(string from,string to){Directory.CreateDirectory(to);foreach(var file in Directory.GetFiles(from))File.Copy(file,Path.Combine(to,Path.GetFileName(file)));foreach(var dir in Directory.GetDirectories(from))CopyDirectory(dir,Path.Combine(to,Path.GetFileName(dir)));}
     private static CancellationToken Deadline()=>new CancellationTokenSource(Limit).Token;
-    private static async Task<McpClient> Connect(string bridge,string pipe)=>await McpClient.CreateAsync(new StdioClientTransport(new(){Command=bridge,Arguments=["--pipe",pipe],Name="Published Cutwork",EnvironmentVariables=new Dictionary<string,string?>{["PATH"]=CleanPath}}),cancellationToken:Deadline());
+    private static async Task<McpClient> Connect(string bridge,ConnectionInfo connection)=>await McpClient.CreateAsync(new StdioClientTransport(new(){Command=bridge,Arguments=["--pipe",connection.Pipe],Name="Published Cutwork",EnvironmentVariables=new Dictionary<string,string?>{["PATH"]=CleanPath,[StdioBridge.CredentialEnvironmentVariable]=connection.Capability}}),cancellationToken:Deadline());
     private static JsonElement Text(CallToolResult result)=>JsonDocument.Parse(result.Content.OfType<TextContentBlock>().First().Text).RootElement.Clone();
-    private static async Task<JsonElement> Context(McpClient c)=>Text(await c.CallToolAsync("context",new Dictionary<string,object?>(),cancellationToken:Deadline()));
-    private static async Task<JsonElement> Layers(McpClient c)=>Text(await c.CallToolAsync("layers",new Dictionary<string,object?>{{"offset",0},{"count",64}},cancellationToken:Deadline())).GetProperty("layers");
-    private static async Task<CallToolResult> Edit(McpClient c,JsonElement context,params object[] ops)=>await c.CallToolAsync("edit",new Dictionary<string,object?>{{"documentToken",context.GetProperty("documentToken").GetString()},{"expectedRevision",context.GetProperty("revision").GetString()},{"operations",JsonSerializer.SerializeToElement(ops)}},cancellationToken:Deadline());
-    private static async Task<byte[]> Composite(McpClient c)=>(await c.CallToolAsync("image",new Dictionary<string,object?>{{"source","Composite"},{"target",null},{"roi",null},{"maxEdge",32}},cancellationToken:Deadline())).Content.OfType<ImageContentBlock>().Single().DecodedData.ToArray();
-    private static async Task<byte[]> Mask(McpClient c,Guid id)=>(await c.CallToolAsync("image",new Dictionary<string,object?>{{"source","Mask"},{"target",id.ToString()},{"roi",null},{"maxEdge",32}},cancellationToken:Deadline())).Content.OfType<ImageContentBlock>().Single().DecodedData.ToArray();
+    private static async Task<JsonElement> Common(McpClient c)=>Text(await c.CallToolAsync("mcp.context",new Dictionary<string,object?>(),cancellationToken:Deadline()));
+    private static Dictionary<string,object?> Envelope(JsonElement common,object input,string? documentToken=null,string? revision=null)
+    {
+        var guard=new Dictionary<string,object?>{{"runtimeId",common.GetProperty("runtimeId").GetString()},{"documentToken",documentToken??common.GetProperty("documentToken").GetString()}};
+        if(revision is not null)guard["expectedRevision"]=revision;
+        return new Dictionary<string,object?>{{"input",JsonSerializer.SerializeToElement(input)},{"guard",guard}};
+    }
+    private static async Task<JsonElement> Context(McpClient c){var common=await Common(c);return Text(await c.CallToolAsync("context",Envelope(common,new{}),cancellationToken:Deadline()));}
+    private static async Task<CallToolResult> Query(McpClient c,string name,object input){var common=await Common(c);return await c.CallToolAsync(name,Envelope(common,input),cancellationToken:Deadline());}
+    private static async Task<JsonElement> Layers(McpClient c)=>Text(await Query(c,"layers",new{offset=0,count=64})).GetProperty("layers");
+    private static async Task<CallToolResult> Edit(McpClient c,JsonElement context,params object[] ops){var common=await Common(c);return await c.CallToolAsync("edit",Envelope(common,new{operations=ops},context.GetProperty("documentToken").GetString(),context.GetProperty("revision").GetString()),cancellationToken:Deadline());}
+    private static byte[] Png(CallToolResult result)=>Convert.FromBase64String(Text(result).GetProperty("pngBase64").GetString()!);
+    private static async Task<byte[]> Composite(McpClient c)=>Png(await Query(c,"image",new{source="Composite",target=(string?)null,roi=(object?)null,maxEdge=32}));
+    private static async Task<byte[]> Mask(McpClient c,Guid id)=>Png(await Query(c,"image",new{source="Mask",target=id.ToString(),roi=(object?)null,maxEdge=32}));
     private static AutomationElement Find(AutomationElement root,string id)=>root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id))??throw new Exception("Missing UI control: "+id);
     private static Task Invoke(AutomationElement e)=>Task.Run(()=>((InvokePattern)e.GetCurrentPattern(InvokePattern.Pattern)).Invoke());
     private static async Task ClickReady(AutomationElement root,string id){await Until(()=>Find(root,id).Current.IsEnabled);await Invoke(Find(root,id));}
@@ -166,20 +176,21 @@ internal static class Program
         await Until(()=>((ValuePattern)edit.GetCurrentPattern(ValuePattern.Pattern)).Current.Value==path);AutomationElement? dialog=edit;
         while(dialog is not null&&dialog.Current.ClassName!="#32770")dialog=TreeWalker.ControlViewWalker.GetParent(dialog);var accept=Find(dialog!,"1");Console.WriteLine("Native accept button: "+accept.Current.Name);await Invoke(accept);
     }
-    private static async Task<string> Connection(int pid)
+    private static async Task<ConnectionInfo> Connection(int pid)
     {
         AutomationElement? edit=null;await Until(()=>(edit=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new PropertyCondition(AutomationElement.AutomationIdProperty,"McpConnection"))))is not null);
-        string json=((ValuePattern)edit!.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;string pipe=JsonDocument.Parse(json).RootElement.GetProperty("mcpServers").GetProperty("cutwork").GetProperty("args")[1].GetString()!;
+        string json=((ValuePattern)edit!.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;var server=JsonDocument.Parse(json).RootElement.GetProperty("mcpServers").GetProperty("cutwork");string pipe=server.GetProperty("args")[1].GetString()!;string capability=server.GetProperty("env").GetProperty(StdioBridge.CredentialEnvironmentVariable).GetString()!;
         AutomationElement? dialog=edit;while(dialog is not null&&dialog.Current.ControlType!=ControlType.Window)dialog=TreeWalker.ControlViewWalker.GetParent(dialog);
-        await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());return pipe;
+        await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());return new(pipe,capability);
     }
     private static async Task Rejected(McpClient c){bool rejected=false;try{var r=await Context(c);rejected=r.TryGetProperty("error",out _);}catch(Exception e)when(e is IOException or ModelContextProtocol.McpException or OperationCanceledException){rejected=true;}Check(rejected,"Old client retained access.");}
     private static async Task OldPipeRejected(string name){using var p=new NamedPipeClientStream(".",name,PipeDirection.InOut,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);bool denied=false;try{await p.ConnectAsync(300);}catch(TimeoutException){denied=true;}Check(denied,"Old endpoint accepted a connection.");}
-    private static async Task BridgeEof(string bridge,string pipe)
+    private static async Task BridgeEof(string bridge,ConnectionInfo connection)
     {
-        var start=new ProcessStartInfo(bridge){UseShellExecute=false,RedirectStandardInput=true,RedirectStandardOutput=true};start.ArgumentList.Add("--pipe");start.ArgumentList.Add(pipe);start.Environment["PATH"]=CleanPath;
+        var start=new ProcessStartInfo(bridge){UseShellExecute=false,RedirectStandardInput=true,RedirectStandardOutput=true};start.ArgumentList.Add("--pipe");start.ArgumentList.Add(connection.Pipe);start.Environment["PATH"]=CleanPath;start.Environment[StdioBridge.CredentialEnvironmentVariable]=connection.Capability;
         using var p=Process.Start(start)!;p.StandardInput.Close();try{await p.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));}finally{if(!p.HasExited)p.Kill(true);}
     }
+    private sealed record ConnectionInfo(string Pipe,string Capability);
     private sealed class ClientHandle(McpClient client):IAsyncDisposable{public McpClient Client=>client;public async ValueTask DisposeAsync(){try{await client.DisposeAsync();}catch(IOException){}}}
     private static async Task Until(Func<bool> predicate){var watch=Stopwatch.StartNew();while(!predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI condition not observed.");await Task.Delay(100);}}
     private static async Task UntilAsync(Func<Task<bool>> predicate){var watch=Stopwatch.StartNew();while(!await predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI change not observed by MCP.");await Task.Delay(100);}}

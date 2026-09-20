@@ -4,6 +4,7 @@ using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging.Persistence;
 using Flamoris.Cutwork.Mcp;
 using Flamoris.Logging;
+using Flamoris.Mcp.Core;
 
 namespace Flamoris.Cutwork.Tests;
 
@@ -136,50 +137,47 @@ public sealed class LoggingIntegrationTests
         using var directory = new TemporaryDirectory();
         var logger = LoggingBootstrap.Create(WriteFileOnlySettings(directory.Path), directory.Path);
         var session = LiveMcpTests.Open();
-        using (var readOnly = new LiveAccess(session, LivePermission.ReadOnly, logger))
+        using (var readOnly = await McpCoreHarness.CreateAsync(session, McpPermission.ReadOnly, logger: logger))
         {
-            var editor = new LiveEditor(session, readOnly, () => false, () => Task.CompletedTask, _ => { }, logger);
-            await editor.CallAsync("edit", JsonSerializer.SerializeToElement(new
+            var result = await readOnly.CallAsync("edit", new
             {
-                documentToken = session.DocumentToken,
-                expectedRevision = session.Document!.Revision.ToString(),
                 operations = new[] { new { type = "layer.rename", target = session.Document.Base.Id.ToString(), name = "blocked" } },
-            }));
+            });
+            Assert.AreEqual(McpErrors.Forbidden, result.Error);
         }
-        using (var edit = new LiveAccess(session, LivePermission.Edit, logger))
+        using (var edit = await McpCoreHarness.CreateAsync(session, logger: logger))
         {
-            var editor = new LiveEditor(session, edit, () => false, () => Task.CompletedTask, _ => { }, logger);
-            await editor.CallAsync("edit", JsonSerializer.SerializeToElement(new
+            await edit.CallAsync("edit", new
             {
-                documentToken = session.DocumentToken,
-                expectedRevision = "999",
                 operations = new[] { new { type = "layer.rename", target = session.Document!.Base.Id.ToString(), name = "stale" } },
-            }));
-            await editor.CallAsync("secret-token-value", JsonSerializer.SerializeToElement(new { }));
+            }, expectedRevision: 999);
+            await edit.CallAsync("secret-token-value", new { });
         }
 
         var content = File.ReadAllText(Path.Combine(directory.Path, "logs", "cutwork.log"));
-        StringAssert.Contains(content, "[WARN ] [mcp.auth]");
-        StringAssert.Contains(content, "[WARN ] [mcp.command]");
-        StringAssert.Contains(content, "[INFO ] [mcp.session] Session access granted");
-        StringAssert.Contains(content, "[INFO ] [mcp.session] Session access revoked");
-        StringAssert.Contains(content, "error=revision_conflict");
+        StringAssert.Contains(content, "[INFO ] [mcp.auth]");
+        StringAssert.Contains(content, "[INFO ] [mcp.command]");
+        StringAssert.Contains(content, "outcome=enabled");
+        StringAssert.Contains(content, "outcome=revoked");
+        StringAssert.Contains(content, "outcome=stale_revision");
         Assert.IsFalse(content.Contains("operations", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(content.Contains("secret-token-value", StringComparison.Ordinal));
     }
 
     [TestMethod]
-    public void McpTransportFailureUsesTransportCategoryWithoutConnectionCoordinates()
+    public async Task McpCoreDiagnosticsDoNotLogConnectionCoordinatesOrCredentials()
     {
         using var directory = new TemporaryDirectory();
         var logger = LoggingBootstrap.Create(WriteFileOnlySettings(directory.Path), directory.Path);
-
-        LiveDiagnostics.TransportFailure(logger, new IOException("connection lost"), recoverable: true);
+        var session = LiveMcpTests.Open();
+        string credential;
+        using (var mcp = await McpCoreHarness.CreateAsync(session, logger: logger))
+            credential = mcp.Grant.ExportCredential();
 
         var content = File.ReadAllText(Path.Combine(directory.Path, "logs", "cutwork.log"));
-        StringAssert.Contains(content, "[WARN ] [mcp.transport]");
-        StringAssert.Contains(content, "exceptionType=IOException");
-        Assert.IsFalse(content.Contains("cutwork-", StringComparison.Ordinal));
+        StringAssert.Contains(content, "[mcp.auth]");
+        Assert.IsFalse(content.Contains("flamoris-test-", StringComparison.Ordinal));
+        Assert.IsFalse(content.Contains(credential, StringComparison.Ordinal));
     }
 
     private static string WriteFileOnlySettings(string directory)
