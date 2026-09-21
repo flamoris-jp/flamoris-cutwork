@@ -43,7 +43,7 @@ Part/Mask/Clone/Patch editing through the same Undo/Redo. Access starts disabled
 See [connection and operation guide](docs/live-mcp.md) and
 [ADR 0002](docs/decisions/0002-live-mcp.md) plus the
 [MCP Core migration ADR](docs/decisions/0003-mcp-core-migration.md). Shared transport,
-capability and lifecycle infrastructure comes from `Flamoris.Mcp.Core` 1.0.0;
+capability and lifecycle infrastructure comes from `Flamoris.Mcp.Core` 1.0.1;
 no filesystem tools are exposed.
 
 ## Design authority

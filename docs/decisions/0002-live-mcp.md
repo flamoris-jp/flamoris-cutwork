@@ -1,7 +1,7 @@
 # ADR 0002: Cutwork live MCP
 
 Supersession note: Issue #36 moves the shared transport, capability and protocol
-infrastructure to `Flamoris.Mcp.Core` 1.0.0. Cutwork-specific authority and tool
+infrastructure to `Flamoris.Mcp.Core` 1.0.1. Cutwork-specific authority and tool
 semantics below remain current; see [ADR 0003](0003-mcp-core-migration.md).
 
 Issue #33; reviewed baseline aec08a2. Implementation decision, subject to PR review.
@@ -20,7 +20,9 @@ created by the bridge or adapter. All document access executes on WPF's dispatch
 Reference audit: 2D #102/#103/ADR0010 and Kachinco #13/#14/ADR0003,
 including #14's document-loss follow-up (0100406). Bind a lease to the actual
 session AND document reference AND transient token, observe shared lifecycle,
-and never revive it on Redo. Failed file decoding leaves the grant intact.
+and never revive it on Redo. Failed file decoding leaves the grant intact. All
+authoritative or mutable document access executes on WPF's dispatcher; bounded
+pure preparation may use an immutable Original captured through that lane.
 
 ## Protocol and topology
 
@@ -28,7 +30,7 @@ Local official MCP client → self-contained stdio bridge → explicitly chosen 
 named pipe → official C# SDK protocol server → typed adapter → existing session.
 The original implementation used ModelContextProtocol.Core 1.0.0 with explicit
 2025-03-26 compatibility. Issue #36 replaces that local protocol layer with
-Flamoris.Mcp.Core 1.0.0 / official SDK 2.2.0 and its reviewed 2026-07-28 plus
+Flamoris.Mcp.Core 1.0.1 / official SDK 2.2.0 and its reviewed 2026-07-28 plus
 legacy initialization support. The official SDK
 owns initialize, cancellation, protocol errors and discovery. No HTTP, Node,
 Hub/Relay, filesystem tool, raw command dispatcher or editable snapshot exists.
@@ -63,7 +65,10 @@ Busy includes all human strokes/deferred work, fences/fitting/Patch previews,
 inline metadata editing and modal/file coordination. Reads except status reject
 busy. Remote chunked work disables human editing surfaces, leaves Stop enabled,
 through the Core commit gate. Bounded operation/stroke stages check cancellation;
-Core rechecks the grant before installation or disclosure. All
+Core rechecks the grant before installation or disclosure. Bounded Guriguri
+preparation uses a captured immutable Original outside the WPF serialization
+lane; final preview disclosure and Part installation re-enter Core's guarded
+read/commit gates. All
 pixel readback is tagged with its captured token/revision. Cancellation after
 commit does not Undo; query before retrying an ambiguous response.
 
@@ -101,8 +106,10 @@ also reserve compositor work for cancellation and shared history, including gaps
 between distant operations and owned-repair cascade deletion. Retained history
 cost accumulates before fitter/raster preparation; the session remains the final
 history-budget authority. Validation precedes
-kernel allocation; budgets accumulate over the batch. Read deadline 120 s,
-request 15 s, write 5 s; partial/slow frames terminate the connection. Malformed
+kernel allocation; budgets accumulate over the batch. Read deadline 120 s starts
+only after a frame's first bytes arrive; ordinary idle time between frames is
+unbounded. Request deadline is 15 s and write deadline is 5 s; partial/slow frames
+terminate the connection while revocation/shutdown still interrupt idle reads. Malformed
 UTF-8, duplicate/unknown properties, depth, enums and non-object roots fail closed.
 Limits are deliberately smaller than desktop authoring. Ask for a smaller ROI or
 shorter stroke; do not silently enlarge budgets. Estimates are resource guards,

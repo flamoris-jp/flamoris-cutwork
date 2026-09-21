@@ -68,7 +68,7 @@ build intermediates、PDB、Python/Tkinter/OpenCV由来ファイルが混入し�
 参照projectからSDKがpublishしたPDBは、専用publish directory内からpackage staging前に
 除去し、続くforbidden-content検査で残存がないことを確認します。
 
-MCP serverには`Flamoris.Mcp.Core` 1.0.0、公式`ModelContextProtocol.Core` 2.2.0とproduction dependenciesを含み、
+MCP serverには`Flamoris.Mcp.Core` 1.0.1、公式`ModelContextProtocol.Core` 2.2.0とproduction dependenciesを含み、
 `MCP-SDK-LICENSE.txt`を同梱します。テストクライアント実行物は含みません。OpenCVやPython packageは
 production projectから参照されていません。配布物中のnative filesはself-contained
 .NET/WPF runtimeに由来し、そのlicense/noticesはpublishに使用したSDKからコピーします。

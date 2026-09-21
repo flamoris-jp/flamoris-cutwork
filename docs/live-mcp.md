@@ -21,10 +21,15 @@ Open/Save/書き出し先の指定、フォルダー閲覧、シェル実行は�
 
 ## Protocol / configuration
 
-`Flamoris.Mcp.Core` **1.0.0** / official C# SDK **2.2.0**; MCP
+`Flamoris.Mcp.Core` **1.0.1** / official C# SDK **2.2.0**; MCP
 **2026-07-28** with the Core-supported legacy initialization path, standard stdio.
 Core owns SDK protocol objects; all editing stays in the existing running WPF
 session. Example configuration (the UI supplies fresh exact values):
+
+`ReadTimeoutMs` bounds a frame only after bytes for that frame have started.
+Ordinary idle time between requests does not expire a healthy connection. Stop,
+permission change, document replacement and application shutdown still revoke and
+disconnect an idle bridge immediately.
 
 ```json
 {"mcpServers":{"cutwork":{"command":"C:\\Cutwork\\mcp\\Flamoris.Mcp.Bridge.exe","args":["--pipe","flamoris-cutwork-<fresh address>"],"env":{"FLAMORIS_MCP_CAPABILITY":"<fresh 256-bit capability>"}}}}
@@ -50,7 +55,9 @@ policy and capability; no artwork/file permission is inherited by another docume
    Part, Mask; specify the Part UUID for Part/Mask. Null ROI means source bounds.
 4. `part_preview` takes document-space fence, step and maxEdge. Repeat with
    different existing adjustment steps to compare; it never changes selection,
-   dirty state, revision or history. Preview and create use the same fitter.
+   dirty state, revision or history. Preview and create use the same fitter. Bounded
+   fitting runs against a captured immutable Original outside the WPF serialization
+   lane, then re-enters the guarded read/commit gate before disclosure or installation.
 5. Core wraps each tool's Cutwork-owned `input` in a `guard` containing runtime ID,
    document token and (for mutation) expected revision. `edit` takes a complete
    atomic operation array. One accepted

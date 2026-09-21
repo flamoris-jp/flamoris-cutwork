@@ -1,10 +1,10 @@
-# ADR 0003: Migrate live MCP to Flamoris.Mcp.Core 1.0.0
+# ADR 0003: Migrate live MCP to Flamoris.Mcp.Core 1.0.1
 
 Status: accepted for Issue #36 implementation. Baseline `7791306a`.
 
 ## Decision
 
-Cutwork consumes `Flamoris.Mcp.Core` 1.0.0 and keeps the reviewed local topology:
+Cutwork consumes `Flamoris.Mcp.Core` 1.0.1 and keeps the reviewed local topology:
 
 ```text
 external MCP client
@@ -43,9 +43,24 @@ busy state immediately before the callback. `DocumentReplacing` publishes
 change, document replacement and shutdown revoke the current capability and stop
 the endpoint. A fresh enable creates a fresh pipe address and 256-bit credential.
 
+Guriguri boundary fitting is the bounded preparation exception to dispatcher-only
+domain work. Cutwork first captures the immutable Original, dimensions, token and
+revision through `RequestContext.ReadAsync`, then performs the pure fitting and PNG
+preparation on a worker. Preview disclosure re-enters `ReadAsync` and explicitly
+rechecks the captured revision; authored Part installation re-enters
+`CommitAsync`, whose guard rechecks grant/runtime/document/revision/cancellation.
+Only the ordinary transaction/history commit occurs inside that callback. Stop,
+replacement or a concurrent authored edit therefore cannot disclose or install an
+old prepared result.
+
+Core 1.0.1 treats `ReadTimeoutMs` as a started-frame deadline, not an idle-session
+timeout. Waiting for the first byte of the next request is unbounded, while a
+partial/stalled frame remains bounded and grant revocation or shutdown still
+cancels an idle read immediately.
+
 ## Wire and image compatibility
 
-Core 1.0.0 owns official SDK 2.2.0 protocol handling and the common guarded tool
+Core 1.0.1 owns official SDK 2.2.0 protocol handling and the common guarded tool
 envelope. Existing Cutwork operation payloads remain the typed `input`; runtime,
 document and expected revision move to Core's `guard` object. `mcp.context` exposes
 the common identity while Cutwork's `context` tool retains dimensions, coordinate,
