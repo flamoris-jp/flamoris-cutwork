@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using Flamoris.Cutwork.Mcp;
 using Flamoris.Mcp.Core;
 
 namespace Flamoris.Cutwork.Tests;

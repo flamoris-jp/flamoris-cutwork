@@ -55,7 +55,10 @@ public sealed class LivePreparationTests
         try
         {
             await mcp.Host.InvokeAsync(() =>
-                session.Execute(new RenameLayer(session.Document!.Base.Id, "human edit")),
+            {
+                session.Execute(new RenameLayer(session.Document!.Base.Id, "human edit"));
+                return true;
+            },
                 CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally { fitter.Release.Set(); }
@@ -83,7 +86,10 @@ public sealed class LivePreparationTests
         try
         {
             await mcp.Host.InvokeAsync(() =>
-                session.Execute(new RenameLayer(session.Document!.Base.Id, "new revision")),
+            {
+                session.Execute(new RenameLayer(session.Document!.Base.Id, "new revision"));
+                return true;
+            },
                 CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally { fitter.Release.Set(); }
@@ -112,7 +118,11 @@ public sealed class LivePreparationTests
         Assert.IsTrue(fitter.Started.Wait(TimeSpan.FromSeconds(5)), "Fitting did not start.");
         try
         {
-            await mcp.Host.InvokeAsync(() => session.Open(replacement), CancellationToken.None)
+            await mcp.Host.InvokeAsync(() =>
+            {
+                session.Open(replacement);
+                return true;
+            }, CancellationToken.None)
                 .WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally { fitter.Release.Set(); }
