@@ -16,7 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Flamoris.Logging" Version="1.0.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.0.0" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.0.1" />
     <ProjectReference Include="..\Cutwork.Mcp\Cutwork.Mcp.csproj" />
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />

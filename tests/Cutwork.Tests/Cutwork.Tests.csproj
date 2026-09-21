@@ -9,7 +9,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.4.0" />
     <PackageReference Include="MSTest.TestFramework" Version="4.4.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.0.0" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cutwork.Core\Cutwork.Core.csproj" />
