@@ -9,18 +9,20 @@ namespace Flamoris.Cutwork.Tests;
 internal sealed class McpCoreHarness : IDisposable
 {
     private McpCoreHarness(EditorSession session, McpPermission permission, Func<bool> busy,
-        Func<Action, CancellationToken, Task> dispatch, Action<bool> editing, FlamorisLogger logger)
+        Func<Action, CancellationToken, Task> dispatch, Action<bool> editing, FlamorisLogger logger,
+        IPartBoundaryFitter? partFitter, McpOptions? options)
     {
         Session = session;
         Host = new(session, busy, dispatch);
-        Editor = new(session, permission, busy, editing, logger);
-        Boundary = new(Host, CutworkMcpTools.Create(Editor), new McpOptions
+        Editor = new(session, permission, busy, editing, logger, partFitter);
+        var configured = (options ?? new McpOptions()) with
         {
             Enabled = true,
             Permission = permission,
-            PipeName = "flamoris-test-" + Guid.NewGuid().ToString("N"),
+            PipeName = options?.PipeName ?? "flamoris-test-" + Guid.NewGuid().ToString("N"),
             MaxConcurrentRequests = 1,
-        }, new McpDiagnostics(logger));
+        };
+        Boundary = new(Host, CutworkMcpTools.Create(Editor), configured, new McpDiagnostics(logger));
     }
 
     public EditorSession Session { get; }
@@ -32,7 +34,8 @@ internal sealed class McpCoreHarness : IDisposable
     public static async Task<McpCoreHarness> CreateAsync(EditorSession session,
         McpPermission permission = McpPermission.Edit, Func<bool>? busy = null,
         Func<Action, CancellationToken, Task>? dispatch = null, Action<bool>? editing = null,
-        FlamorisLogger? logger = null)
+        FlamorisLogger? logger = null, IPartBoundaryFitter? partFitter = null,
+        McpOptions? options = null)
     {
         var harness = new McpCoreHarness(session, permission, busy ?? (() => false),
             dispatch ?? ((action, token) =>
@@ -40,7 +43,7 @@ internal sealed class McpCoreHarness : IDisposable
                 token.ThrowIfCancellationRequested();
                 action();
                 return Task.CompletedTask;
-            }), editing ?? (_ => { }), logger ?? FlamorisLogger.Create());
+            }), editing ?? (_ => { }), logger ?? FlamorisLogger.Create(), partFitter, options);
         harness.Grant = await harness.Boundary.EnableAsync(permission);
         return harness;
     }
