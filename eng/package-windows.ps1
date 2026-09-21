@@ -67,8 +67,9 @@ $bridgeProject = Join-Path $repositoryRoot "src\Cutwork.Bridge\Cutwork.Bridge.cs
 $bridgePath = Join-Path $publishPath "mcp"
 & dotnet publish $bridgeProject -c Release -r win-x64 --self-contained true -o $bridgePath /p:DebugType=None /p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Bridge publish failed." }
-if (-not (Test-Path (Join-Path $bridgePath "Cutwork.Bridge.exe"))) { throw "Bridge missing." }
+if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Mcp.Bridge.exe"))) { throw "Bridge missing." }
 if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Logging.dll"))) { throw "Bridge logging dependency missing." }
+if (-not (Test-Path (Join-Path $bridgePath "Flamoris.Mcp.Core.dll"))) { throw "Bridge MCP Core dependency missing." }
 Copy-Item (Join-Path $repositoryRoot "packaging\MCP-SDK-LICENSE.txt") (Join-Path $publishPath "MCP-SDK-LICENSE.txt")
 
 # Referenced projects can still contribute PDBs even when the app publish profile
@@ -83,6 +84,7 @@ $requiredPublishFiles = @(
     "Cutwork.runtimeconfig.json",
     "appsettings.json",
     "Flamoris.Logging.dll",
+    "Flamoris.Mcp.Core.dll",
     "coreclr.dll",
     "hostfxr.dll",
     "hostpolicy.dll",
@@ -96,6 +98,16 @@ foreach ($requiredFile in $requiredPublishFiles) {
     }
 }
 
+foreach ($coreAssembly in @(
+    (Join-Path $publishPath "Flamoris.Mcp.Core.dll"),
+    (Join-Path $bridgePath "Flamoris.Mcp.Core.dll")
+)) {
+    $coreProductVersion = (Get-Item -LiteralPath $coreAssembly).VersionInfo.ProductVersion
+    if ($coreProductVersion -notmatch '^1\.0\.1(?:[+.-]|$)') {
+        throw "Packaged MCP Core must be 1.0.1; found $coreProductVersion at $coreAssembly"
+    }
+}
+
 $wpfNativeFiles = @(Get-ChildItem -LiteralPath $publishPath -File | Where-Object {
     $_.Name -match '^(PresentationNative|wpfgfx).*\.dll$'
 })
@@ -106,7 +118,7 @@ if ($wpfNativeFiles.Count -lt 2) {
 $productLaunchers = @(Get-ChildItem -LiteralPath $publishPath -Filter "*.exe" -File -Recurse | Where-Object {
     $_.Name -match '(?i)(cutwork|flamoris)'
 })
-if ($productLaunchers.Count -ne 2 -or @($productLaunchers | Where-Object Name -eq "Cutwork.exe").Count -ne 1 -or @($productLaunchers | Where-Object Name -eq "Cutwork.Bridge.exe").Count -ne 1) {
+if ($productLaunchers.Count -ne 2 -or @($productLaunchers | Where-Object Name -eq "Cutwork.exe").Count -ne 1 -or @($productLaunchers | Where-Object Name -eq "Flamoris.Mcp.Bridge.exe").Count -ne 1) {
     $names = ($productLaunchers | ForEach-Object Name) -join ", "
     throw "Expected editor and bridge launchers; found: $names"
 }
@@ -171,8 +183,8 @@ try {
     $zipProductLaunchers = @($entryNames | Where-Object {
         $_ -match '(?i)[^/]*(cutwork|flamoris)[^/]*\.exe$'
     })
-    if ($zipProductLaunchers.Count -ne 2 -or "Cutwork.exe" -cnotin $zipProductLaunchers -or "mcp/Cutwork.Bridge.exe" -cnotin $zipProductLaunchers) {
-        throw "ZIP must expose Cutwork.exe and mcp/Cutwork.Bridge.exe only."
+    if ($zipProductLaunchers.Count -ne 2 -or "Cutwork.exe" -cnotin $zipProductLaunchers -or "mcp/Flamoris.Mcp.Bridge.exe" -cnotin $zipProductLaunchers) {
+        throw "ZIP must expose Cutwork.exe and mcp/Flamoris.Mcp.Bridge.exe only."
     }
 
     $forbiddenEntries = @($entryNames | Where-Object {

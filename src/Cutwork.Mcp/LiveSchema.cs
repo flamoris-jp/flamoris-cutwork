@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using ModelContextProtocol.Protocol;
 
 namespace Flamoris.Cutwork.Mcp;
 
@@ -22,8 +21,6 @@ public static class LiveSchema
     private static readonly object NullableTarget = new { anyOf = new object[] { Target, new { type = "null" } } };
     private static readonly object Transform = Obj(("centerX", Num(0, 100000)), ("centerY", Num(0, 100000)),
         ("scale", Num(0.01, 10)), ("rotationDegrees", Num(-360, 360)));
-    private static readonly object Revision = new { type = "string", pattern = "^(0|[1-9][0-9]{0,18})$" };
-    private static readonly object Token = new { type = "string", pattern = "^[0-9a-f]{32}$" };
     private static object Op(string kind, params (string, object)[] fields) => Obj(new[] { ("type", (object)new { @const = kind }) }.Concat(fields).ToArray());
     private static readonly object Operations = new { oneOf = new object[] {
         Op("part.create", ("fence", Fence), ("step", Int(0, 100)), ("name", Str())),
@@ -44,15 +41,12 @@ public static class LiveSchema
             ("roi", new { anyOf = new object[] { new { type = "null" }, Obj(("x", Int(0, 100000)), ("y", Int(0, 100000)), ("width", Int(1, 100000)), ("height", Int(1, 100000))) } }),
             ("maxEdge", Int(1, LiveLimits.PreviewEdge))),
         ["part_preview"] = Obj(("fence", Fence), ("step", Int(0, 100)), ("maxEdge", Int(1, LiveLimits.PreviewEdge))),
-        ["edit"] = Obj(("documentToken", Token), ("expectedRevision", Revision), ("operations", ArrayOf(Operations, 1, LiveLimits.Operations))),
-        ["undo"] = Obj(("documentToken", Token), ("expectedRevision", Revision)),
-        ["redo"] = Obj(("documentToken", Token), ("expectedRevision", Revision))
+        ["edit"] = Obj(("operations", ArrayOf(Operations, 1, LiveLimits.Operations))),
+        ["undo"] = Obj(),
+        ["redo"] = Obj()
     }.ToDictionary(p => p.Key, p => JsonSerializer.SerializeToElement(p.Value));
 
     public static bool IsEdit(string name) => name is "edit" or "undo" or "redo";
-    public static IList<Tool> Tools(LivePermission permission) => Schemas
-        .Where(p => permission == LivePermission.Edit || !IsEdit(p.Key))
-        .Select(p => new Tool { Name = p.Key, Description = Descriptions[p.Key], InputSchema = p.Value }).ToList();
     private static readonly Dictionary<string, string> Descriptions = new() {
         ["context"] = "Live document token, monotonic revision, busy and shared history. Coordinates are document pixels; pixel centers x+0.5,y+0.5.",
         ["layers"] = "Paged layer metadata including semantic partOrder, compositor index and ownerPartId. No pixels or filesystem paths.",
@@ -61,6 +55,8 @@ public static class LiveSchema
         ["edit"] = "Atomic ordinary edits; one history entry. Targets are UUID or @N for an earlier created operation result. Clone: existing target OR ownerPart OR explicit global=true. Read current revision first; never retry automatically.",
         ["undo"] = "Undo one shared WPF/MCP history entry with document/revision precondition.",
         ["redo"] = "Redo one shared WPF/MCP history entry with document/revision precondition." };
+    public static string Description(string name) => Descriptions.TryGetValue(name, out var value)
+        ? value : throw new ArgumentOutOfRangeException(nameof(name));
     public static void Validate(string name, JsonElement input)
     {
         if (!Schemas.TryGetValue(name, out var schema)) throw new LiveException("unknown_tool");

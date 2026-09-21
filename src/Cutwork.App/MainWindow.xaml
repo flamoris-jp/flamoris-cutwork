@@ -194,7 +194,15 @@
         </ToolBarTray>
 
         <Border DockPanel.Dock="Bottom" Background="#292B2F" Padding="8,5">
-            <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
+            <DockPanel>
+                <StackPanel x:Name="McpStatusPanel" DockPanel.Dock="Right" Orientation="Horizontal"
+                            AutomationProperties.AutomationId="McpStatus"
+                            VerticalAlignment="Center" Margin="12,0,0,0">
+                    <Ellipse x:Name="McpStatusDot" Width="9" Height="9" Fill="IndianRed" Margin="0,0,5,0" />
+                    <TextBlock x:Name="McpStatusLabel" Text="MCP" Foreground="#E7E7E7" />
+                </StackPanel>
+                <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
+            </DockPanel>
         </Border>
 
         <Grid x:Name="WorkArea">
