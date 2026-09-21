@@ -154,4 +154,8 @@
   <data name="Mcp_Connection" xml:space="preserve"><value>MCP connection configuration</value></data>
   <data name="Mcp_CopyBusy" xml:space="preserve"><value>Clipboard busy. Try again.</value></data>
   <data name="Mcp_Unavailable" xml:space="preserve"><value>MCP connection unavailable.</value></data>
+  <data name="Mcp_StatusDisabled" xml:space="preserve"><value>MCP is disabled</value></data>
+  <data name="Mcp_StatusAvailable" xml:space="preserve"><value>MCP is available</value></data>
+  <data name="Mcp_StatusConnected" xml:space="preserve"><value>An MCP client is connected</value></data>
+  <data name="Mcp_StatusUnavailable" xml:space="preserve"><value>MCP is unavailable</value></data>
 </root>

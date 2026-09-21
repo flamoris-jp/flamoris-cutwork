@@ -14,7 +14,7 @@ Layer Handoffの書き出しができます。
 ローカルMCP:
 画像を開いた後、MCP / AI メニューで「読み取り専用」または「編集を許可」を
 有効にし、表示された設定JSONを同じPC・WindowsユーザーのMCPクライアントへ
-コピーしてください。同梱の mcp/Cutwork.Bridge.exe を使用します。
+コピーしてください。同梱の mcp/Flamoris.Mcp.Bridge.exe を使用します。
 初期状態はOffです。停止・権限変更・文書の再Openで古い接続は失効します。
 画像へのアクセスを許可しますが、MCPからのOpen/Save/ファイル書き出しはできません。
 クラウド側のクライアントへの中継機能はありません。
@@ -22,6 +22,7 @@ Layer Handoffの書き出しができます。
 
 ライセンス:
 - FLAMORIS Cutwork: LICENSE.txt (Mozilla Public License 2.0)
+- FLAMORIS MCP Core: Apache License 2.0
 - MCP C# SDK: MCP-SDK-LICENSE.txt (Apache License 2.0)
 - 同梱.NET Runtime/WPF: DOTNET-LICENSE.txt / THIRD-PARTY-NOTICES.txt
 

@@ -42,7 +42,7 @@ profileは`src/Cutwork.App/Properties/PublishProfiles/win-x64.pubxml`です。
 WPFの互換性と診断可能性を優先し、single-file、trimming、ReadyToRunは使用しません。
 satellite resourcesは製品が対応する日本語・英語に限定します。入口となるproduct
 executableは`Cutwork.exe`です。MCPクライアント専用のself-contained bridgeは
-`mcp/Cutwork.Bridge.exe`です。
+`mcp/Flamoris.Mcp.Bridge.exe`です。
 
 出力:
 
@@ -62,13 +62,13 @@ ZIP rootには次を含みます。
 - `THIRD-PARTY-NOTICES.txt`
 
 packaging scriptは、必須app/runtime filesとWPF native runtime、`Cutwork.exe`が唯一の
-Cutwork editor launcherであり、bridgeは`mcp/Cutwork.Bridge.exe`のみであること、ZIPの可読性、required noticesを検査します。
+Cutwork editor launcherであり、bridgeは`mcp/Flamoris.Mcp.Bridge.exe`のみであること、ZIPの可読性、required noticesを検査します。
 source、tests、experiments、
 build intermediates、PDB、Python/Tkinter/OpenCV由来ファイルが混入した場合は失敗します。
 参照projectからSDKがpublishしたPDBは、専用publish directory内からpackage staging前に
 除去し、続くforbidden-content検査で残存がないことを確認します。
 
-MCP serverには公式`ModelContextProtocol.Core` 1.0.0とそのproduction dependenciesを含み、
+MCP serverには`Flamoris.Mcp.Core` 1.0.1、公式`ModelContextProtocol.Core` 2.2.0とproduction dependenciesを含み、
 `MCP-SDK-LICENSE.txt`を同梱します。テストクライアント実行物は含みません。OpenCVやPython packageは
 production projectから参照されていません。配布物中のnative filesはself-contained
 .NET/WPF runtimeに由来し、そのlicense/noticesはpublishに使用したSDKからコピーします。
