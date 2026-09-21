@@ -9,20 +9,27 @@ namespace Flamoris.Cutwork.Mcp;
 
 /// <summary>Cutwork-owned typed operations over the one authoritative session.</summary>
 public sealed class LiveEditor(EditorSession session, McpPermission permission, Func<bool> humanBusy,
-    Action<bool> editing, FlamorisLogger? logger = null)
+    Action<bool> editing, FlamorisLogger? logger = null, IPartBoundaryFitter? partFitter = null)
 {
     private readonly FlamorisLogger? log = logger;
+    private readonly IPartBoundaryFitter fitter = partFitter ?? new GuriguriPartFitter();
     public EditorSession Session => session;
     private CutworkDocument Document => session.Document ?? throw new LiveException(McpErrors.HostUnavailable);
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonElement Empty = JsonSerializer.SerializeToElement(new { });
 
     public async Task<JsonElement> ExecuteAsync(RequestContext context, string name, JsonElement input,
         CancellationToken cancellationToken)
     {
         try
         {
+            if (name == "part_preview")
+                return await PartPreviewAsync(context, input, cancellationToken);
+            var preparedParts = name == "edit"
+                ? await PreparePartsAsync(context, input, cancellationToken)
+                : EmptyPreparedParts;
             return LiveSchema.IsEdit(name)
-                ? await context.CommitAsync(() => Mutate(name, input, cancellationToken))
+                ? await context.CommitAsync(() => Mutate(name, input, preparedParts, cancellationToken))
                 : await context.ReadAsync(() => Query(name, input, cancellationToken));
         }
         catch (LiveException exception)
@@ -53,12 +60,12 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
             "context" => Element(Context()),
             "layers" => Layers(args),
             "image" => ImageQuery(args, cancellationToken),
-            "part_preview" => PartPreview(args, cancellationToken),
             _ => throw new LiveException(McpErrors.UnsupportedCapability),
         };
     }
 
-    private JsonElement Mutate(string name, JsonElement args, CancellationToken cancellationToken)
+    private JsonElement Mutate(string name, JsonElement args,
+        IReadOnlyDictionary<int, PreparedPart> preparedParts, CancellationToken cancellationToken)
     {
         DemandIdle(cancellationToken);
         editing(true);
@@ -82,10 +89,12 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
             var budget = new LiveBudget(session.HistoryBudgetBytes);
             var ids = new List<Guid?>();
             using var transaction = session.BeginTransaction();
+            int operationIndex = 0;
             foreach (var operation in args.GetProperty("operations").EnumerateArray())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ids.Add(Apply(operation, ids, transaction, budget, cancellationToken));
+                ids.Add(Apply(operation, operationIndex++, preparedParts, ids,
+                    transaction, budget, cancellationToken));
             }
             cancellationToken.ThrowIfCancellationRequested();
             transaction.Commit(ids.LastOrDefault(id => id.HasValue
@@ -139,13 +148,31 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
         return Image(image, token, revision);
     }
 
-    private JsonElement PartPreview(JsonElement args, CancellationToken cancellationToken)
+    private async Task<JsonElement> PartPreviewAsync(RequestContext context, JsonElement args,
+        CancellationToken cancellationToken)
     {
-        string revision = Revision(), token = session.DocumentToken;
-        var prepared = Fit(args, new LiveBudget(), cancellationToken);
-        var image = LiveImages.Mask(prepared.Bounds, prepared.Mask, args.GetProperty("maxEdge").GetInt32());
-        cancellationToken.ThrowIfCancellationRequested();
-        return Image(image, token, revision);
+        var source = await CaptureFittingSourceAsync(context, cancellationToken);
+        var result = await Task.Run(() =>
+        {
+            var prepared = PrepareFit(source, args, new LiveBudget(), cancellationToken);
+            var image = LiveImages.Mask(prepared.Bounds, prepared.Mask,
+                args.GetProperty("maxEdge").GetInt32());
+            cancellationToken.ThrowIfCancellationRequested();
+            return Image(image, source.DocumentToken,
+                source.Revision.ToString(CultureInfo.InvariantCulture));
+        }, cancellationToken);
+
+        // The pure preparation above can outlive Stop, replacement or an ordinary
+        // document edit. Re-enter the host lane before disclosing any prepared bytes.
+        return await context.ReadAsync(() =>
+        {
+            DemandIdle(cancellationToken);
+            if (session.DocumentToken != source.DocumentToken)
+                throw new LiveException(McpErrors.StaleDocument);
+            if (Document.Revision != source.Revision)
+                throw new LiveException(McpErrors.StaleRevision);
+            return result;
+        });
     }
 
     private object Context() => new
@@ -166,24 +193,63 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
         redoCount = session.RedoCount,
     };
 
-    private (DocumentRect Bounds, byte[] Mask) Fit(JsonElement operation, LiveBudget budget,
-        CancellationToken cancellationToken, bool authored = false)
+    private async Task<IReadOnlyDictionary<int, PreparedPart>> PreparePartsAsync(
+        RequestContext context, JsonElement args, CancellationToken cancellationToken)
+    {
+        var operations = args.GetProperty("operations").EnumerateArray().ToArray();
+        var requested = operations.Select((operation, index) => (operation, index))
+            .Where(item => item.operation.GetProperty("type").GetString() == "part.create")
+            .ToArray();
+        if (requested.Length == 0) return EmptyPreparedParts;
+
+        var source = await CaptureFittingSourceAsync(context, cancellationToken);
+        return await Task.Run<IReadOnlyDictionary<int, PreparedPart>>(() =>
+        {
+            var prepared = new Dictionary<int, PreparedPart>();
+            var budget = new LiveBudget();
+            foreach (var item in requested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                prepared.Add(item.index, PrepareFit(source, item.operation, budget, cancellationToken));
+            }
+            return prepared;
+        }, cancellationToken);
+    }
+
+    private async Task<FittingSource> CaptureFittingSourceAsync(RequestContext context,
+        CancellationToken cancellationToken)
+    {
+        FittingSource? source = null;
+        await context.ReadAsync(() =>
+        {
+            DemandIdle(cancellationToken);
+            var document = Document;
+            source = new(document.Original, document.Dimensions,
+                session.DocumentToken, document.Revision);
+            return Empty;
+        });
+        return source!;
+    }
+
+    private PreparedPart PrepareFit(FittingSource source, JsonElement operation,
+        LiveBudget budget, CancellationToken cancellationToken)
     {
         var points = Points(operation.GetProperty("fence"));
-        var bounds = LiveLimits.Fence(points, Document.Dimensions, budget);
-        if (authored) budget.ReserveHistory(128 + LiveLimits.Area(bounds)
-            + operation.GetProperty("name").GetString()!.Length * 2L);
+        var bounds = LiveLimits.Fence(points, source.Dimensions, budget);
         cancellationToken.ThrowIfCancellationRequested();
-        var fit = new GuriguriPartFitter().Create(Document.Original, points);
+        var fit = fitter.Create(source.Original, points);
         if (fit.PolygonPixelCount < PartToolController.MinimumFencePixels)
             throw new LiveException("fence_too_small");
         var mask = fit.Adjust(operation.GetProperty("step").GetInt32());
         cancellationToken.ThrowIfCancellationRequested();
-        return (fit.Bounds, mask);
+        if (fit.Bounds != bounds || mask.Length != LiveLimits.Area(bounds))
+            throw new LiveException(McpErrors.InvalidRequest);
+        return new(bounds, mask);
     }
 
-    private Guid? Apply(JsonElement operation, List<Guid?> ids, EditTransaction transaction,
-        LiveBudget budget, CancellationToken cancellationToken)
+    private Guid? Apply(JsonElement operation, int operationIndex,
+        IReadOnlyDictionary<int, PreparedPart> preparedParts, List<Guid?> ids,
+        EditTransaction transaction, LiveBudget budget, CancellationToken cancellationToken)
     {
         string type = operation.GetProperty("type").GetString()!;
         Guid Target() => Resolve(operation.GetProperty("target"), ids);
@@ -207,7 +273,14 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
         switch (type)
         {
             case "part.create":
-                var fit = Fit(operation, budget, cancellationToken, authored: true);
+                if (!preparedParts.TryGetValue(operationIndex, out var fit))
+                    throw new LiveException(McpErrors.InvalidRequest);
+                var fitBounds = LiveLimits.Fence(Points(operation.GetProperty("fence")),
+                    Document.Dimensions, budget);
+                if (fitBounds != fit.Bounds || fit.Mask.Length != LiveLimits.Area(fitBounds))
+                    throw new LiveException(McpErrors.StaleRevision);
+                budget.ReserveHistory(128 + LiveLimits.Area(fit.Bounds)
+                    + operation.GetProperty("name").GetString()!.Length * 2L);
                 var part = new PartLayer(fit.Bounds, fit.Mask, operation.GetProperty("name").GetString()!);
                 budget.Dirty(part.Bounds, Document.Layers.Count + 1);
                 transaction.Apply(new AddLayer(part));
@@ -393,4 +466,10 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
         image.DocumentPixelsPerOutputY,
         mapping = "source pixel=floor(crop origin+(output pixel+0.5)*documentPixelsPerOutput), clamped to crop",
     });
+
+    private static readonly IReadOnlyDictionary<int, PreparedPart> EmptyPreparedParts =
+        new Dictionary<int, PreparedPart>();
+    private sealed record FittingSource(OriginalAsset Original, PixelSize Dimensions,
+        string DocumentToken, long Revision);
+    private sealed record PreparedPart(DocumentRect Bounds, byte[] Mask);
 }
