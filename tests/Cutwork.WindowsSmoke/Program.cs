@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Flamoris.Cutwork.Imaging.Persistence;
+using Flamoris.Logging;
 using Flamoris.Mcp.Core;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -32,6 +33,7 @@ internal static class Program
         string editor=Path.Combine(package,"Cutwork.exe"), bridge=Path.Combine(package,"mcp","Flamoris.Mcp.Bridge.exe");
         Check(File.Exists(editor)&&File.Exists(bridge),"Self-contained executables missing.");
         Check(!Directory.GetFiles(package,"*",SearchOption.AllDirectories).Any(p=>Path.GetFileName(p).Contains("Tests",StringComparison.Ordinal)||Path.GetFileName(p).Contains("WindowsSmoke",StringComparison.Ordinal)),"Test dependency in package.");
+        await PackagedBridgeIdle(bridge);
         var start=new ProcessStartInfo(editor){UseShellExecute=false,WorkingDirectory=temp}; start.Environment["PATH"]=CleanPath;
         using var process=Process.Start(start)!;
         try
@@ -144,6 +146,30 @@ internal static class Program
     private static void CopyDirectory(string from,string to){Directory.CreateDirectory(to);foreach(var file in Directory.GetFiles(from))File.Copy(file,Path.Combine(to,Path.GetFileName(file)));foreach(var dir in Directory.GetDirectories(from))CopyDirectory(dir,Path.Combine(to,Path.GetFileName(dir)));}
     private static CancellationToken Deadline()=>new CancellationTokenSource(Limit).Token;
     private static async Task<McpClient> Connect(string bridge,ConnectionInfo connection)=>await McpClient.CreateAsync(new StdioClientTransport(new(){Command=bridge,Arguments=["--pipe",connection.Pipe],Name="Published Cutwork",EnvironmentVariables=new Dictionary<string,string?>{["PATH"]=CleanPath,[StdioBridge.CredentialEnvironmentVariable]=connection.Capability}}),cancellationToken:Deadline());
+    private static async Task PackagedBridgeIdle(string bridge)
+    {
+        using var host=new IdleHost();
+        using var boundary=new McpBoundary(host,[],new()
+        {
+            Enabled=true,
+            Permission=McpPermission.ReadOnly,
+            PipeName="flamoris-cutwork-smoke-"+Guid.NewGuid().ToString("N"),
+            MaxConcurrentRequests=1,
+            ReadTimeoutMs=100,
+        },new McpDiagnostics(FlamorisLogger.Create()));
+        using var grant=await boundary.EnableAsync(McpPermission.ReadOnly);
+        using var lifetime=new CancellationTokenSource(Limit);
+        var serving=new LocalMcpEndpoint(boundary).RunAsync(grant,lifetime.Token);
+        await using var handle=new ClientHandle(await Connect(bridge,new(boundary.Options.PipeName,grant.ExportCredential())));
+        await Task.Delay(350,lifetime.Token);
+        Check(!handle.Client.Completion.IsCompleted,"Packaged bridge disconnected an idle client at ReadTimeoutMs.");
+        var context=await Common(handle.Client);
+        Check(context.GetProperty("productId").GetString()=="flamoris.cutwork.idle-smoke","Idle client could not use MCP after ReadTimeoutMs.");
+        boundary.Disable();
+        await serving.WaitAsync(TimeSpan.FromSeconds(5));
+        await handle.Client.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        Console.WriteLine("Packaged bridge idle beyond ReadTimeoutMs and prompt revocation: PASS");
+    }
     private static JsonElement Text(CallToolResult result)=>JsonDocument.Parse(result.Content.OfType<TextContentBlock>().First().Text).RootElement.Clone();
     private static async Task<JsonElement> Common(McpClient c)=>Text(await c.CallToolAsync("mcp.context",new Dictionary<string,object?>(),cancellationToken:Deadline()));
     private static Dictionary<string,object?> Envelope(JsonElement common,object input,string? documentToken=null,string? revision=null)
@@ -205,6 +231,18 @@ internal static class Program
         using var p=Process.Start(start)!;p.StandardInput.Close();try{await p.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));}finally{if(!p.HasExited)p.Kill(true);}
     }
     private sealed record ConnectionInfo(string Pipe,string Capability);
+    private sealed class IdleHost:IMcpHost,IDisposable
+    {
+        private readonly string runtimeId=Guid.NewGuid().ToString("N");
+        public HostSnapshot Snapshot=>new("flamoris.cutwork.idle-smoke","1.0.1",runtimeId,"idle-document",0);
+        public event Action? Invalidating;
+        public Task<T> InvokeAsync<T>(Func<T> action,CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(action());
+        }
+        public void Dispose()=>Invalidating?.Invoke();
+    }
     private sealed class ClientHandle(McpClient client):IAsyncDisposable{public McpClient Client=>client;public async ValueTask DisposeAsync(){try{await client.DisposeAsync();}catch(IOException){}}}
     private static async Task Until(Func<bool> predicate){var watch=Stopwatch.StartNew();while(!predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI condition not observed.");await Task.Delay(100);}}
     private static async Task UntilAsync(Func<Task<bool>> predicate){var watch=Stopwatch.StartNew();while(!await predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI change not observed by MCP.");await Task.Delay(100);}}

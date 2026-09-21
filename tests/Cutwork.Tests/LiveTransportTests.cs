@@ -10,7 +10,7 @@ namespace Flamoris.Cutwork.Tests;
 public sealed class LiveTransportTests
 {
     [TestMethod]
-    public async Task Core101IdleConnectionRemainsUsablePastFrameTimeoutAndRevokeClosesIt()
+    public async Task Core101IdleProtocolConnectionProcessesFramePastTimeoutAndRevokeClosesIt()
     {
         var session = LiveMcpTests.Open();
         using var mcp = await McpCoreHarness.CreateAsync(session, options: new()
@@ -26,34 +26,13 @@ public sealed class LiveTransportTests
         {
             jsonrpc = "2.0",
             id = 1,
-            method = "initialize",
-            @params = new
-            {
-                protocolVersion = "2026-07-28",
-                capabilities = new { },
-                clientInfo = new { name = "cutwork-idle-test", version = "1.0" },
-            },
+            method = "ping",
         }, lifetime.Token);
-        using (var initialized = JsonDocument.Parse(await ReadLineAsync(pipe, lifetime.Token)))
+        using (var response = JsonDocument.Parse(await ReadLineAsync(pipe, lifetime.Token)))
         {
-            Assert.AreEqual(1, initialized.RootElement.GetProperty("id").GetInt32());
-            Assert.IsFalse(initialized.RootElement.TryGetProperty("error", out _));
+            Assert.AreEqual(1, response.RootElement.GetProperty("id").GetInt32(),
+                "The endpoint did not process a complete frame after the idle interval.");
         }
-        await WriteLineAsync(pipe, new
-        {
-            jsonrpc = "2.0",
-            method = "notifications/initialized",
-        }, lifetime.Token);
-        await WriteLineAsync(pipe, new
-        {
-            jsonrpc = "2.0",
-            id = 2,
-            method = "tools/call",
-            @params = new { name = "mcp.context", arguments = new { } },
-        }, lifetime.Token);
-        string context = await ReadLineAsync(pipe, lifetime.Token);
-        StringAssert.Contains(context, "flamoris.cutwork");
-        StringAssert.Contains(context, session.DocumentToken);
 
         mcp.Boundary.Disable();
         await serving.WaitAsync(TimeSpan.FromSeconds(2));
