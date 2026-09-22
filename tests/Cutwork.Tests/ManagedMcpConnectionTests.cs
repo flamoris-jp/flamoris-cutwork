@@ -183,6 +183,28 @@ public sealed class ManagedMcpConnectionTests
     }
 
     [TestMethod]
+    public async Task TransientStopFailureRetainsExactChildForDisableRetry()
+    {
+        using var fixture = new ProviderFixture();
+        var launcher = new FakeLauncher { KillFailures = 1 };
+        await using var host = new TunnelClientProcessHost(launcher);
+        var provider = new TunnelClientConnectionProvider(fixture.Settings,
+            new MutableMaterialSource(new("flamoris-pipe-one", CapabilityOne)),
+            new FixedCredentialSource(), host);
+        await using var lifecycle = new ManagedConnectionLifecycle(provider, _ => ValueTask.CompletedTask);
+        var controller = new McpConnectionController(lifecycle);
+        await controller.EnableAsync(_ => Task.CompletedTask, startManagedHelper: true);
+
+        await Assert.ThrowsExactlyAsync<ManagedConnectionException>(
+            () => controller.StopManagedConnectionAsync());
+        Assert.IsFalse(launcher.Processes.Single().HasExited);
+
+        await controller.DisableAsync();
+        Assert.IsTrue(launcher.Processes.Single().Killed);
+        Assert.IsTrue(launcher.Processes.Single().HasExited);
+    }
+
+    [TestMethod]
     public async Task RepeatedEnableDisableLeavesNoOwnedProcess()
     {
         using var fixture = new ProviderFixture();
@@ -311,6 +333,7 @@ public sealed class ManagedMcpConnectionTests
     private sealed class FakeLauncher : IOwnedProcessLauncher
     {
         public bool FailStart { get; init; }
+        public int KillFailures { get; init; }
         public FakeProcess? Unrelated { get; init; }
         public List<CapturedStart> Starts { get; } = [];
         public List<FakeProcess> Processes { get; } = [];
@@ -321,7 +344,7 @@ public sealed class ManagedMcpConnectionTests
             Starts.Add(new(startInfo.FileName, startInfo.UseShellExecute,
                 startInfo.ArgumentList.ToArray(), startInfo.Environment.ToDictionary(
                     item => item.Key, item => item.Value, StringComparer.Ordinal)));
-            var process = new FakeProcess();
+            var process = new FakeProcess { KillFailuresRemaining = KillFailures };
             Processes.Add(process);
             return process;
         }
@@ -331,10 +354,12 @@ public sealed class ManagedMcpConnectionTests
     {
         public bool HasExited { get; private set; }
         public bool Killed { get; private set; }
+        public int KillFailuresRemaining { get; set; }
         public event Action? Exited;
         public void Kill(bool entireProcessTree)
         {
             Assert.IsTrue(entireProcessTree);
+            if (KillFailuresRemaining-- > 0) throw new InvalidOperationException("transient stop failure");
             Killed = true;
             HasExited = true;
             Exited?.Invoke();

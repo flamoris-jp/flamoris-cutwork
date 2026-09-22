@@ -155,26 +155,43 @@ public sealed class TunnelClientProcessHost(IOwnedProcessLauncher launcher) : IA
         lock (gate)
         {
             child = owned;
-            owned = null;
             exitedUnexpectedly = unexpectedExit;
-            unexpectedExit = false;
             if (child is not null) child.Exited -= OwnedExited;
         }
         if (child is null) return;
 
+        bool stopped = false;
         try
         {
             if (!child.HasExited) child.Kill(entireProcessTree: true);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
             await child.WaitForExitAsync(timeout.Token);
+            stopped = true;
             if (exitedUnexpectedly)
                 throw new TunnelClientException("tunnel_client_exited");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (TunnelClientException) { throw; }
         catch { throw new TunnelClientException("tunnel_client_stop_failed"); }
-        finally { child.Dispose(); }
+        finally
+        {
+            lock (gate)
+            {
+                if (stopped || child.HasExited)
+                {
+                    if (ReferenceEquals(owned, child)) owned = null;
+                    unexpectedExit = false;
+                    child.Dispose();
+                }
+                else if (ReferenceEquals(owned, child))
+                {
+                    // Keep exact ownership after a transient stop failure so disable/shutdown
+                    // can retry without ever scanning for a process by name.
+                    child.Exited += OwnedExited;
+                }
+            }
+        }
     }
 
     private void OwnedExited()
