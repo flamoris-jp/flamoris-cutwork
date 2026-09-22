@@ -75,8 +75,15 @@ public sealed class WindowsCredentialStore : IProviderCredentialStore
         finally
         {
             CryptographicOperations.ZeroMemory(bytes);
-            Marshal.FreeCoTaskMem(blob);
+            try { ZeroUnmanagedMemory(blob, bytes.Length); }
+            finally { Marshal.FreeCoTaskMem(blob); }
         }
+    }
+
+    internal static void ZeroUnmanagedMemory(nint buffer, int byteCount)
+    {
+        for (int index = 0; index < byteCount; index++)
+            Marshal.WriteByte(buffer, index, 0);
     }
 
     public void Delete()

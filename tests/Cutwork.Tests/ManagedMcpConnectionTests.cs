@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Flamoris.Cutwork.App.McpConnection;
 using Flamoris.Mcp.Core;
 
@@ -288,6 +290,29 @@ public sealed class ManagedMcpConnectionTests
         var material = new McpConnectionMaterial("flamoris-pipe-one", CapabilityOne);
         Assert.AreEqual("McpConnectionMaterial [redacted]", material.ToString());
         Assert.IsFalse(material.ToString().Contains(CapabilityOne, StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void CredentialBufferIsZeroedBeforeUnmanagedMemoryIsReleased()
+    {
+        byte[] secret = Enumerable.Repeat((byte)0xA5, 32).ToArray();
+        byte[] observed = new byte[secret.Length];
+        nint buffer = Marshal.AllocCoTaskMem(secret.Length);
+        try
+        {
+            Marshal.Copy(secret, 0, buffer, secret.Length);
+
+            WindowsCredentialStore.ZeroUnmanagedMemory(buffer, secret.Length);
+
+            Marshal.Copy(buffer, observed, 0, observed.Length);
+            Assert.IsTrue(observed.All(value => value == 0));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(secret);
+            CryptographicOperations.ZeroMemory(observed);
+            Marshal.FreeCoTaskMem(buffer);
+        }
     }
 
     private sealed class CountingProvider(List<string>? order = null) : IMcpConnectionProvider
