@@ -158,4 +158,32 @@
   <data name="Mcp_StatusAvailable" xml:space="preserve"><value>MCP is available</value></data>
   <data name="Mcp_StatusConnected" xml:space="preserve"><value>An MCP client is connected</value></data>
   <data name="Mcp_StatusUnavailable" xml:space="preserve"><value>MCP is unavailable</value></data>
+  <data name="Mcp_Method" xml:space="preserve"><value>Connection method</value></data>
+  <data name="Mcp_MethodManual" xml:space="preserve"><value>Manual (copy configuration)</value></data>
+  <data name="Mcp_MethodTunnel" xml:space="preserve"><value>OpenAI tunnel-client 0.0.14</value></data>
+  <data name="Mcp_AutoStart" xml:space="preserve"><value>Start helper when MCP is enabled</value></data>
+  <data name="Mcp_StartHelper" xml:space="preserve"><value>Start managed helper</value></data>
+  <data name="Mcp_StopHelper" xml:space="preserve"><value>Stop managed helper</value></data>
+  <data name="Mcp_Settings" xml:space="preserve"><value>Connection settings...</value></data>
+  <data name="Mcp_SettingsTitle" xml:space="preserve"><value>MCP managed connection settings</value></data>
+  <data name="Mcp_TunnelExecutable" xml:space="preserve"><value>tunnel-client.exe</value></data>
+  <data name="Mcp_ProfileDirectory" xml:space="preserve"><value>Profile directory</value></data>
+  <data name="Mcp_ProfileName" xml:space="preserve"><value>Profile name</value></data>
+  <data name="Mcp_TunnelId" xml:space="preserve"><value>Tunnel ID</value></data>
+  <data name="Mcp_HealthAddress" xml:space="preserve"><value>Health listen address</value></data>
+  <data name="Mcp_ApiKey" xml:space="preserve"><value>OpenAI API key (blank keeps current value)</value></data>
+  <data name="Mcp_DeleteCredential" xml:space="preserve"><value>Delete the saved API key</value></data>
+  <data name="Mcp_CredentialSaved" xml:space="preserve"><value>An API key is saved in Windows Credential Manager.</value></data>
+  <data name="Mcp_CredentialMissing" xml:space="preserve"><value>No API key is saved yet.</value></data>
+  <data name="Mcp_SettingsInvalid" xml:space="preserve"><value>Check the paths, profile, tunnel ID, and health address.</value></data>
+  <data name="Mcp_HelperStopped" xml:space="preserve"><value>Helper: stopped</value></data>
+  <data name="Mcp_HelperStarting" xml:space="preserve"><value>Helper: starting</value></data>
+  <data name="Mcp_HelperRunning" xml:space="preserve"><value>Helper: running</value></data>
+  <data name="Mcp_HelperRefreshing" xml:space="preserve"><value>Helper: refreshing</value></data>
+  <data name="Mcp_HelperStopping" xml:space="preserve"><value>Helper: stopping</value></data>
+  <data name="Mcp_HelperFaulted" xml:space="preserve"><value>Helper: faulted</value></data>
+  <data name="Mcp_HelperUnavailable" xml:space="preserve"><value>The managed helper could not start. Manual connection remains available.</value></data>
+  <data name="Mcp_SettingsSaveFailed" xml:space="preserve"><value>The connection settings could not be saved.</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
 </root>

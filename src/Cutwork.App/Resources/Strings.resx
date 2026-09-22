@@ -158,4 +158,32 @@
   <data name="Mcp_StatusAvailable" xml:space="preserve"><value>MCPは接続可能です</value></data>
   <data name="Mcp_StatusConnected" xml:space="preserve"><value>MCPクライアントが接続中です</value></data>
   <data name="Mcp_StatusUnavailable" xml:space="preserve"><value>MCP接続を利用できません</value></data>
+  <data name="Mcp_Method" xml:space="preserve"><value>接続方法</value></data>
+  <data name="Mcp_MethodManual" xml:space="preserve"><value>Manual（接続設定をコピー）</value></data>
+  <data name="Mcp_MethodTunnel" xml:space="preserve"><value>OpenAI tunnel-client 0.0.14</value></data>
+  <data name="Mcp_AutoStart" xml:space="preserve"><value>MCP有効時にhelperを自動起動</value></data>
+  <data name="Mcp_StartHelper" xml:space="preserve"><value>managed helperを起動</value></data>
+  <data name="Mcp_StopHelper" xml:space="preserve"><value>managed helperを停止</value></data>
+  <data name="Mcp_Settings" xml:space="preserve"><value>接続設定...</value></data>
+  <data name="Mcp_SettingsTitle" xml:space="preserve"><value>MCP managed connection設定</value></data>
+  <data name="Mcp_TunnelExecutable" xml:space="preserve"><value>tunnel-client.exe</value></data>
+  <data name="Mcp_ProfileDirectory" xml:space="preserve"><value>profileフォルダー</value></data>
+  <data name="Mcp_ProfileName" xml:space="preserve"><value>profile名</value></data>
+  <data name="Mcp_TunnelId" xml:space="preserve"><value>tunnel ID</value></data>
+  <data name="Mcp_HealthAddress" xml:space="preserve"><value>health listen address</value></data>
+  <data name="Mcp_ApiKey" xml:space="preserve"><value>OpenAI API key（空欄なら変更しない）</value></data>
+  <data name="Mcp_DeleteCredential" xml:space="preserve"><value>保存済みAPI keyを削除</value></data>
+  <data name="Mcp_CredentialSaved" xml:space="preserve"><value>API keyはWindows Credential Managerに保存済みです。</value></data>
+  <data name="Mcp_CredentialMissing" xml:space="preserve"><value>API keyはまだ保存されていません。</value></data>
+  <data name="Mcp_SettingsInvalid" xml:space="preserve"><value>パス、profile、tunnel ID、health addressを確認してください。</value></data>
+  <data name="Mcp_HelperStopped" xml:space="preserve"><value>Helper: 停止</value></data>
+  <data name="Mcp_HelperStarting" xml:space="preserve"><value>Helper: 起動中</value></data>
+  <data name="Mcp_HelperRunning" xml:space="preserve"><value>Helper: 実行中</value></data>
+  <data name="Mcp_HelperRefreshing" xml:space="preserve"><value>Helper: 更新中</value></data>
+  <data name="Mcp_HelperStopping" xml:space="preserve"><value>Helper: 停止中</value></data>
+  <data name="Mcp_HelperFaulted" xml:space="preserve"><value>Helper: エラー</value></data>
+  <data name="Mcp_HelperUnavailable" xml:space="preserve"><value>managed helperを開始できません。Manual接続は引き続き利用できます。</value></data>
+  <data name="Mcp_SettingsSaveFailed" xml:space="preserve"><value>接続設定を保存できません。</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>キャンセル</value></data>
 </root>

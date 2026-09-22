@@ -1,10 +1,23 @@
 # Cutwork MCP / AI
 
 Cutworkを起動して画像または`.flimg`を開き、上部の **MCP / AI** から
-「読み取り専用で有効」または「編集を許可して有効」を選びます。
-表示されたJSONを、同じWindowsユーザーで動くローカルMCPクライアントの
-サーバー設定へコピーしてください。ブリッジは配布物内の
-`mcp/Flamoris.Mcp.Bridge.exe`です。起動済みの、このウィンドウだけに接続します。
+接続方法を選び、「読み取り専用で有効」または「編集を許可して有効」を選びます。
+ブリッジは配布物内の`mcp/Flamoris.Mcp.Bridge.exe`です。起動済みの、
+このウィンドウだけに接続します。
+
+接続方法は次の2つです。
+
+- **Manual**: 従来どおり、表示されたJSONを同じWindowsユーザーで動く
+  MCPクライアントへコピーします。managed helperを起動しなくても利用できます。
+- **OpenAI tunnel-client 0.0.14**: 接続設定で実行ファイル、profile、
+  tunnel ID、loopback health addressを指定し、MCP有効時にowned helperを
+  自動起動できます。現在のpipe/capabilityはenableや権限変更のたびに自動反映されます。
+
+OpenAI control-plane API keyはWindows Credential Managerへ保存され、
+`CONTROL_PLANE_API_KEY`としてowned childへだけ渡されます。
+`FLAMORIS_MCP_CAPABILITY`もchild environmentで渡され、YAML、argv、log、
+通常settingsへ保存されません。通常settingsには接続方法、auto-start、
+実行ファイル/profile/tunnel/healthの安定した設定だけを保存します。
 
 読み取り専用でも現在の画像ピクセルをクライアントへ公開します。
 編集を許可すると、切り出し・補修・レイヤー編集と共有Undo/Redoが使えます。
@@ -13,15 +26,18 @@ Open/Save/書き出し先の指定、フォルダー閲覧、シェル実行は�
 
 同時接続は1つです。無効化、権限変更、文書を開き直す操作、終了によって
 古い接続は失効します。同じファイルの再Openも、新しく有効化が必要です。
-接続情報は保存されず、再起動時はOffです。通信停止時は、エディターを確認して
-から新しい接続設定をコピーしてください。編集要求を自動再送しないでください。
+grant/pipe/capabilityは保存されず、再起動時はMCP Offです。Manual通信停止時は、
+エディターを確認してから新しい接続設定をコピーしてください。
+編集要求を自動再送しないでください。
 
-この接続は同一PC内のクライアント用です。クラウド側のChat/WorkからこのPCに
-到達できるようにする中継機能は含みません。
+Manual接続は同一PC内のクライアント用です。managed modeでは、review済みの
+`tunnel-client`が認証済み外部clientとlocal bridgeを中継します。Cutwork自身は
+public/LAN listenerやdaemonを追加せず、bridge以降は同じowner-only named pipeと
+transient capability境界を使います。
 
 ## Protocol / configuration
 
-`Flamoris.Mcp.Core` **1.0.1** / official C# SDK **2.2.0**; MCP
+`Flamoris.Mcp.Core` **1.1.0** / official C# SDK **2.2.0**; MCP
 **2026-07-28** with the Core-supported legacy initialization path, standard stdio.
 Core owns SDK protocol objects; all editing stays in the existing running WPF
 session. Example configuration (the UI supplies fresh exact values):
@@ -41,6 +57,30 @@ address is not a password. A separate transient capability is passed only throug
 the bridge environment, removed by the bridge at startup and never placed in argv
 or saved in `.flimg`/settings. Enabling trusts processes accepted by that local-user
 policy and capability; no artwork/file permission is inherited by another document.
+
+## Managed helper lifecycle
+
+Cutworkは次の状態を別々に表示・管理します。
+
+- MCP enabled / current grant available;
+- managed helper starting/running/stopped/faulted;
+- authenticated external client connected.
+
+helperが起動しているだけでは、外部client接続中とは表示しません。Manual接続では
+helper stoppedのまま外部clientが接続できます。helperの起動・更新・停止に失敗しても
+通常の画像編集とManual接続は利用できます。
+
+無効化、権限変更、文書置換、終了では、current grantを先にrevokeし、その後で
+このCutwork instanceが起動・追跡している正確なchildだけを停止します。プロセス名の
+検索や他の`tunnel-client`の停止は行いません。grant発行またはrotationが成功した後は、
+caller cancellationが同時に成立してもlifecycle/providerの整合を完了します。
+
+verified tunnel-client 0.0.14 profile schemaは
+`config_version`, `control_plane`, `tunnel_id`, environment参照の
+`api_key`, loopback `health`, `open_browser`, `log`,
+`mcp.commands`を使用します。YAMLのcommandにはbridge executableとcurrent pipeだけを
+書き、capabilityは書きません。詳細な責務と順序は
+[ADR 0004](decisions/0004-managed-mcp-connections.md)を参照してください。
 
 ## Tool workflow
 
