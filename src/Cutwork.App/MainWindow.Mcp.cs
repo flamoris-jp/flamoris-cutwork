@@ -25,6 +25,8 @@ public partial class MainWindow
     private McpConnectionController? _mcpConnection;
     private TunnelClientProcessHost? _mcpProcessHost;
     private Window? _mcpInfo;
+    private readonly object _mcpStopGate = new();
+    private Task? _mcpStopTask;
     private bool _mcpStopping;
     private bool _mcpShutdown;
     private bool _remoteEditing;
@@ -237,7 +239,7 @@ public partial class MainWindow
             if (_mcpGrant?.IsActive == true) await DisableMcpAsync(shutdown: false);
             SaveMcpPreferences(dialog.Preferences);
             if (dialog.DeleteCredential) _mcpCredentialStore.Delete();
-            else if (dialog.NewCredential is { } credential) _mcpCredentialStore.Save(credential);
+            else if (dialog.TakeNewCredential() is { } credential) _mcpCredentialStore.Save(credential);
         }
         catch
         {
@@ -326,9 +328,11 @@ public partial class MainWindow
         }
         catch
         {
-            StatusText.Text = LocalizationService.Current["Mcp_Unavailable"];
             if (ReferenceEquals(boundary, _mcpBoundary))
+            {
+                StatusText.Text = LocalizationService.Current["Mcp_Unavailable"];
                 await DisableMcpAsync(shutdown: false);
+            }
         }
     }
 
@@ -340,7 +344,7 @@ public partial class MainWindow
         if (!ReferenceEquals(boundary, _mcpBoundary))
         {
             grant.Dispose();
-            return;
+            throw new OperationCanceledException("MCP enable was superseded.");
         }
         _mcpGrant = grant;
         _mcpLifetime = new CancellationTokenSource();
@@ -403,11 +407,20 @@ public partial class MainWindow
         SetMcpActivity(false);
     }
 
-    private async Task DisableMcpAsync(bool shutdown, bool uiPrepared = false)
+    private Task DisableMcpAsync(bool shutdown, bool uiPrepared = false)
     {
-        if (_mcpStopping) return;
         if (!uiPrepared) PrepareMcpUiForDisable();
-        _mcpStopping = true;
+        lock (_mcpStopGate)
+        {
+            if (_mcpStopTask is not null) return _mcpStopTask;
+            _mcpStopping = true;
+            _mcpStopTask = Task.Run(() => DisableMcpCoreAsync(shutdown));
+            return _mcpStopTask;
+        }
+    }
+
+    private async Task DisableMcpCoreAsync(bool shutdown)
+    {
         var connection = _mcpConnection;
         var lifecycle = _mcpManagedLifecycle;
         var processHost = _mcpProcessHost;
@@ -433,7 +446,11 @@ public partial class MainWindow
             _mcpConnection = null;
             _mcpManagedLifecycle = null;
             _mcpProcessHost = null;
-            _mcpStopping = false;
+            lock (_mcpStopGate)
+            {
+                _mcpStopping = false;
+                _mcpStopTask = null;
+            }
             QueueMcpUpdate();
         }
     }
@@ -451,15 +468,21 @@ public partial class MainWindow
 
     private void ShowManagedHelperFailure()
     {
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(new Action(ShowManagedHelperFailure),
+                DispatcherPriority.Background);
+            return;
+        }
         StatusText.Text = LocalizationService.Current["Mcp_HelperUnavailable"];
-        QueueMcpUpdate();
+        UpdateMcp();
     }
 
     private void StopMcp()
     {
         PrepareMcpUiForDisable();
-        Task.Run(() => DisableMcpAsync(shutdown: false, uiPrepared: true))
-            .GetAwaiter().GetResult();
+        DisableMcpAsync(shutdown: false, uiPrepared: true).GetAwaiter().GetResult();
     }
 
     private void ShutdownMcp()
@@ -467,8 +490,7 @@ public partial class MainWindow
         if (_mcpShutdown) return;
         _mcpShutdown = true;
         PrepareMcpUiForDisable();
-        Task.Run(() => DisableMcpAsync(shutdown: true, uiPrepared: true))
-            .GetAwaiter().GetResult();
+        DisableMcpAsync(shutdown: true, uiPrepared: true).GetAwaiter().GetResult();
         _mcpHost?.Shutdown();
     }
 

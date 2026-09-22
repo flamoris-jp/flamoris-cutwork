@@ -20,6 +20,13 @@ public sealed class McpConnectionSettingsWindow : Window
     public string? NewCredential { get; private set; }
     public bool DeleteCredential => deleteCredential.IsChecked == true;
 
+    public string? TakeNewCredential()
+    {
+        string? value = NewCredential;
+        NewCredential = null;
+        return value;
+    }
+
     public McpConnectionSettingsWindow(McpConnectionPreferences preferences,
         bool credentialExists, string bridgeExecutable)
     {

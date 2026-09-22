@@ -27,7 +27,7 @@ public sealed class WindowsCredentialStore : IProviderCredentialStore
         try
         {
             var credential = Marshal.PtrToStructure<NativeCredential>(pointer);
-            if (credential.CredentialBlob == 0 || credential.CredentialBlobSize == 0)
+            if (credential.CredentialBlob == 0 || credential.CredentialBlobSize is 0 or > 2048)
                 throw new TunnelClientException("control_plane_credential_unavailable");
             byte[] bytes = new byte[credential.CredentialBlobSize];
             Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
@@ -52,7 +52,8 @@ public sealed class WindowsCredentialStore : IProviderCredentialStore
 
     public void Save(string credential)
     {
-        if (string.IsNullOrWhiteSpace(credential) || credential.IndexOfAny(['\r', '\n', '\0']) >= 0)
+        if (string.IsNullOrWhiteSpace(credential) || credential.Length > 1024
+            || credential.IndexOfAny(['\r', '\n', '\0']) >= 0)
             throw new ArgumentException("Invalid credential.", nameof(credential));
         byte[] bytes = Encoding.Unicode.GetBytes(credential);
         nint blob = Marshal.AllocCoTaskMem(bytes.Length);
