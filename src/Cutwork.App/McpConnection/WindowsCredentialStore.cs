@@ -94,7 +94,7 @@ public sealed class WindowsCredentialStore : IProviderCredentialStore
     {
         public uint Flags;
         public uint Type;
-        public string TargetName;
+        public string? TargetName;
         public string? Comment;
         public long LastWritten;
         public uint CredentialBlobSize;
@@ -103,7 +103,7 @@ public sealed class WindowsCredentialStore : IProviderCredentialStore
         public uint AttributeCount;
         public nint Attributes;
         public string? TargetAlias;
-        public string UserName;
+        public string? UserName;
     }
 
     [DllImport("Advapi32.dll", EntryPoint = "CredReadW", CharSet = CharSet.Unicode,

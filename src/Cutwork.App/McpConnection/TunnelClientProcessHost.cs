@@ -26,9 +26,18 @@ public sealed class SystemOwnedProcessLauncher : IOwnedProcessLauncher
     {
         var process = Process.Start(startInfo)
             ?? throw new TunnelClientException("tunnel_client_start_failed");
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        return new SystemOwnedProcess(process);
+        try
+        {
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            return new SystemOwnedProcess(process);
+        }
+        catch
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            process.Dispose();
+            throw;
+        }
     }
 
     private sealed class SystemOwnedProcess : IOwnedProcess
@@ -135,6 +144,7 @@ public sealed class TunnelClientProcessHost(IOwnedProcessLauncher launcher) : IA
             owned = child;
             child.Exited += OwnedExited;
         }
+        if (child.HasExited) OwnedExited();
     }
 
     public async ValueTask StopAsync(CancellationToken cancellationToken)

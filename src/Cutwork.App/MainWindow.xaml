@@ -105,6 +105,19 @@
                 <MenuItem x:Name="McpStopMenu" Click="McpStop_Click" />
                 <MenuItem x:Name="McpCopyMenu" Click="McpCopy_Click" />
                 <Separator />
+                <MenuItem x:Name="McpMethodMenu">
+                    <MenuItem x:Name="McpManualMethodMenu" IsCheckable="True"
+                              Click="McpManualMethod_Click" />
+                    <MenuItem x:Name="McpTunnelMethodMenu" IsCheckable="True"
+                              Click="McpTunnelMethod_Click" />
+                </MenuItem>
+                <MenuItem x:Name="McpAutoStartMenu" IsCheckable="True"
+                          Click="McpAutoStart_Click" />
+                <MenuItem x:Name="McpStartHelperMenu" Click="McpStartHelper_Click" />
+                <MenuItem x:Name="McpStopHelperMenu" Click="McpStopHelper_Click" />
+                <MenuItem x:Name="McpSettingsMenu" Click="McpSettings_Click" />
+                <MenuItem x:Name="McpHelperStatusMenu" IsEnabled="False" />
+                <Separator />
                 <MenuItem x:Name="McpNotice" IsEnabled="False" />
             </MenuItem>
             <MenuItem x:Name="HelpMenu">
