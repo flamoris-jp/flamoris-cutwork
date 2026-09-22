@@ -131,7 +131,7 @@ internal static class Program
             {
                 await Context(handle.Client);await Task.Run(()=>((WindowPattern)window.GetCurrentPattern(WindowPattern.Pattern)).Close());await process.WaitForExitAsync().WaitAsync(Limit);await Rejected(handle.Client);
             }
-            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core 1.0.1 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
+            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core 1.1.0 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
         }
         catch { DumpUi(process.Id); throw; }
         finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){} }

@@ -1,6 +1,7 @@
 # ADR 0003: Migrate live MCP to Flamoris.Mcp.Core 1.0.1
 
 Status: accepted for Issue #36 implementation. Baseline `7791306a`.
+Managed connection lifecycle additions are recorded separately in ADR 0004.
 
 ## Decision
 
