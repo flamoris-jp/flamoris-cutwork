@@ -40,8 +40,12 @@ public partial class MainWindow
     private void MaskTool_Click(object sender, RoutedEventArgs e)
     {
         if (_session.Document is null) return;
-        _inputRouter.SetActiveTool(_maskTool);
+        var switched = _inputRouter.SetActiveTool(_maskTool);
         UpdatePartToolUi();
+        if (!switched)
+            MessageBox.Show(this, LocalizationService.Current["MaskTool_PendingPart"],
+                LocalizationService.Current["PartTool_Name"],
+                MessageBoxButton.OK, MessageBoxImage.Information);
         CanvasView.Focus();
     }
 

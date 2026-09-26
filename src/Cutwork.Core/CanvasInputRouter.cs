@@ -19,12 +19,18 @@ public sealed class CanvasInputRouter
     public bool IsPanning => _panButton != CanvasPointerButton.None;
     public bool HasPendingToolWork => _activeTool is ICanvasDeferredWork { HasPendingWork: true };
 
-    public void SetActiveTool(ICanvasToolInput? tool)
+    public bool SetActiveTool(ICanvasToolInput? tool)
     {
-        if (ReferenceEquals(_activeTool, tool)) return;
+        if (ReferenceEquals(_activeTool, tool)) return true;
+        // Mask correction edits an authored Part. Never cancel a pending Part
+        // preview and silently retarget the previously selected Part instead.
+        if (tool is MaskBrushController
+            && _activeTool is PartToolController { State: not PartToolState.Idle })
+            return false;
         _activeTool?.Deactivate();
         _activeTool = tool;
         _activeTool?.Activate();
+        return true;
     }
 
     public CanvasInputEffects PointerDown(CanvasPointerInput input)
