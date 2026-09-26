@@ -216,7 +216,24 @@ internal static class Program
         AutomationElement? dialog=edit;while(dialog is not null&&dialog.Current.ControlType!=ControlType.Window)dialog=TreeWalker.ControlViewWalker.GetParent(dialog);
         await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());return new(pipe,capability);
     }
-    private static async Task Rejected(McpClient c){bool rejected=false;try{var r=await Context(c);rejected=r.TryGetProperty("error",out _);}catch(Exception e)when(e is IOException or ModelContextProtocol.McpException or OperationCanceledException){rejected=true;}Check(rejected,"Old client retained access.");}
+    private static async Task Rejected(McpClient c)
+    {
+        bool rejected=false;
+        try
+        {
+            // Revocation may return a tool error before the transport closes.
+            // Do not build a normal guard from that error's missing identity fields.
+            var common=await c.CallToolAsync("mcp.context",new Dictionary<string,object?>(),cancellationToken:Deadline());
+            rejected=common.IsError==true;
+            if(!rejected)
+            {
+                var result=await c.CallToolAsync("context",Envelope(Text(common),new{}),cancellationToken:Deadline());
+                rejected=result.IsError==true;
+            }
+        }
+        catch(Exception e)when(e is IOException or ModelContextProtocol.McpException or OperationCanceledException){rejected=true;}
+        Check(rejected,"Old client retained access.");
+    }
     private static async Task OldPipeRejected(string name)
     {
         // Revocation is synchronous, while the Core endpoint closes its pending listener
