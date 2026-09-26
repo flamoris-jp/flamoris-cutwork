@@ -1,6 +1,28 @@
 # Cutwork v0.1 implementation roadmap
 
-Status: proposed roadmap for Issue [#3](https://github.com/flamoris-jp/flamoris-cutwork/issues/3)
+Status: implementation history and remaining hands-on acceptance, reconciled
+2026-09-26 against reviewed `main` after PR #44 (`01c9f14`). The phase specifications below
+preserve the original plan from Issue [#3](https://github.com/flamoris-jp/flamoris-cutwork/issues/3);
+they are not a claim that every historical manual check has been performed.
+
+## Current implementation status
+
+| Work | Current state |
+|---|---|
+| Phase 0–8 | Implemented: production editor, tools, persistence/export and portable Windows package |
+| Phase 9-1 | Implemented: Parts vs compositor Layers, contextual tool options, inline Part names, Part-owned Repairs |
+| Phase 9-2 | Implemented: explicit Fixed / Offset Clone modes |
+| Live MCP (#33 / merged #34) | Implemented; remaining human/security-matrix acceptance is recorded in the [current audit](reviews/issue33-current-acceptance.md) |
+| MCP Core migration (#36 / merged #37) | Implemented; subsequently upgraded to Core 1.1.0 |
+| Managed connections (#40 / merged #41) | Implemented: Manual fallback and owned OpenAI tunnel-client lifecycle |
+| #39 / merged PR #43 | Implemented: preserve unfinished Guriguri state when requesting Mask Brush |
+| #38 / merged PR #44 | Implemented: bounded candidate comparison and exact candidate creation |
+| #42 | Separate maintenance backlog: UI code-behind and CI structure; outside this polish batch |
+
+The current `.flimg` writer is **v2** (Part order and Repair ownership); the v1
+format described in the original Phase 7 plan remains supported for reading.
+Phase 9 as a whole is not declared universally performance-accepted: real-artwork
+latency, visual quality and DPI checks still require a Windows hands-on run.
 
 This roadmap implements [the production architecture](production-architecture.md) in small, reviewable phases. The order optimizes for the earliest point at which Akino can open real artwork and judge the interaction, then the earliest end-to-end useful cutout, rather than completing invisible infrastructure first.
 

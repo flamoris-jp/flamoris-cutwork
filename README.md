@@ -34,7 +34,16 @@ Current milestone:
 - Phase 5: point-source Clone Repair complete;
 - Phase 6: Blur and Smudge repair finishing complete;
 - Phase 7: `.flimg` persistence and export complete;
-- current: Phase 8, self-contained Windows packaging.
+- Phase 8: self-contained Windows packaging complete;
+- Phase 9-1: separate Parts / Layers panels, contextual tool options and Part-owned Repairs complete;
+- Phase 9-2: Fixed / Offset Clone modes complete;
+- Live MCP and managed Manual / OpenAI tunnel-client connections complete (`Flamoris.Mcp.Core` 1.1.0);
+- current: v0.1 hands-on fixes and workflow polish, with remaining visual/performance acceptance tracked explicitly.
+
+The current writer is `.flimg` **v2**; v1 reading/migration remains supported.
+Implementation completion does not imply every real-artwork, DPI, or performance
+check has been executed. See the [current roadmap status](docs/roadmap.md) and
+[Live MCP acceptance audit](docs/reviews/issue33-current-acceptance.md).
 
 ## Live MCP / AI
 
@@ -60,21 +69,15 @@ no filesystem tools are exposed.
 
 The production UI follows a conventional Windows image-editor layout:
 
-```text
-+---------------------------------------------------------+
-| File  Edit  View  Layer  Export  Help                 |
-+----+--------------------------------------+-------------+
-|    |                                      | Layers      |
-| T  |                                      |-------------|
-| o  |              Canvas                  | ...         |
-| o  |                                      |             |
-| l  |                                      | Properties  |
-| s  |                                      |-------------|
-|    |                                      | contextual  |
-+----+--------------------------------------+-------------+
-```
+| Area | Current role |
+|---|---|
+| Top menus and contextual toolbar | File/history/export, MCP access and active tool settings |
+| Left tool rail | Part, Mask, Patch, Clone, Blur and Smudge |
+| Center | Artwork canvas, previews, zoom and pan |
+| Right Parts panel | Semantic Part order, inline names and semantic metadata |
+| Right Layers panel | Compositor order, visibility and Part-owned Repairs |
 
-Current Phase 1 behavior includes:
+Current canvas behavior includes:
 
 - PNG/JPEG import;
 - immutable Original asset;
@@ -108,10 +111,11 @@ extract its ZIP completely, and start `Cutwork.exe`. The portable build is
 self-contained and does not require the .NET SDK/runtime or Python. See the
 [Windows release guide](docs/phase8-windows-packaging.md).
 
-### Phase 2 developer checkpoint
+### Synthetic developer fixture
 
-Phase 2 adds the authored layer stack, Layers/Properties panels, partial composition,
-and transactional Undo/Redo. End-user creation tools begin in Phase 3.
+The optional developer fixture exercises the existing layer stack, partial
+composition and shared Undo/Redo. Normal Part/Mask/repair tools are available
+without developer mode.
 
 ```powershell
 dotnet run --project src/Cutwork.App/Cutwork.App.csproj -- --developer
@@ -170,7 +174,7 @@ python experiments/python-tkinter/app_clone_guriguri.py
 
 ## Production direction
 
-The planned production tool model remains intentionally small:
+The production tool model remains intentionally small:
 
 - Part Tool: rough polygon/fence + Guriguri refinement;
 - Mask Brush: add/erase through one brush workflow;
