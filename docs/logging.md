@@ -1,6 +1,6 @@
 # Logging integration
 
-Cutwork consumes `Flamoris.Logging` 1.0.0 from the FLAMORIS GitHub Packages feed. The package is referenced normally; its DLL is not vendored in this repository.
+Cutwork consumes `Flamoris.Logging` 1.0.0 from nuget.org. The package is referenced normally; its DLL is not vendored in this repository.
 
 Logging observes the existing `EditorSession`, `ProjectWorkspace`, rendering, and live MCP paths. It does not own document state, history, permissions, or transport lifecycle.
 
@@ -52,4 +52,4 @@ Log calls carry bounded identifiers, dimensions, revision numbers, operation kin
 
 ## Package restore
 
-Local developers must authenticate the `flamoris` source declared in `NuGet.config` with a GitHub credential that can read packages. CI uses its short-lived `GITHUB_TOKEN` with `packages: read`; no package credential is committed.
+`NuGet.config` uses only public nuget.org; local development and CI restore the package without GitHub package credentials.
