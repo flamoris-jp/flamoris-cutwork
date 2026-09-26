@@ -64,7 +64,14 @@ internal static class Program
                 object[] fence=[new{x=4,y=4},new{x=20,y=4},new{x=20,y=20},new{x=4,y=20}];
                 var preview=await Query(client,"part_preview",new {fence,step=0,maxEdge=32});
                 Check(preview.IsError!=true&&Png(preview).Length>0,"Fitting preview failed.");Check((await Context(client)).GetProperty("revision").GetString()==before.GetProperty("revision").GetString(),"Preview mutated document.");
-                var edit=await Edit(client,before,new{type="part.create",fence,step=0,name="MCP Face"},
+                var candidates=await Query(client,"part_candidates",new{fence,steps=new[]{0,4,8},maxEdge=32});
+                Check(candidates.IsError!=true,"Candidate query failed.");
+                var choices=Text(candidates).GetProperty("candidates");
+                Check(choices.GetArrayLength()==3,"Candidate set incomplete.");
+                Check(Convert.FromBase64String(choices[0].GetProperty("preview").GetProperty("pngBase64").GetString()!).AsSpan().StartsWith(new byte[]{137,80,78,71}),"Candidate PNG missing.");
+                Check((await Context(client)).GetProperty("revision").GetString()==before.GetProperty("revision").GetString(),"Candidates mutated document.");
+                var candidateId=choices[0].GetProperty("candidateId").GetString();
+                var edit=await Edit(client,before,new{type="part.create",candidateId,name="MCP Face"},
                     new{type="mask.stroke",target="@0",points=new[]{new{x=8.5,y=8.5},new{x=9.5,y=8.5}},radius=1,polarity="Erase"},
                     new{type="clone.stroke",target=(string?)null,ownerPart="@0",global=false,source=new{x=4.5,y=4.5},points=new[]{new{x=10.5,y=10.5},new{x=15.5,y=10.5}},radius=2,mode="Fixed"},
                     new{type="patch.create",fence,transform=new{centerX=12.5,centerY=12.5,scale=1,rotationDegrees=0},name="MCP Patch"}, new{type="layer.visible",target="@0",visible=false});

@@ -11,7 +11,9 @@ public sealed class LivePreparationTests
         [new { x = 4, y = 4 }, new { x = 20, y = 4 }, new { x = 20, y = 20 }, new { x = 4, y = 20 }];
 
     [TestMethod]
-    public async Task BlockedPreviewPreparationLeavesHostLaneFreeAndRevokeDisclosesNothing()
+    [DataRow("part_preview")]
+    [DataRow("part_candidates")]
+    public async Task BlockedPreviewPreparationLeavesHostLaneFreeAndRevokeDisclosesNothing(string tool)
     {
         var session = LiveMcpTests.Open();
         using var lane = new SingleLane();
@@ -19,8 +21,7 @@ public sealed class LivePreparationTests
         using var mcp = await McpCoreHarness.CreateAsync(session,
             dispatch: lane.Dispatch, partFitter: fitter);
 
-        var call = mcp.CallAsync("part_preview",
-            new { fence = Fence, step = 2, maxEdge = 32 });
+        var call = mcp.CallAsync(tool, PreviewInput(tool));
         Assert.IsTrue(fitter.Started.Wait(TimeSpan.FromSeconds(5)), "Fitting did not start.");
         try
         {
@@ -72,7 +73,9 @@ public sealed class LivePreparationTests
     }
 
     [TestMethod]
-    public async Task RevisionChangeDuringPreviewPreparationCannotDisclosePreparedImage()
+    [DataRow("part_preview")]
+    [DataRow("part_candidates")]
+    public async Task RevisionChangeDuringPreviewPreparationCannotDisclosePreparedImage(string tool)
     {
         var session = LiveMcpTests.Open();
         using var lane = new SingleLane();
@@ -80,8 +83,7 @@ public sealed class LivePreparationTests
         using var mcp = await McpCoreHarness.CreateAsync(session,
             dispatch: lane.Dispatch, partFitter: fitter);
 
-        var call = mcp.CallAsync("part_preview",
-            new { fence = Fence, step = 1, maxEdge = 32 });
+        var call = mcp.CallAsync(tool, PreviewInput(tool));
         Assert.IsTrue(fitter.Started.Wait(TimeSpan.FromSeconds(5)), "Fitting did not start.");
         try
         {
@@ -135,6 +137,36 @@ public sealed class LivePreparationTests
         Assert.AreEqual(0, session.UndoCount);
         Assert.IsFalse(session.HasActiveTransaction);
     }
+
+    [TestMethod]
+    public async Task ReplacementDuringCandidatesCannotPublishUnderFreshGrant()
+    {
+        var session = LiveMcpTests.Open();
+        using var lane = new SingleLane();
+        using var fitter = new BlockingFitter();
+        using var mcp = await McpCoreHarness.CreateAsync(session,
+            dispatch: lane.Dispatch, partFitter: fitter);
+        var call = mcp.CallAsync("part_candidates", PreviewInput("part_candidates"));
+        Assert.IsTrue(fitter.Started.Wait(TimeSpan.FromSeconds(5)));
+        try
+        {
+            await mcp.Host.InvokeAsync(() =>
+            {
+                session.Open(session.Document!);
+                return true;
+            }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
+            await mcp.ReenableAsync();
+        }
+        finally { fitter.Release.Set(); }
+        var result = await call.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.AreEqual(McpErrors.Unauthorized, result.Error);
+        Assert.IsNull(result.Value);
+        Assert.AreEqual(0, session.UndoCount);
+    }
+
+    private static object PreviewInput(string tool) => tool == "part_candidates"
+        ? new { fence = Fence, steps = new[] { 0, 4, 8 }, maxEdge = 32 }
+        : new { fence = Fence, step = 2, maxEdge = 32 };
 
     private sealed class BlockingFitter : IPartBoundaryFitter, IDisposable
     {

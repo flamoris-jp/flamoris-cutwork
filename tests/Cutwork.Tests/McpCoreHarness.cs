@@ -61,6 +61,12 @@ internal sealed class McpCoreHarness : IDisposable
             cancellationToken);
     }
 
+    public async Task ReenableAsync(McpPermission permission = McpPermission.Edit)
+    {
+        Grant.Dispose();
+        Grant = await Boundary.EnableAsync(permission);
+    }
+
     public void Dispose()
     {
         Boundary.Dispose();
