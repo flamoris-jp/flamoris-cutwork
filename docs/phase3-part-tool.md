@@ -71,6 +71,20 @@ document dirty.
 
 ## Windows hands-on checklist
 
+### Mask correction transition (Issue #39)
+
+Mask Brush edits a committed Part. While a fence or fitting preview is pending,
+the router rejects a switch to Mask Brush before deactivating Part Tool. The UI
+restores the checked tool buttons and asks the user to finish/confirm the Part
+with Enter (or cancel with Escape), then select Mask Brush again. No implicit
+commit, cancellation, selection change, or second editable mask is introduced.
+After confirmation, the ordinary Part transaction selects the new Part, so mask
+correction targets it and remains in the shared Undo/Redo history.
+
+Regression check: keep a different Part selected, start a fence/adjusted preview,
+click Mask Brush, dismiss the guidance, and verify the pending overlay survives.
+Then confirm and correct the new Part; Undo/Redo must preserve both Parts.
+
 An interactive Windows desktop was not available during implementation. Verify
 the following before merge:
 

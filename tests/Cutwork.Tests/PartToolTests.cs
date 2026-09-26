@@ -213,6 +213,71 @@ public sealed class PartToolTests
         Assert.IsFalse(session.IsDirty);
     }
 
+    [TestMethod]
+    public void MaskSwitchPreservesPendingFenceAndPreviewUntilExplicitCommit()
+    {
+        var (session, tool) = CreateTool(useProductionFitter: true);
+        var existing = new PartLayer(new(0, 0, 2, 2), [255, 255, 255, 255]);
+        session.Execute(new AddLayer(existing));
+        session.SelectLayer(existing.Id);
+        session.MarkSaved();
+        var revision = session.Document!.Revision;
+        var history = session.UndoCount;
+        var router = new CanvasInputRouter(session);
+        var mask = new MaskBrushController(session);
+        router.SetActiveTool(tool);
+        AddRectangle(tool);
+        var fence = tool.Snapshot().Fence.ToArray();
+
+        Assert.IsFalse(router.SetActiveTool(mask));
+        Assert.AreSame(tool, router.ActiveTool);
+        Assert.IsTrue(tool.IsActive);
+        Assert.IsFalse(mask.IsActive);
+        CollectionAssert.AreEqual(fence, tool.Snapshot().Fence.ToArray());
+
+        Assert.IsTrue(tool.FinalizeFence());
+        tool.Wheel(2, CanvasModifiers.None);
+        var preview = tool.Snapshot();
+        Assert.IsFalse(router.SetActiveTool(mask));
+        Assert.AreEqual(preview.Step, tool.Snapshot().Step);
+        Assert.AreEqual(preview.MaskRevision, tool.Snapshot().MaskRevision);
+        CollectionAssert.AreEqual(preview.Mask.ToArray(), tool.Snapshot().Mask.ToArray());
+        Assert.AreEqual(existing.Id, session.SelectedLayerId);
+        Assert.AreEqual(revision, session.Document.Revision);
+        Assert.AreEqual(history, session.UndoCount);
+        Assert.IsFalse(session.IsDirty);
+
+        router.KeyDown(CanvasToolKey.Enter, CanvasModifiers.None);
+        var created = (PartLayer)session.Document.GetLayer(session.SelectedLayerId!.Value);
+        Assert.AreNotEqual(existing.Id, created.Id);
+        CollectionAssert.AreEqual(preview.Mask.ToArray(), created.CopyMask(created.Bounds));
+        Assert.IsTrue(router.SetActiveTool(mask));
+        Assert.AreSame(mask, router.ActiveTool);
+        Assert.IsTrue(mask.IsActive);
+        Assert.AreEqual(history + 1, session.UndoCount);
+        session.Undo();
+        Assert.AreEqual(existing.Id, session.SelectedLayerId);
+        session.Redo();
+        Assert.AreEqual(created.Id, session.SelectedLayerId);
+        CollectionAssert.AreEqual(preview.Mask.ToArray(), created.CopyMask(created.Bounds));
+    }
+
+    [TestMethod]
+    public void ExplicitCancelAllowsMaskSwitchWithoutCommittingPendingPart()
+    {
+        var (session, tool) = CreateTool();
+        var router = new CanvasInputRouter(session);
+        var mask = new MaskBrushController(session);
+        router.SetActiveTool(tool);
+        AddRectangle(tool);
+        Assert.IsFalse(router.SetActiveTool(mask));
+        router.KeyDown(CanvasToolKey.Escape, CanvasModifiers.None);
+        Assert.IsTrue(router.SetActiveTool(mask));
+        Assert.AreEqual(0, session.UndoCount);
+        Assert.AreEqual(1, session.Document!.Layers.Count);
+        Assert.IsFalse(session.IsDirty);
+    }
+
     private static (EditorSession Session, PartToolController Tool) CreateTool(bool useProductionFitter = false)
     {
         var pixels = Enumerable.Repeat(new byte[] { 80, 100, 120, 255 }, 20 * 20)

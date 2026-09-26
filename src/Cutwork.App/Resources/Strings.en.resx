@@ -186,4 +186,5 @@
   <data name="Mcp_SettingsSaveFailed" xml:space="preserve"><value>The connection settings could not be saved.</value></data>
   <data name="Common_Save" xml:space="preserve"><value>Save</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="MaskTool_PendingPart" xml:space="preserve"><value>A Part is still being edited. Use Enter to finish the fence and confirm the Part, or Escape to cancel, then select Mask Brush again. Your current fence and mask have been preserved.</value></data>
 </root>

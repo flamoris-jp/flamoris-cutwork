@@ -186,4 +186,5 @@
   <data name="Mcp_SettingsSaveFailed" xml:space="preserve"><value>接続設定を保存できません。</value></data>
   <data name="Common_Save" xml:space="preserve"><value>保存</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>キャンセル</value></data>
+  <data name="MaskTool_PendingPart" xml:space="preserve"><value>未確定のパーツがあります。Enterで囲いを完成・パーツを確定するか、Escで取り消してから、マスク補正を選んでください。現在の囲い・マスクは保持されています。</value></data>
 </root>
