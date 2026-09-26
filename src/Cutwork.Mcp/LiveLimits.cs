@@ -7,7 +7,9 @@ public static class LiveLimits
 {
     public const int FrameBytes = 4 * 1024 * 1024, Depth = 64, Operations = 64, Points = 4096,
         FenceVertices = 64, Dabs = 1024, SurfacePixels = 262144, FittingPixels = 65536,
-        PreviewEdge = 1024, PngBytes = 1024 * 1024, PageSize = 64;
+        PreviewEdge = 1024, PngBytes = 1024 * 1024, PageSize = 64,
+        Candidates = 3, CandidatePngBytes = 2 * 1024 * 1024;
+    public static readonly TimeSpan CandidateLifetime = TimeSpan.FromMinutes(5);
     public const double Radius = 64;
     public const long WorkUnits = 8_000_000, WorkingBytes = 64L * 1024 * 1024;
     public static long Area(DocumentRect bounds) => (long)bounds.Width * bounds.Height;

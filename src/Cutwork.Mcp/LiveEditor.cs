@@ -8,8 +8,9 @@ using Flamoris.Mcp.Core;
 namespace Flamoris.Cutwork.Mcp;
 
 /// <summary>Cutwork-owned typed operations over the one authoritative session.</summary>
-public sealed class LiveEditor(EditorSession session, McpPermission permission, Func<bool> humanBusy,
-    Action<bool> editing, FlamorisLogger? logger = null, IPartBoundaryFitter? partFitter = null)
+public sealed partial class LiveEditor(EditorSession session, McpPermission permission, Func<bool> humanBusy,
+    Action<bool> editing, FlamorisLogger? logger = null, IPartBoundaryFitter? partFitter = null,
+    Func<CapabilityGrant?>? currentGrant = null, TimeProvider? timeProvider = null)
 {
     private readonly FlamorisLogger? log = logger;
     private readonly IPartBoundaryFitter fitter = partFitter ?? new GuriguriPartFitter();
@@ -25,6 +26,8 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
         {
             if (name == "part_preview")
                 return await PartPreviewAsync(context, input, cancellationToken);
+            if (name == "part_candidates")
+                return await PartCandidatesAsync(context, input, cancellationToken);
             var preparedParts = name == "edit"
                 ? await PreparePartsAsync(context, input, cancellationToken)
                 : EmptyPreparedParts;
@@ -86,6 +89,9 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
             }
             if (name != "edit") throw new LiveException(McpErrors.UnsupportedCapability);
 
+            // Resolve against the starting revision before the batch's own edits
+            // advance it. Candidate creation never re-runs the fitter.
+            preparedParts = ResolveCandidates(args, preparedParts);
             var budget = new LiveBudget(session.HistoryBudgetBytes);
             var ids = new List<Guid?>();
             using var transaction = session.BeginTransaction();
@@ -198,7 +204,8 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
     {
         var operations = args.GetProperty("operations").EnumerateArray().ToArray();
         var requested = operations.Select((operation, index) => (operation, index))
-            .Where(item => item.operation.GetProperty("type").GetString() == "part.create")
+            .Where(item => item.operation.GetProperty("type").GetString() == "part.create"
+                && !item.operation.TryGetProperty("candidateId", out _))
             .ToArray();
         if (requested.Length == 0) return EmptyPreparedParts;
 
@@ -275,8 +282,12 @@ public sealed class LiveEditor(EditorSession session, McpPermission permission, 
             case "part.create":
                 if (!preparedParts.TryGetValue(operationIndex, out var fit))
                     throw new LiveException(McpErrors.InvalidRequest);
-                var fitBounds = LiveLimits.Fence(Points(operation.GetProperty("fence")),
-                    Document.Dimensions, budget);
+                var fitBounds = fit.Bounds;
+                if (operation.TryGetProperty("candidateId", out _))
+                    budget.Add(LiveLimits.Area(fitBounds), LiveLimits.Area(fitBounds) * 2);
+                else
+                    fitBounds = LiveLimits.Fence(Points(operation.GetProperty("fence")),
+                        Document.Dimensions, budget);
                 if (fitBounds != fit.Bounds || fit.Mask.Length != LiveLimits.Area(fitBounds))
                     throw new LiveException(McpErrors.StaleRevision);
                 budget.ReserveHistory(128 + LiveLimits.Area(fit.Bounds)

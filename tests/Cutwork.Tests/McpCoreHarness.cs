@@ -10,11 +10,12 @@ internal sealed class McpCoreHarness : IDisposable
 {
     private McpCoreHarness(EditorSession session, McpPermission permission, Func<bool> busy,
         Func<Action, CancellationToken, Task> dispatch, Action<bool> editing, FlamorisLogger logger,
-        IPartBoundaryFitter? partFitter, McpOptions? options)
+        IPartBoundaryFitter? partFitter, McpOptions? options, TimeProvider? timeProvider)
     {
         Session = session;
         Host = new(session, busy, dispatch);
-        Editor = new(session, permission, busy, editing, logger, partFitter);
+        Editor = new(session, permission, busy, editing, logger, partFitter,
+            currentGrant: () => Grant, timeProvider: timeProvider);
         var configured = (options ?? new McpOptions()) with
         {
             Enabled = true,
@@ -35,7 +36,7 @@ internal sealed class McpCoreHarness : IDisposable
         McpPermission permission = McpPermission.Edit, Func<bool>? busy = null,
         Func<Action, CancellationToken, Task>? dispatch = null, Action<bool>? editing = null,
         FlamorisLogger? logger = null, IPartBoundaryFitter? partFitter = null,
-        McpOptions? options = null)
+        McpOptions? options = null, TimeProvider? timeProvider = null)
     {
         var harness = new McpCoreHarness(session, permission, busy ?? (() => false),
             dispatch ?? ((action, token) =>
@@ -43,7 +44,7 @@ internal sealed class McpCoreHarness : IDisposable
                 token.ThrowIfCancellationRequested();
                 action();
                 return Task.CompletedTask;
-            }), editing ?? (_ => { }), logger ?? FlamorisLogger.Create(), partFitter, options);
+            }), editing ?? (_ => { }), logger ?? FlamorisLogger.Create(), partFitter, options, timeProvider);
         harness.Grant = await harness.Boundary.EnableAsync(permission);
         return harness;
     }
