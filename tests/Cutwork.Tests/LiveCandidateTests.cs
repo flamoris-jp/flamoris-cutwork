@@ -171,7 +171,9 @@ public sealed class LiveCandidateTests
         var fence = new[] { new { x = 0, y = 0 }, new { x = 257, y = 0 }, new { x = 257, y = 256 }, new { x = 0, y = 256 } };
         Assert.AreEqual("fitting_limit", (await mcp.CallAsync("part_candidates", new { fence, steps = new[] { 0, 4 }, maxEdge = 32 })).Error);
         Assert.AreEqual(0, fitter.Count);
-        fence[1] = new { x = 256, y = 0 }; fence[2] = new { x = 256, y = 256 };
+        // Fitter bounds include the maximum polygon coordinate itself.
+        fence[1] = new { x = 255, y = 0 }; fence[2] = new { x = 255, y = 255 };
+        fence[3] = new { x = 0, y = 255 };
         var result = Value(await mcp.CallAsync("part_candidates", new { fence, steps = new[] { 0, 4, 100 }, maxEdge = 1024 }));
         Assert.AreEqual(3, result.GetProperty("candidates").GetArrayLength());
         Assert.IsTrue(System.Text.Encoding.UTF8.GetByteCount(result.GetRawText()) < LiveLimits.FrameBytes);
