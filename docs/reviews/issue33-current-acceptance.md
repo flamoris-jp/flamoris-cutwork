@@ -1,7 +1,8 @@
 # Issue #33 current implementation and acceptance audit
 
-Date: 2026-09-26. Baseline: reviewed main `21636ed2417790c7aa79ca8a37fb71f7e0d9049a`.
-This is author source/acceptance review, not independent approval to merge.
+Date: 2026-09-26. Original audit baseline: reviewed main `21636ed2417790c7aa79ca8a37fb71f7e0d9049a`.
+PR #43 and PR #44 were subsequently reviewed and merged. This audit does not
+replace the remaining hands-on acceptance for Issue #33.
 
 ## Finding
 
@@ -35,9 +36,9 @@ recorded result. Do not close #33 solely because its implementation PR merged.
 | Current-v2 save/reopen, ownership/order and artwork | Published WPF file dialog smoke plus persistence regression suite; no schema change |
 
 The current scope deliberately leaves Blur/Smudge, selection/tool state and
-filesystem/Open/Save/export-to-path UI-only, as #33 required. Candidate UX is
-follow-up #38, and pending human Guriguri switching is #39; neither should be
-misreported as absence of the original single-step preview/create surface.
+filesystem/Open/Save/export-to-path UI-only, as #33 required. The follow-up
+candidate UX (#38 / PR #44) and human Guriguri transition (#39 / PR #43) are
+implemented. They extend the original single-step preview/create surface.
 
 ## Executed Windows evidence
 
@@ -48,7 +49,10 @@ misreported as absence of the original single-step preview/create surface.
 - [Current baseline plus #39 run 36205883584](https://github.com/flamoris-jp/flamoris-cutwork/actions/runs/36205883584):
   observed successful restore, build, test, package verification and published
   editor/bridge official-client smoke on 2026-09-26. This run includes PR #43's
-  pending transition guard, not unmerged candidate work from PR #44.
+  transition guard, before candidate work from PR #44 was merged.
+- [Candidate run 36206652132](https://github.com/flamoris-jp/flamoris-cutwork/actions/runs/36206652132):
+  234 passing tests, release build, package verification and published editor/bridge
+  official-client smoke with candidate preview/create.
 
 This Linux workspace has no .NET SDK or Windows desktop. Local source/diff checks
 are not substituted for the linked Windows executions. Existing workflow
