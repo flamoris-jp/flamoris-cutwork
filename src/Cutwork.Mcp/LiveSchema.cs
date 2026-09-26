@@ -16,6 +16,7 @@ public static class LiveSchema
     private static object ArrayOf(object items, int min, int max) => new { type = "array", items, minItems = min, maxItems = max };
     private static readonly object Point = Obj(("x", Num(0, 100000)), ("y", Num(0, 100000)));
     private static readonly object Fence = ArrayOf(Point, 3, LiveLimits.FenceVertices);
+    private static readonly object CandidateId = new { type = "string", pattern = "^[0-9a-f]{32}$" };
     private static readonly object Path = ArrayOf(Point, 1, LiveLimits.Points);
     private static readonly object Target = new { type = "string", pattern = "^(?:[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}|@(?:[0-9]|[1-5][0-9]|6[0-3]))$" };
     private static readonly object NullableTarget = new { anyOf = new object[] { Target, new { type = "null" } } };
@@ -24,6 +25,7 @@ public static class LiveSchema
     private static object Op(string kind, params (string, object)[] fields) => Obj(new[] { ("type", (object)new { @const = kind }) }.Concat(fields).ToArray());
     private static readonly object Operations = new { oneOf = new object[] {
         Op("part.create", ("fence", Fence), ("step", Int(0, 100)), ("name", Str())),
+        Op("part.create", ("candidateId", CandidateId), ("name", Str())),
         Op("layer.rename", ("target", Target), ("name", Str())),
         Op("layer.semantic", ("target", Target), ("semanticName", Str())),
         Op("layer.visible", ("target", Target), ("visible", new { type = "boolean" })),
@@ -41,6 +43,8 @@ public static class LiveSchema
             ("roi", new { anyOf = new object[] { new { type = "null" }, Obj(("x", Int(0, 100000)), ("y", Int(0, 100000)), ("width", Int(1, 100000)), ("height", Int(1, 100000))) } }),
             ("maxEdge", Int(1, LiveLimits.PreviewEdge))),
         ["part_preview"] = Obj(("fence", Fence), ("step", Int(0, 100)), ("maxEdge", Int(1, LiveLimits.PreviewEdge))),
+        ["part_candidates"] = Obj(("fence", Fence), ("steps", ArrayOf(Int(0, 100), 2, LiveLimits.Candidates)),
+            ("maxEdge", Int(1, LiveLimits.PreviewEdge))),
         ["edit"] = Obj(("operations", ArrayOf(Operations, 1, LiveLimits.Operations))),
         ["undo"] = Obj(),
         ["redo"] = Obj()
@@ -52,6 +56,7 @@ public static class LiveSchema
         ["layers"] = "Paged layer metadata including semantic partOrder, compositor index and ownerPartId. No pixels or filesystem paths.",
         ["image"] = "Bounded PNG of Original, Composite or explicit Part/Mask. Null ROI means source bounds; null target only for Original/Composite. Nearest-pixel mapping is returned.",
         ["part_preview"] = "Pure existing Guriguri fence/step preview; repeat steps to compare. Same parameters create the same mask.",
+        ["part_candidates"] = "Compare 2-3 Guriguri steps (strictly increasing, 0..100; try [0,4,8]). Returns cutout PNGs and temporary candidate IDs. Create via edit part.create(candidateId,name). Latest set only; expires in 5 minutes or on revision/document/grant change.",
         ["edit"] = "Atomic ordinary edits; one history entry. Targets are UUID or @N for an earlier created operation result. Clone: existing target OR ownerPart OR explicit global=true. Read current revision first; never retry automatically.",
         ["undo"] = "Undo one shared WPF/MCP history entry with document/revision precondition.",
         ["redo"] = "Redo one shared WPF/MCP history entry with document/revision precondition." };

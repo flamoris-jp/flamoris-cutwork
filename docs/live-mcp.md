@@ -120,6 +120,38 @@ Conceptual guarded edit payload (the MCP client library supplies it as tool argu
 ```
 
 The complete closed schemas are returned by `tools/list` and used for validation.
+
+### Comparing Guriguri candidates
+
+`part_candidates` takes the same document-space `fence`, `steps: [0,4,8]`, and
+`maxEdge`. Supply two or three strictly increasing integer steps in 0..100.
+These are shrink steps, not percentages: each step retains about 88% of the
+preceding area, down to the existing minimum. Start with small steps.
+
+The response contains captured `documentToken`/`revision`, `expiresInSeconds`,
+and `candidates`. Each candidate has `candidateId`, `step`, `bounds`,
+`remainingPixels`, `fencePixels`, `retainedRatio`, `maskSha256`, and `preview`.
+The preview is an Original cutout PNG with the same mapping fields as `image`.
+Candidates can have identical masks once the minimum retained area is reached;
+counts and hashes make this visible without semantic ranking.
+
+Choose a candidate and submit the ordinary guarded `edit` input:
+
+```json
+{"operations":[{"type":"part.create","candidateId":"<returned ID>","name":"Left eye"}]}
+```
+
+The exact stored full-resolution mask is committed without fitting again.
+Candidate creation can be followed by `@0` Mask/Clone edits in the same atomic
+batch. Only the latest successful set is retained (maximum three masks); IDs
+expire after five minutes or on a document/revision/capability change. Even
+Undo back to the previous history state does not revive an ID. A fresh request
+guard cannot revive a stale candidate. Read only can compare but cannot create.
+On `stale_candidate`, request new previews. Never automatically retry edits.
+The existing single-step `part_preview` and fence/step create form still work.
+See [ADR 0005](decisions/0005-guriguri-candidates.md) for aggregate bounds and
+the preparation/disclosure/commit contract.
+
 Clone explicitly chooses one of existing Repair `target`, new Repair `ownerPart`,
 or new legacy/global underpaint (`global:true`); it never uses ambient selection.
 Offset uses immutable source-anchor minus first destination; Fixed stamps the

@@ -58,6 +58,26 @@ public static class LiveImages
         }
         return Encode(pixels, false, bounds, bounds, width, height);
     }
+    public static LiveImage Cutout(OriginalAsset original, DocumentRect bounds, byte[] mask,
+        int maxEdge, CancellationToken cancellationToken)
+    {
+        var (width, height) = Size(bounds, maxEdge);
+        var pixels = new byte[checked(width * height * 4)];
+        for (int y = 0; y < height; y++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int sy = Math.Min(bounds.Height - 1, (int)((y + 0.5) * bounds.Height / height));
+            for (int x = 0; x < width; x++)
+            {
+                int sx = Math.Min(bounds.Width - 1, (int)((x + 0.5) * bounds.Width / width));
+                var pixel = pixels.AsSpan((y * width + x) * 4, 4);
+                original.PixelAt(bounds.X + sx, bounds.Y + sy).CopyTo(pixel);
+                pixel[3] = CompositeCache.Multiply(pixel[3], mask[sy * bounds.Width + sx]);
+            }
+        }
+        return Encode(pixels, false, bounds, bounds, width, height);
+    }
+
     private static (int, int) Size(DocumentRect crop, int edge)
     {
         if (edge is < 1 or > LiveLimits.PreviewEdge) throw new LiveException("preview_limit");

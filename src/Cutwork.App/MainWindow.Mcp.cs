@@ -297,7 +297,8 @@ public partial class MainWindow
             ReadTimeoutMs = 120_000,
             WriteTimeoutMs = 5_000,
         };
-        var editor = new LiveEditor(_session, permission, HumanBusy, SetRemoteEditing, CutworkLog.Current);
+        var editor = new LiveEditor(_session, permission, HumanBusy, SetRemoteEditing,
+            CutworkLog.Current, currentGrant: () => _mcpGrant);
         var boundary = new McpBoundary(_mcpHost, CutworkMcpTools.Create(editor), options,
             new McpDiagnostics(CutworkLog.Current));
         boundary.Status.Changed += McpStatusChanged;
