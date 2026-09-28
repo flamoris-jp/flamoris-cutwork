@@ -99,27 +99,7 @@
                 <MenuItem x:Name="ExportCompositeMenuItem" IsEnabled="False" Click="ExportCompositeMenuItem_Click" />
                 <MenuItem x:Name="ExportHandoffMenuItem" IsEnabled="False" Click="ExportHandoffMenuItem_Click" />
             </MenuItem>
-            <MenuItem x:Name="McpMenu" SubmenuOpened="McpMenu_Opened">
-                <MenuItem x:Name="McpReadMenu" IsCheckable="True" Click="McpRead_Click" />
-                <MenuItem x:Name="McpEditMenu" IsCheckable="True" Click="McpEdit_Click" />
-                <MenuItem x:Name="McpStopMenu" Click="McpStop_Click" />
-                <MenuItem x:Name="McpCopyMenu" Click="McpCopy_Click" />
-                <Separator />
-                <MenuItem x:Name="McpMethodMenu">
-                    <MenuItem x:Name="McpManualMethodMenu" IsCheckable="True"
-                              Click="McpManualMethod_Click" />
-                    <MenuItem x:Name="McpTunnelMethodMenu" IsCheckable="True"
-                              Click="McpTunnelMethod_Click" />
-                </MenuItem>
-                <MenuItem x:Name="McpAutoStartMenu" IsCheckable="True"
-                          Click="McpAutoStart_Click" />
-                <MenuItem x:Name="McpStartHelperMenu" Click="McpStartHelper_Click" />
-                <MenuItem x:Name="McpStopHelperMenu" Click="McpStopHelper_Click" />
-                <MenuItem x:Name="McpSettingsMenu" Click="McpSettings_Click" />
-                <MenuItem x:Name="McpHelperStatusMenu" IsEnabled="False" />
-                <Separator />
-                <MenuItem x:Name="McpNotice" IsEnabled="False" />
-            </MenuItem>
+            <MenuItem x:Name="McpMenu" Header="MCP / AI" />
             <MenuItem x:Name="HelpMenu">
                 <MenuItem x:Name="DeveloperFixtureMenuItem" Visibility="Collapsed" IsEnabled="False"
                           Click="DeveloperFixture_Click" />
@@ -208,12 +188,7 @@
 
         <Border DockPanel.Dock="Bottom" Background="#292B2F" Padding="8,5">
             <DockPanel>
-                <StackPanel x:Name="McpStatusPanel" DockPanel.Dock="Right" Orientation="Horizontal"
-                            AutomationProperties.AutomationId="McpStatus"
-                            VerticalAlignment="Center" Margin="12,0,0,0">
-                    <Ellipse x:Name="McpStatusDot" Width="9" Height="9" Fill="IndianRed" Margin="0,0,5,0" />
-                    <TextBlock x:Name="McpStatusLabel" Text="MCP" Foreground="#E7E7E7" />
-                </StackPanel>
+                <ContentControl x:Name="McpStatusPanel" DockPanel.Dock="Right" Margin="12,0,0,0" />
                 <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
             </DockPanel>
         </Border>

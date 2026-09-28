@@ -85,6 +85,7 @@ $requiredPublishFiles = @(
     "appsettings.json",
     "Flamoris.Logging.dll",
     "Flamoris.Mcp.Core.dll",
+    "Flamoris.Mcp.Wpf.dll",
     "coreclr.dll",
     "hostfxr.dll",
     "hostpolicy.dll",
@@ -103,8 +104,8 @@ foreach ($coreAssembly in @(
     (Join-Path $bridgePath "Flamoris.Mcp.Core.dll")
 )) {
     $coreProductVersion = (Get-Item -LiteralPath $coreAssembly).VersionInfo.ProductVersion
-    if ($coreProductVersion -notmatch '^1\.1\.0(?:[+.-]|$)') {
-        throw "Packaged MCP Core must be 1.1.0; found $coreProductVersion at $coreAssembly"
+    if ($coreProductVersion -notmatch '^1\.2\.0(?:[+.-]|$)') {
+        throw "Packaged MCP Core must be 1.2.0; found $coreProductVersion at $coreAssembly"
     }
 }
 
