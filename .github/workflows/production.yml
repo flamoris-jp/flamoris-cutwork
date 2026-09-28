@@ -23,21 +23,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  FlamorisMcpSourceRoot: ${{ github.workspace }}/.mcp-core
 
 jobs:
   build-and-test:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Checkout MCP Core candidate for cross-repository validation
-        uses: actions/checkout@v4
-        with:
-          repository: flamoris-jp/flamoris-mcp-core
-          ref: 87f654d6c4579c21e2267554236ae3ce1bbe5a1c
-          path: .mcp-core
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
       - run: dotnet restore Cutwork.sln
