@@ -138,7 +138,7 @@ internal static class Program
             {
                 await Context(handle.Client);await Task.Run(()=>((WindowPattern)window.GetCurrentPattern(WindowPattern.Pattern)).Close());await process.WaitForExitAsync().WaitAsync(Limit);await Rejected(handle.Client);
             }
-            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core 1.1.0 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
+            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core/Wpf 1.2.0 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
         }
         catch { DumpUi(process.Id); throw; }
         finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){} }
@@ -195,7 +195,26 @@ internal static class Program
     private static AutomationElement Find(AutomationElement root,string id)=>root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.AutomationIdProperty,id))??throw new Exception("Missing UI control: "+id);
     private static Task Invoke(AutomationElement e)=>Task.Run(()=>((InvokePattern)e.GetCurrentPattern(InvokePattern.Pattern)).Invoke());
     private static async Task ClickReady(AutomationElement root,string id){await Until(()=>Find(root,id).Current.IsEnabled);await Invoke(Find(root,id));}
-    private static async Task Menu(AutomationElement root,string parent,string child){((ExpandCollapsePattern)Find(root,parent).GetCurrentPattern(ExpandCollapsePattern.Pattern)).Expand();await Invoke(Find(root,child));}
+    private static async Task Menu(AutomationElement root, string parent, string child)
+    {
+        bool connect = parent == "McpMenu" && child is "McpReadMenu" or "McpReadOnlyMenu" or "McpEditMenu";
+        ((ExpandCollapsePattern)Find(root, parent).GetCurrentPattern(ExpandCollapsePattern.Pattern)).Expand();
+        if (!connect) { await Invoke(Find(root, child)); return; }
+        var opening = Invoke(Find(root, "McpConnectMenu"));
+        int pid = root.Current.ProcessId;
+        AutomationElement? permission = null;
+        await Until(() => (permission = AutomationElement.RootElement.FindFirst(TreeScope.Descendants,
+            new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty, pid),
+                new PropertyCondition(AutomationElement.AutomationIdProperty, "McpPermission")))) is not null);
+        ((ExpandCollapsePattern)permission!.GetCurrentPattern(ExpandCollapsePattern.Pattern)).Expand();
+        var items = permission.FindAll(TreeScope.Descendants, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem));
+        ((SelectionItemPattern)items[child == "McpEditMenu" ? 1 : 0].GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
+        var accept = AutomationElement.RootElement.FindFirst(TreeScope.Descendants, new AndCondition(
+            new PropertyCondition(AutomationElement.ProcessIdProperty, pid),
+            new PropertyCondition(AutomationElement.AutomationIdProperty, "McpAccept")));
+        await Invoke(accept!); await opening;
+        await Until(() => root.Current.IsEnabled);
+    }
     private static bool VisibleValue(AutomationElement root,string text)=>root.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit)).Cast<AutomationElement>().Any(e=>e.TryGetCurrentPattern(ValuePattern.Pattern,out var p)&&((ValuePattern)p).Current.Value==text);
     private static async Task FileMenu(AutomationElement root,int pid,string item,string path){var opening=Menu(root,"FileMenu",item);await ChooseFile(pid,path);await opening;await Until(()=>root.Current.IsEnabled);}
     private static async Task ChooseFile(int pid,string path)
@@ -211,10 +230,12 @@ internal static class Program
     }
     private static async Task<ConnectionInfo> Connection(int pid)
     {
+        var main = AutomationElement.FromHandle(Process.GetProcessById(pid).MainWindowHandle);
+        var opening = Menu(main, "McpMenu", "McpSettingsMenu");
         AutomationElement? edit=null;await Until(()=>(edit=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new PropertyCondition(AutomationElement.AutomationIdProperty,"McpConnection"))))is not null);
-        string json=((ValuePattern)edit!.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;var server=JsonDocument.Parse(json).RootElement.GetProperty("mcpServers").GetProperty("cutwork");string pipe=server.GetProperty("args")[1].GetString()!;string capability=server.GetProperty("env").GetProperty(StdioBridge.CredentialEnvironmentVariable).GetString()!;
+        string json=((ValuePattern)edit!.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;var server=JsonDocument.Parse(json).RootElement.GetProperty("mcpServers").GetProperty("flamoris-cutwork");string pipe=server.GetProperty("args")[1].GetString()!;string capability=server.GetProperty("env").GetProperty(StdioBridge.CredentialEnvironmentVariable).GetString()!;
         AutomationElement? dialog=edit;while(dialog is not null&&dialog.Current.ControlType!=ControlType.Window)dialog=TreeWalker.ControlViewWalker.GetParent(dialog);
-        await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());return new(pipe,capability);
+        await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());await opening;return new(pipe,capability);
     }
     private static async Task Rejected(McpClient c)
     {
@@ -305,3 +326,4 @@ internal static class Program
     [DllImport("gdi32.dll")]private static extern uint GetPixel(IntPtr dc,int x,int y);
     private static void Check(bool value,string message){if(!value)throw new Exception(message);}
 }
+

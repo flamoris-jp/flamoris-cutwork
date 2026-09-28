@@ -1,3 +1,5 @@
+> The desktop connection UX below is superseded by [shared MCP connection](shared-mcp-connection.md). The app tool/authority contracts remain unchanged.
+
 # Cutwork MCP / AI
 
 Cutworkを起動して画像または`.flimg`を開き、上部の **MCP / AI** から

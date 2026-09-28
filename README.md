@@ -247,3 +247,7 @@ FLAMORISは元気になって育ちます。🌱
 <sub>主にGPU代とか。</sub>
 
 FLAMORISのキャラクター、キャラクターデザイン、イラスト、PSD素材、音楽・音声、ロゴ、商標・ブランド、映像その他のクリエイティブ素材は、**Apache-2.0によって自動的にライセンスされるものではありません**。各素材に適用されるライセンスや権利表示を別途確認してください。
+
+## Shared desktop MCP connection
+
+The shared MCP UI migration and package release order are documented in [shared MCP connection](docs/shared-mcp-connection.md).
