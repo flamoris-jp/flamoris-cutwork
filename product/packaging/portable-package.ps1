@@ -29,6 +29,13 @@ function Assert-PortableArchive {
     $archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
     try {
         foreach ($entry in $archive.Entries) {
+            # ZipFile records empty directories. Inventory describes files only.
+            if ($entry.FullName.EndsWith('/')) {
+                if ($entry.Length -ne 0 -or $entry.FullName -match '(^/|(^|/)\.\.(/|$)|\\)') {
+                    throw "Unsafe ZIP directory entry: $($entry.FullName)"
+                }
+                continue
+            }
             if (-not $expected.ContainsKey($entry.FullName)) { throw "Unexpected or duplicate ZIP entry: $($entry.FullName)" }
             $file = $expected[$entry.FullName]
             if ($entry.Length -ne $file.size) { throw "ZIP size mismatch: $($entry.FullName)" }

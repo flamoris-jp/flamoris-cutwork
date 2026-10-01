@@ -16,6 +16,7 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('portable-contract-' + [guid]::New
 $package = Join-Path $temp 'FLAMORIS-Fixture-win-x64'
 New-Item -ItemType Directory -Path (Join-Path $package 'mcp') -Force | Out-Null
 try {
+    New-Item -ItemType Directory (Join-Path $package 'empty-runtime-directory') | Out-Null
     # Synthetic binaries test packaging, without requiring a WPF host or network.
     Set-Content (Join-Path $package 'Fixture.exe') 'synthetic editor'
     Set-Content (Join-Path $package 'mcp/Flamoris.Mcp.Bridge.exe') 'synthetic bridge'
