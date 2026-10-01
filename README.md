@@ -106,10 +106,20 @@ dotnet build Cutwork.sln --configuration Release
 dotnet test Cutwork.sln --configuration Release --no-build
 ```
 
-For normal use, download the `FLAMORIS-Cutwork-v0.1.0-win-x64` CI artifact,
+For normal use, download the `FLAMORIS-Cutwork-win-x64` CI artifact,
 extract its ZIP completely, and start `Cutwork.exe`. The portable build is
 self-contained and does not require the .NET SDK/runtime or Python. See the
 [Windows release guide](docs/phase8-windows-packaging.md).
+
+Build the same portable candidate from the repository root:
+
+```powershell
+git pull --ff-only
+./product/packaging/publish-windows.ps1
+```
+
+Outputs are the directory, ZIP and inventory under `artifacts/windows/`.
+See [the shared Windows packaging contract](docs/windows-packaging.md).
 
 ### Synthetic developer fixture
 

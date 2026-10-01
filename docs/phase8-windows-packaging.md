@@ -7,8 +7,8 @@ acceptanceはWindows 11 x64で行います。インストーラーや管理者�
 
 ユーザー操作は次の3手順です。
 
-1. GitHub Actionsの`FLAMORIS-Cutwork-v0.1.0-win-x64` artifactを取得する。
-2. `FLAMORIS-Cutwork-v0.1.0-win-x64.zip`を任意のフォルダーへすべて展開する。
+1. GitHub Actionsの`FLAMORIS-Cutwork-win-x64` artifactを取得する。
+2. `FLAMORIS-Cutwork-win-x64.zip`を任意のフォルダーへすべて展開する。
 3. 展開先の`Cutwork.exe`を起動する。
 
 配布物には.NET 10 Desktop Runtimeを含むため、対象PCに.NET SDK/runtimeは不要です。
@@ -25,7 +25,8 @@ FLAMORISの配布元から取得したartifactであることと、同梱invento
 repository rootで次を実行します。
 
 ```powershell
-pwsh -File eng/package-windows.ps1
+git pull --ff-only
+./product/packaging/publish-windows.ps1
 ```
 
 scriptが実行するproduction publishの要点は次のとおりです。
@@ -47,15 +48,17 @@ executableは`Cutwork.exe`です。MCPクライアント専用のself-contained 
 出力:
 
 - `artifacts/publish/win-x64/`: 検査前のself-contained publish出力
-- `artifacts/package/FLAMORIS-Cutwork-v0.1.0-win-x64/`: ZIP staging
-- `artifacts/FLAMORIS-Cutwork-v0.1.0-win-x64.zip`: portable配布物
-- `artifacts/FLAMORIS-Cutwork-v0.1.0-win-x64.inventory.json`: path、size、SHA-256
+- `artifacts/windows/FLAMORIS-Cutwork-win-x64/`: ZIP staging
+- `artifacts/windows/FLAMORIS-Cutwork-win-x64.zip`: portable配布物
+- `artifacts/windows/FLAMORIS-Cutwork-win-x64.inventory.json`: path、size、SHA-256（SHA256SUMS.txtも含む）
 
 ## Artifact contract
 
 ZIP rootには次を含みます。
 
 - `Cutwork.exe`とself-contained .NET/WPF runtime files
+- `SHA256SUMS.txt`（自己参照を除くファイルのSHA-256）
+- `BUILD-INFO.txt`（source commit / platform）
 - `README-ja.txt`
 - `LICENSE.txt`（Cutwork、MPL-2.0）
 - `DOTNET-LICENSE.txt`

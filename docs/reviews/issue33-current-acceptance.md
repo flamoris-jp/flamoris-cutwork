@@ -32,7 +32,7 @@ recorded result. Do not close #33 solely because its implementation PR merged.
 | Stop/downgrade/reopen/shutdown revocation | `CutworkMcpHost`, `MainWindow.Mcp.cs`, barrier preparation tests and managed-connection tests |
 | Local Windows trust boundary | `LiveBoundaryTests` inspects protected owner DACL and remote-client-reject flag; separate real token/machine matrix is still manual |
 | Bounded work, images, frames and idle semantics | `LiveLimits`, schema tests, `LiveTransportTests`; healthy idle survives timeout, partial frames do not |
-| Published self-contained editor/bridge and official client | Existing `eng/package-windows.ps1` and `Cutwork.WindowsSmoke`; no parallel packaging path or new runtime dependency |
+| Published self-contained editor/bridge and official client | Existing `product/packaging/publish-windows.ps1` and `Cutwork.WindowsSmoke`; no parallel packaging path or new runtime dependency |
 | Current-v2 save/reopen, ownership/order and artwork | Published WPF file dialog smoke plus persistence regression suite; no schema change |
 
 The current scope deliberately leaves Blur/Smudge, selection/tool state and
