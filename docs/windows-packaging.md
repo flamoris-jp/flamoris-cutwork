@@ -59,7 +59,7 @@ All bridges live at `mcp/Flamoris.Mcp.Bridge.exe`.
 | Build prerequisites | PowerShell 7, .NET 10 SDK, Git | PowerShell 7, .NET 10 SDK, Git, CMake, Visual Studio C++ Build Tools, network for pinned ICU/FFmpeg | PowerShell 7, .NET 10 SDK, Git, CMake, Visual Studio C++ Build Tools |
 | User prerequisites | Windows x64 | Windows x64 | Windows x64; FFmpeg/ffprobe on PATH for media, Python 3 for Recipes |
 | Integrity/provenance | SHA256SUMS.txt, inventory, BUILD-INFO.txt | SHA256SUMS.txt, inventory, BUILD-INFO.txt | SHA256SUMS.txt, inventory, BUILD-INFO.txt with native ABI/capabilities/timebase |
-| CI workflow | Production (`production.yml`), PR/manual | Native Shell Boundary (`native-shell-ci.yml`), PR/manual | Product (`foundation.yml`), non-main push/manual; manual package workflow delegates to it |
+| Package Action | Windows Portable Package (`windows-package.yml`) | Windows Portable Package (`windows-package.yml`) | Windows Portable Package (`windows-package.yml`) |\n| CI execution | Same package workflow on PR/manual | Same package workflow on PR/manual | Product (`foundation.yml`) on non-main push; package Action delegates to it |
 | Packaged automated smoke | Official MCP client, UI projection/edit/history, save/reopen, lifecycle, System32-only PATH | Native desktop/MCP client, packaged WPF production smoke, PATH without developer runtimes | Official MCP client, UI edit/history/lifecycle, System32-only PATH; five real media formats with declared FFmpeg dependency |
 | Human acceptance remaining | Clean Windows, actual artwork/brush latency, DPI/navigation | Clean Windows, actual PSD/flimg, DPI/rig/preview/export | Clean Windows, pointer/DPI, A/V synchronization, Recipe generation/export |
 
