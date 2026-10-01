@@ -21,7 +21,7 @@ Layer Handoffの書き出しができます。
 手順と対応範囲: https://github.com/flamoris-jp/flamoris-cutwork/blob/main/docs/live-mcp.md
 
 ライセンス:
-- FLAMORIS Cutwork: LICENSE.txt (Mozilla Public License 2.0)
+- FLAMORIS Cutwork: LICENSE.txt (Apache License 2.0)
 - FLAMORIS MCP Core: Apache License 2.0
 - MCP C# SDK: MCP-SDK-LICENSE.txt (Apache License 2.0)
 - 同梱.NET Runtime/WPF: DOTNET-LICENSE.txt / THIRD-PARTY-NOTICES.txt

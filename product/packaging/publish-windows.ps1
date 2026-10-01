@@ -7,20 +7,26 @@ param(
     [string]$RuntimeIdentifier = "win-x64",
 
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version = "0.1.0"
+    [string]$Version = "0.1.0",
+
+    [string]$OutputDirectory = "artifacts/windows"
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$repositoryRoot = Split-Path -Parent $PSScriptRoot
-$projectPath = Join-Path $repositoryRoot "src\Cutwork.App\Cutwork.App.csproj"
-$publishProfilePath = Join-Path $repositoryRoot "src\Cutwork.App\Properties\PublishProfiles\win-x64.pubxml"
-$publishPath = Join-Path $repositoryRoot "artifacts\publish\win-x64"
-$packageName = "FLAMORIS-Cutwork-v$Version-win-x64"
-$packageRoot = Join-Path $repositoryRoot "artifacts\package\$packageName"
-$zipPath = Join-Path $repositoryRoot "artifacts\$packageName.zip"
-$inventoryPath = Join-Path $repositoryRoot "artifacts\$packageName.inventory.json"
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+. (Join-Path $PSScriptRoot 'portable-package.ps1')
+$destination = if ([IO.Path]::IsPathRooted($OutputDirectory)) {
+    [IO.Path]::GetFullPath($OutputDirectory)
+} else { [IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory)) }
+$projectPath = Join-Path $repositoryRoot "src/Cutwork.App/Cutwork.App.csproj"
+$publishProfilePath = Join-Path $repositoryRoot "src/Cutwork.App/Properties/PublishProfiles/win-x64.pubxml"
+$publishPath = Join-Path $repositoryRoot "artifacts/publish/win-x64"
+$packageName = "FLAMORIS-Cutwork-win-x64"
+$packageRoot = Join-Path $destination $packageName
+$zipPath = "$packageRoot.zip"
+$inventoryPath = "$packageRoot.inventory.json"
 
 [xml]$projectXml = Get-Content -LiteralPath $projectPath -Raw
 [xml]$profileXml = Get-Content -LiteralPath $publishProfilePath -Raw
@@ -159,23 +165,12 @@ if (-not (Test-Path -LiteralPath $dotnetNotices -PathType Leaf)) {
 Copy-Item -LiteralPath $dotnetLicense -Destination (Join-Path $packageRoot "DOTNET-LICENSE.txt")
 Copy-Item -LiteralPath $dotnetNotices -Destination (Join-Path $packageRoot "THIRD-PARTY-NOTICES.txt")
 
-$packageFiles = @(Get-ChildItem -LiteralPath $packageRoot -File -Recurse | Sort-Object FullName)
-$inventory = @($packageFiles | ForEach-Object {
-    [ordered]@{
-        path = [System.IO.Path]::GetRelativePath($packageRoot, $_.FullName).Replace('\', '/')
-        size = $_.Length
-        sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-    }
-})
-$inventory | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $inventoryPath -Encoding utf8
+Complete-PortablePackage -PackageRoot $packageRoot -RepositoryRoot $repositoryRoot
 
-Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal
-
-Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
 try {
     $entryNames = @($archive.Entries | ForEach-Object FullName)
-    foreach ($requiredEntry in @("Cutwork.exe", "LICENSE.txt", "DOTNET-LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "README-ja.txt")) {
+    foreach ($requiredEntry in @("Cutwork.exe", "LICENSE.txt", "DOTNET-LICENSE.txt", "THIRD-PARTY-NOTICES.txt", "README-ja.txt", "SHA256SUMS.txt", "BUILD-INFO.txt")) {
         if (@($entryNames | Where-Object { $_ -ceq $requiredEntry }).Count -ne 1) {
             throw "ZIP must contain exactly one root entry named $requiredEntry."
         }

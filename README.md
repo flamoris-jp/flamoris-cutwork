@@ -37,7 +37,7 @@ Current milestone:
 - Phase 8: self-contained Windows packaging complete;
 - Phase 9-1: separate Parts / Layers panels, contextual tool options and Part-owned Repairs complete;
 - Phase 9-2: Fixed / Offset Clone modes complete;
-- Live MCP and managed Manual / OpenAI tunnel-client connections complete (`Flamoris.Mcp.Core` 1.1.0);
+- Live MCP and managed Manual / OpenAI tunnel-client connections complete (`Flamoris.Mcp.Core` 1.2.0);
 - current: v0.1 hands-on fixes and workflow polish, with remaining visual/performance acceptance tracked explicitly.
 
 The current writer is `.flimg` **v2**; v1 reading/migration remains supported.
@@ -54,7 +54,7 @@ See [connection and operation guide](docs/live-mcp.md) and
 [MCP Core migration ADR](docs/decisions/0003-mcp-core-migration.md) and
 [managed connection ADR](docs/decisions/0004-managed-mcp-connections.md). Shared
 transport, capability and lifecycle infrastructure comes from
-`Flamoris.Mcp.Core` 1.1.0;
+`Flamoris.Mcp.Core` 1.2.0;
 no filesystem tools are exposed.
 
 ## Design authority
@@ -106,10 +106,20 @@ dotnet build Cutwork.sln --configuration Release
 dotnet test Cutwork.sln --configuration Release --no-build
 ```
 
-For normal use, download the `FLAMORIS-Cutwork-v0.1.0-win-x64` CI artifact,
+For normal use, download the `FLAMORIS-Cutwork-win-x64` CI artifact,
 extract its ZIP completely, and start `Cutwork.exe`. The portable build is
 self-contained and does not require the .NET SDK/runtime or Python. See the
 [Windows release guide](docs/phase8-windows-packaging.md).
+
+Build the same portable candidate from the repository root:
+
+```powershell
+git pull --ff-only
+./product/packaging/publish-windows.ps1
+```
+
+Outputs are the directory, ZIP and inventory under `artifacts/windows/`.
+See [the shared Windows packaging contract](docs/windows-packaging.md).
 
 ### Synthetic developer fixture
 
