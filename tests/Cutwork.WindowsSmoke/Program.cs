@@ -15,6 +15,7 @@ using ModelContextProtocol.Protocol;
 internal static class Program
 {
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ConnectionUiLimit = TimeSpan.FromMinutes(2);
     private static readonly string CleanPath = Environment.GetFolderPath(Environment.SpecialFolder.System);
     [STAThread]
     private static int Main(string[] args)
@@ -232,7 +233,7 @@ internal static class Program
     {
         var main = AutomationElement.FromHandle(Process.GetProcessById(pid).MainWindowHandle);
         var opening = Menu(main, "McpMenu", "McpSettingsMenu");
-        AutomationElement? edit=null;await Until(()=>(edit=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new PropertyCondition(AutomationElement.AutomationIdProperty,"McpConnection"))))is not null);
+        AutomationElement? edit=null;await Until(()=>(edit=AutomationElement.RootElement.FindFirst(TreeScope.Descendants,new AndCondition(new PropertyCondition(AutomationElement.ProcessIdProperty,pid),new PropertyCondition(AutomationElement.AutomationIdProperty,"McpConnection"))))is not null, ConnectionUiLimit);
         string json=((ValuePattern)edit!.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;var server=JsonDocument.Parse(json).RootElement.GetProperty("mcpServers").GetProperty("flamoris-cutwork");string pipe=server.GetProperty("args")[1].GetString()!;string capability=server.GetProperty("env").GetProperty(StdioBridge.CredentialEnvironmentVariable).GetString()!;
         AutomationElement? dialog=edit;while(dialog is not null&&dialog.Current.ControlType!=ControlType.Window)dialog=TreeWalker.ControlViewWalker.GetParent(dialog);
         await Task.Run(()=>((WindowPattern)dialog!.GetCurrentPattern(WindowPattern.Pattern)).Close());await opening;return new(pipe,capability);
@@ -289,7 +290,7 @@ internal static class Program
         public void Dispose()=>Invalidating?.Invoke();
     }
     private sealed class ClientHandle(McpClient client):IAsyncDisposable{public McpClient Client=>client;public async ValueTask DisposeAsync(){try{await client.DisposeAsync();}catch(IOException){}}}
-    private static async Task Until(Func<bool> predicate){var watch=Stopwatch.StartNew();while(!predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI condition not observed.");await Task.Delay(100);}}
+    private static async Task Until(Func<bool> predicate, TimeSpan? timeout=null){var watch=Stopwatch.StartNew();var limit=timeout??Limit;while(!predicate()){if(watch.Elapsed>limit)throw new TimeoutException($"UI condition not observed within {limit}.");await Task.Delay(100);}}
     private static async Task UntilAsync(Func<Task<bool>> predicate){var watch=Stopwatch.StartNew();while(!await predicate()){if(watch.Elapsed>Limit)throw new TimeoutException("UI change not observed by MCP.");await Task.Delay(100);}}
     private static void TypeText(AutomationElement edit,string text)
     {
