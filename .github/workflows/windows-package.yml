@@ -1,4 +1,4 @@
-name: Production
+name: Windows Portable Package
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ on:
       - "docs/phase8-windows-packaging.md"
       - "LICENSE"
       - "README.md"
-      - ".github/workflows/production.yml"
+      - ".github/workflows/windows-package.yml"
   workflow_dispatch:
 
 permissions:

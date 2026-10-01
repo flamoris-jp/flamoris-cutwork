@@ -119,7 +119,7 @@ desktopで実施していない項目をCI結果だけで「確認済み」と�
 
 ## CI boundary
 
-既存のWindows `Production` workflowだけを使用します。Release restore/build/testの後、
+`Windows Portable Package` workflowだけを使用します。Release restore/build/testの後、
 同じpackaging scriptを実行してartifact inventoryとZIPを検査し、ZIPとinventoryを
 workflow artifactとしてuploadします。GitHub Releaseの自動作成は行いません。
 
