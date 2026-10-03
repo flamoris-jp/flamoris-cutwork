@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -13,40 +12,47 @@ namespace Flamoris.Cutwork.Tests;
 [DoNotParallelize]
 public sealed class PartIdentifierUiTests
 {
+    private static readonly TimeSpan UiTimeout = TimeSpan.FromSeconds(30);
     private static Dispatcher _dispatcher = null!;
     private static Thread _uiThread = null!;
 
     [ClassInitialize]
     public static void Initialize(TestContext _)
     {
-        using var ready = new ManualResetEventSlim();
-        Exception? failure = null;
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _uiThread = new Thread(() =>
         {
+            Application application;
             try
             {
-                var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 application.Resources.MergedDictionaries.Add(new ResourceDictionary
                 {
                     Source = new Uri("/Cutwork;component/Resources/ToolIcons.xaml", UriKind.Relative),
                 });
                 _dispatcher = Dispatcher.CurrentDispatcher;
+                ready.SetResult();
             }
-            catch (Exception exception) { failure = exception; }
-            finally { ready.Set(); }
-            if (failure is null) Dispatcher.Run();
+            catch (Exception exception) { ready.SetException(exception); return; }
+            // Application.Shutdown stops only the dispatcher started by Application.Run.
+            // This plain Application has no production startup hooks or StartupUri.
+            application.Run();
         }) { IsBackground = true };
         _uiThread.SetApartmentState(ApartmentState.STA);
         _uiThread.Start();
-        ready.Wait();
-        if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+        ready.Task.WaitAsync(UiTimeout).GetAwaiter().GetResult();
     }
 
     [ClassCleanup]
     public static void Cleanup()
     {
-        _dispatcher.Invoke(() => Application.Current.Shutdown());
-        _uiThread.Join();
+        if (!_uiThread.IsAlive) return;
+        try { RunSta(() => Application.Current?.Shutdown()); }
+        finally
+        {
+            if (!_uiThread.Join(UiTimeout))
+                throw new TimeoutException("The Part identifier test UI did not shut down within 30 seconds.");
+        }
     }
 
     [TestMethod]
@@ -168,5 +174,5 @@ public sealed class PartIdentifierUiTests
     }
 
     private static void RunSta(Action action)
-        => _dispatcher.Invoke(action);
+        => _dispatcher.InvokeAsync(action).Task.WaitAsync(UiTimeout).GetAwaiter().GetResult();
 }

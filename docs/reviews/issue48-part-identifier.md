@@ -41,3 +41,25 @@ uses its editable ComboBox and Apply button on an STA dispatcher. It checks:
 These tests run in the existing Windows build-and-test CI job. Real artwork and
 pointer interaction remain useful hands-on checks; the fixture does not claim
 perceptual acceptance.
+
+## Test fixture lifecycle correction
+
+Review of the stalled Windows test step found an unbounded teardown wait in the
+new fixture. It started `Dispatcher.Run()` directly, then called
+`Application.Shutdown()` and joined the UI thread. WPF shuts down its dispatcher
+only when the application started that loop through `Application.Run()`; the
+direct dispatcher loop therefore remained running after application shutdown.
+See WPF's `ShutdownImpl` and `RunDispatcher` in
+[Application.cs](https://source.dot.net/PresentationFramework/System/Windows/Application.cs.html).
+
+The fixture now runs its plain, resource-only `Application` through
+`Application.Run()`. No production `App`, startup hooks or `StartupUri` are used.
+Startup readiness, dispatcher operations and the final thread join each have a
+30-second limit, so a lifecycle failure reports a test failure rather than
+blocking the entire job indefinitely. The readiness task does not dispose an
+event that a late-starting thread could still signal.
+
+Local Linux cross-compilation of the Windows test project, using
+`EnableWindowsTargeting=true`, completed with zero warnings and zero errors.
+That checks compilation only; actual WPF execution and teardown must pass the
+Windows CI test step before merge.
