@@ -10,6 +10,9 @@ namespace Flamoris.Cutwork.App;
 public partial class MainWindow
 {
     private bool _refreshingLayers;
+    private string? _semanticNameDocumentToken;
+    private Guid? _semanticNamePartId;
+    private string? _semanticNameValue;
     private static readonly RoutedCommand UndoEdit = new(nameof(UndoEdit), typeof(MainWindow),
         new InputGestureCollection { new KeyGesture(Key.Z, ModifierKeys.Control) });
     private static readonly RoutedCommand RedoEdit = new(nameof(RedoEdit), typeof(MainWindow),
@@ -97,7 +100,18 @@ public partial class MainWindow
             PartAddButton.IsEnabled = document is not null;
             PartDeleteButton.IsEnabled = selectedPart is not null && document!.CanDelete(selectedPart.Id);
             SemanticNameEditor.IsEnabled = SemanticNameApplyButton.IsEnabled = selectedPart is not null;
-            SemanticNameEditor.Text = selectedPart?.SemanticName ?? "";
+            // Session/tool notifications also occur while this editable ComboBox holds an
+            // unapplied preset or custom name. Reload only when its document, target or
+            // authored value changes; unrelated refreshes must not discard the draft.
+            if (_semanticNameDocumentToken != _session.DocumentToken
+                || _semanticNamePartId != selectedPart?.Id
+                || !StringComparer.Ordinal.Equals(_semanticNameValue, selectedPart?.SemanticName))
+            {
+                _semanticNameDocumentToken = _session.DocumentToken;
+                _semanticNamePartId = selectedPart?.Id;
+                _semanticNameValue = selectedPart?.SemanticName;
+                SemanticNameEditor.Text = _semanticNameValue ?? "";
+            }
             DeveloperFixtureMenuItem.IsEnabled = document is not null;
 
             var targetName = selectedPart is null ? null : DisplayName(selectedPart, text);
@@ -168,8 +182,11 @@ public partial class MainWindow
 
     private void SemanticNameApply_Click(object sender, RoutedEventArgs e)
     {
-        if (PartList.SelectedItem is not PartRow row) return;
-        ExecuteEdit(new SetLayerSemanticName(row.Id, SemanticNameEditor.Text));
+        if (_session.SelectedLayerId is not { } id
+            || _session.Document?.GetLayer(id) is not PartLayer part) return;
+        ExecuteEdit(new SetLayerSemanticName(id, SemanticNameEditor.Text));
+        // A normalized no-op has no authored change for RefreshLayerPanel to observe.
+        SemanticNameEditor.Text = part.SemanticName ?? "";
         CanvasView.Focus();
     }
 
