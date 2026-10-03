@@ -28,11 +28,13 @@ There is no format change, new auto-apply behavior or display-name rename.
 `PartIdentifierUiTests` instantiates the actual WPF window without showing it and
 uses its editable ComboBox and Apply button on an STA dispatcher. It checks:
 
-- a selected preset survives real session refreshes before Apply;
+- a selected preset survives real session refreshes and Mask tool hover before
+  Apply;
 - Apply updates the selected Part through shared Undo/Redo and survives `.flimg`
   serialization;
 - custom text survives unrelated notifications and is normalized on Apply;
 - changing the selected Part reloads its identifier;
+- reopening the same document reloads the selected Part without an old draft;
 - a normalized no-op adds no history and still removes pending whitespace;
 - clearing the identifier and selecting Base update the editor correctly.
 

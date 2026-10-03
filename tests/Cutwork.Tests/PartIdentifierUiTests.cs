@@ -63,6 +63,8 @@ public sealed class PartIdentifierUiTests
                 session.Execute(new AddLayer(part));
                 session.Open(session.Document!);
                 session.SelectLayer(part.Id);
+                var maskTool = Field<MaskBrushController>(window, "_maskTool");
+                Field<CanvasInputRouter>(window, "_inputRouter").SetActiveTool(maskTool);
                 var editor = (ComboBox)window.FindName("SemanticNameEditor");
                 var apply = (Button)window.FindName("SemanticNameApplyButton");
 
@@ -74,6 +76,7 @@ public sealed class PartIdentifierUiTests
                 // These real session notifications formerly rewrote the pending preset.
                 session.SelectLayer(part.Id);
                 session.SetPreviewSource(PreviewSource.Original);
+                maskTool.PointerMove(new DocumentPoint(1, 1), CanvasModifiers.None);
                 Assert.AreEqual("eye_left", editor.Text);
                 apply.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
 
@@ -138,6 +141,11 @@ public sealed class PartIdentifierUiTests
                 Assert.AreEqual("", editor.Text);
                 Assert.AreEqual("costume_ribbon_07", first.SemanticName);
 
+                editor.Text = "unsaved_draft";
+                session.Open(session.Document!);
+                session.SelectLayer(second.Id);
+                Assert.AreEqual("", editor.Text);
+
                 session.SelectLayer(session.Document!.Base.Id);
                 Assert.IsFalse(editor.IsEnabled);
                 Assert.IsFalse(apply.IsEnabled);
@@ -146,8 +154,10 @@ public sealed class PartIdentifierUiTests
         });
     }
 
-    private static EditorSession Session(MainWindow window) =>
-        (EditorSession)typeof(MainWindow).GetField("_session",
+    private static EditorSession Session(MainWindow window) => Field<EditorSession>(window, "_session");
+
+    private static T Field<T>(MainWindow window, string name) =>
+        (T)typeof(MainWindow).GetField(name,
             BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
 
     private static void CloseWithoutPrompt(MainWindow window)
