@@ -419,16 +419,7 @@ public partial class DocumentCanvas : UserControl
         }
         if (_presentedPartMaskRevision != snapshot.MaskRevision)
         {
-            var mask = snapshot.Mask.Span;
-            var overlayPixels = new byte[checked(mask.Length * 4)];
-            for (var index = 0; index < mask.Length; index++)
-            {
-                var alpha = (byte)(mask[index] * 88 / 255);
-                overlayPixels[index * 4] = (byte)(170 * alpha / 255);
-                overlayPixels[index * 4 + 1] = (byte)(70 * alpha / 255);
-                overlayPixels[index * 4 + 2] = (byte)(235 * alpha / 255);
-                overlayPixels[index * 4 + 3] = alpha;
-            }
+            var overlayPixels = DisplayPixels.TintMask(snapshot.Mask.Span, 170, 70, 235, 88);
             var bitmap = new WriteableBitmap(snapshot.MaskBounds.Width, snapshot.MaskBounds.Height, 96, 96,
                 PixelFormats.Pbgra32, null);
             bitmap.WritePixels(new Int32Rect(0, 0, snapshot.MaskBounds.Width, snapshot.MaskBounds.Height),
@@ -502,15 +493,7 @@ public partial class DocumentCanvas : UserControl
     private void WriteSelectedMaskRegion(PartLayer part, DocumentRect region)
     {
         var mask = part.CopyMask(region);
-        var pixels = new byte[checked(mask.Length * 4)];
-        for (var index = 0; index < mask.Length; index++)
-        {
-            var alpha = (byte)(mask[index] * 80 / 255);
-            pixels[index * 4] = (byte)(58 * alpha / 255);
-            pixels[index * 4 + 1] = (byte)(11 * alpha / 255);
-            pixels[index * 4 + 2] = (byte)(210 * alpha / 255);
-            pixels[index * 4 + 3] = alpha;
-        }
+        var pixels = DisplayPixels.TintMask(mask, 58, 11, 210, 80);
         // Packed ROI source with an explicit layer-local destination. Using the destination as
         // a source rectangle would make WPF index beyond this intentionally small buffer.
         _selectedMaskBitmap!.WritePixels(new Int32Rect(0, 0, region.Width, region.Height),
@@ -617,16 +600,8 @@ public partial class DocumentCanvas : UserControl
         if (snapshot.Source is not { } source || snapshot.Transform is not { } transform) return;
         if (!ReferenceEquals(_presentedPatchSource, source))
         {
-            var straight = source.StraightBgra.Span;
-            var premultiplied = new byte[straight.Length];
-            for (var offset = 0; offset < straight.Length; offset += 4)
-            {
-                var alpha = straight[offset + 3];
-                premultiplied[offset] = CompositeCache.Multiply(straight[offset], alpha);
-                premultiplied[offset + 1] = CompositeCache.Multiply(straight[offset + 1], alpha);
-                premultiplied[offset + 2] = CompositeCache.Multiply(straight[offset + 2], alpha);
-                premultiplied[offset + 3] = alpha;
-            }
+            var premultiplied = source.StraightBgra.ToArray();
+            DisplayPixels.PremultiplyInPlace(premultiplied);
             var width = source.SourceBounds.Width;
             var height = source.SourceBounds.Height;
             var bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Pbgra32, null);

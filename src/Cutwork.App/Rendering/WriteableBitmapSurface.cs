@@ -49,7 +49,7 @@ public sealed class WriteableBitmapSurface
             PixelFormats.Pbgra32,
             null);
         var displayPixels = original.CopyPixelBytes();
-        PremultiplyInPlace(displayPixels);
+        DisplayPixels.PremultiplyInPlace(displayPixels);
         bitmap.WritePixels(
             new Int32Rect(0, 0, dimensions.Width, dimensions.Height),
             displayPixels,
@@ -61,17 +61,4 @@ public sealed class WriteableBitmapSurface
         TransferredPixelCount += (long)dimensions.Width * dimensions.Height;
     }
 
-    private static void PremultiplyInPlace(Span<byte> bgra32)
-    {
-        for (var offset = 0; offset < bgra32.Length; offset += 4)
-        {
-            var alpha = bgra32[offset + 3];
-            bgra32[offset] = Premultiply(bgra32[offset], alpha);
-            bgra32[offset + 1] = Premultiply(bgra32[offset + 1], alpha);
-            bgra32[offset + 2] = Premultiply(bgra32[offset + 2], alpha);
-        }
-    }
-
-    private static byte Premultiply(byte color, byte alpha) =>
-        CompositeCache.Multiply(color, alpha);
 }
