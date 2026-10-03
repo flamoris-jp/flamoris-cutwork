@@ -103,8 +103,13 @@ Build and test:
 
 ```powershell
 dotnet build Cutwork.sln --configuration Release
-dotnet test Cutwork.sln --configuration Release --no-build
+dotnet test Cutwork.sln --configuration Release --no-build --framework net10.0-windows
 ```
+
+Core/Imaging regression tests also run without WPF on Linux. See the
+[UI responsibility audit and portable test boundary](docs/ui-responsibilities-and-portable-tests.md)
+for the reviewed scope and local command; Windows CI remains authoritative for
+the complete test suite, editor/bridge and portable package.
 
 For normal use, download the `FLAMORIS-Cutwork-win-x64` CI artifact,
 extract its ZIP completely, and start `Cutwork.exe`. The portable build is

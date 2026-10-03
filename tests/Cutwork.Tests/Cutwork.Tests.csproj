@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
+    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
+    <UseWPF Condition="'$(TargetFramework)' == 'net10.0-windows'">true</UseWPF>
+    <EnableDefaultCompileItems Condition="'$(TargetFramework)' == 'net10.0'">false</EnableDefaultCompileItems>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -9,12 +10,35 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.4.0" />
     <PackageReference Include="MSTest.TestFramework" Version="4.4.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.2.0" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.2.0" Condition="'$(TargetFramework)' == 'net10.0-windows'" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.Imaging\Cutwork.Imaging.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <ProjectReference Include="..\..\src\Cutwork.App\Cutwork.App.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.Bridge\Cutwork.Bridge.csproj" />
+  </ItemGroup>
+  <!-- Reuse reviewed portable tests; new WPF/MCP tests cannot leak into Linux by default. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Compile Include="Usings.cs" />
+    <Compile Include="CanvasInputRouterTests.cs" />
+    <Compile Include="CloneRepairTests.cs" />
+    <Compile Include="CompositeTests.cs" />
+    <Compile Include="DeveloperFixtureTests.cs" />
+    <Compile Include="DisplayPixelsTests.cs" />
+    <Compile Include="DocumentRestoreTests.cs" />
+    <Compile Include="EditHistoryTests.cs" />
+    <Compile Include="EditorSessionTests.cs" />
+    <Compile Include="LayerDomainTests.cs" />
+    <Compile Include="MaskBrushTests.cs" />
+    <Compile Include="OriginalAssetTests.cs" />
+    <Compile Include="PartToolTests.cs" />
+    <Compile Include="PatchWorkflowTests.cs" />
+    <Compile Include="PolygonGuriguriTests.cs" />
+    <Compile Include="RepairFinishingTests.cs" />
+    <Compile Include="StrokeSamplerTests.cs" />
+    <Compile Include="ViewportTransformTests.cs" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,31 @@
+name: Portable Core Tests
+
+on:
+  pull_request:
+    paths:
+      - "src/Cutwork.Core/**"
+      - "src/Cutwork.Imaging/**"
+      - "tests/Cutwork.Tests/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - "NuGet.config"
+      - ".github/workflows/portable-core-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable-core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      # Limit the restore graph as well as execution: Imaging also has a Windows target.
+      - run: dotnet test tests/Cutwork.Tests/Cutwork.Tests.csproj -c Release -p:TargetFrameworks=net10.0
