@@ -41,7 +41,7 @@ public partial class DocumentCanvas : UserControl
     {
         InitializeComponent();
         Loaded += (_, _) => RefreshDpi();
-        SizeChanged += (_, _) => OnViewportSizeChanged();
+        SizeChanged += (_, e) => OnViewportSizeChanged(e.PreviousSize, e.NewSize);
         MouseMove += Canvas_MouseMove;
         MouseLeave += (_, _) =>
         {
@@ -229,12 +229,19 @@ public partial class DocumentCanvas : UserControl
         RefreshDpi();
     }
 
-    private void OnViewportSizeChanged()
+    internal void OnViewportSizeChanged(Size previousSize, Size newSize)
     {
         if (_autoFit)
         {
             Fit();
+            return;
         }
+
+        if (_session?.Document is null) return;
+        _session.Viewport.ResizeViewport(
+            new ViewportSize(previousSize.Width, previousSize.Height),
+            new ViewportSize(newSize.Width, newSize.Height));
+        ApplyViewport();
     }
 
     private void Canvas_MouseWheel(object sender, MouseWheelEventArgs e)

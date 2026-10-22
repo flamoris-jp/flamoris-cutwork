@@ -75,6 +75,18 @@ public sealed class ViewportTransform
         PanY += deltaY;
     }
 
+    public void ResizeViewport(ViewportSize previous, ViewportSize current)
+    {
+        if (previous.Width <= 0 || previous.Height <= 0
+            || current.Width <= 0 || current.Height <= 0)
+        {
+            return;
+        }
+
+        PanX += (current.Width - previous.Width) / 2.0;
+        PanY += (current.Height - previous.Height) / 2.0;
+    }
+
     public void SetDpiScale(double scaleX, double scaleY, ViewportPoint anchor)
     {
         if (!double.IsFinite(scaleX) || scaleX <= 0)
