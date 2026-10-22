@@ -242,6 +242,35 @@ public sealed class BitmapPresentationTests
         });
     }
 
+    [TestMethod]
+    public void ManualViewportRecentersWhenCanvasResizes()
+    {
+        RunSta(() =>
+        {
+            var session = new EditorSession();
+            session.Open(new CutworkDocument(new OriginalAsset(
+                "landscape.png", new PixelSize(400, 200), 1600, new byte[400 * 200 * 4])));
+            var canvas = new DocumentCanvas();
+            canvas.AttachSession(session);
+            canvas.Measure(new Size(800, 600));
+            canvas.Arrange(new Rect(0, 0, 800, 600));
+            canvas.Present(session.Document!);
+            canvas.ActualSize();
+            session.Viewport.ZoomAt(new ViewportPoint(350, 260), 1.25);
+            var expected = session.Viewport.ViewportToDocument(new ViewportPoint(400, 300));
+
+            canvas.OnViewportSizeChanged(new Size(800, 600), new Size(1200, 500));
+
+            var actual = session.Viewport.ViewportToDocument(new ViewportPoint(600, 250));
+            Assert.AreEqual(expected.X, actual.X, 1e-9);
+            Assert.AreEqual(expected.Y, actual.Y, 1e-9);
+            var transform = (System.Windows.Media.MatrixTransform)
+                ((Image)canvas.FindName("ImageSurface")).RenderTransform;
+            Assert.AreEqual(session.Viewport.Projection.OffsetX, transform.Matrix.OffsetX, 1e-9);
+            Assert.AreEqual(session.Viewport.Projection.OffsetY, transform.Matrix.OffsetY, 1e-9);
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? failure = null;

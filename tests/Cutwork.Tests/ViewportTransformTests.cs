@@ -79,6 +79,48 @@ public sealed class ViewportTransformTests
         Assert.AreEqual(expected.Y, actual.Y, 1e-8);
     }
 
+    [TestMethod]
+    [DataRow(600, 1200)]
+    [DataRow(1600, 600)]
+    public void FitKeepsPortraitAndLandscapeInsideViewport(int documentWidth, int documentHeight)
+    {
+        var transform = new ViewportTransform();
+        var viewport = new ViewportSize(1000, 700);
+
+        transform.Fit(new PixelSize(documentWidth, documentHeight), viewport);
+
+        var topLeft = transform.DocumentToViewport(new DocumentPoint(0, 0));
+        var bottomRight = transform.DocumentToViewport(new DocumentPoint(documentWidth, documentHeight));
+        Assert.IsTrue(topLeft.X >= 16.0 - 1e-9);
+        Assert.IsTrue(topLeft.Y >= 16.0 - 1e-9);
+        Assert.IsTrue(bottomRight.X <= viewport.Width - 16.0 + 1e-9);
+        Assert.IsTrue(bottomRight.Y <= viewport.Height - 16.0 + 1e-9);
+        Assert.AreEqual(viewport.Width / 2.0, (topLeft.X + bottomRight.X) / 2.0, 1e-9);
+        Assert.AreEqual(viewport.Height / 2.0, (topLeft.Y + bottomRight.Y) / 2.0, 1e-9);
+    }
+
+    [TestMethod]
+    [DataRow(600, 1200)]
+    [DataRow(1600, 600)]
+    public void ResizeAfterZoomKeepsSameDocumentPointAtViewportCenter(int documentWidth, int documentHeight)
+    {
+        var transform = new ViewportTransform();
+        var previous = new ViewportSize(1000, 700);
+        var current = new ViewportSize(1400, 560);
+        transform.Fit(new PixelSize(documentWidth, documentHeight), previous);
+        transform.ZoomAt(new ViewportPoint(420, 310), 1.35);
+        transform.PanBy(27, -19);
+        var expected = transform.ViewportToDocument(
+            new ViewportPoint(previous.Width / 2.0, previous.Height / 2.0));
+
+        transform.ResizeViewport(previous, current);
+
+        var actual = transform.ViewportToDocument(
+            new ViewportPoint(current.Width / 2.0, current.Height / 2.0));
+        Assert.AreEqual(expected.X, actual.X, 1e-9);
+        Assert.AreEqual(expected.Y, actual.Y, 1e-9);
+    }
+
     private static ViewportTransform CreateTransformedViewport()
     {
         var transform = new ViewportTransform();
