@@ -4,12 +4,14 @@
              Focusable="True"
              ClipToBounds="True">
     <Grid Background="#17181A">
-        <Image x:Name="ImageSurface"
-               HorizontalAlignment="Left"
-               VerticalAlignment="Top"
-               Stretch="Fill"
-               RenderTransformOrigin="0,0"
-               RenderOptions.BitmapScalingMode="HighQuality" />
+        <Canvas IsHitTestVisible="False">
+            <Image x:Name="ImageSurface"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   Stretch="Fill"
+                   RenderTransformOrigin="0,0"
+                   RenderOptions.BitmapScalingMode="HighQuality" />
+        </Canvas>
         <Canvas x:Name="OverlaySurface" IsHitTestVisible="False">
             <Image x:Name="SelectedMaskOverlay"
                    HorizontalAlignment="Left"
