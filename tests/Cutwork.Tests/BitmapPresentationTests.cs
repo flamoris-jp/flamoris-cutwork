@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using Flamoris.Cutwork.App.Controls;
@@ -268,6 +269,46 @@ public sealed class BitmapPresentationTests
                 ((Image)canvas.FindName("ImageSurface")).RenderTransform;
             Assert.AreEqual(session.Viewport.Projection.OffsetX, transform.Matrix.OffsetX, 1e-9);
             Assert.AreEqual(session.Viewport.Projection.OffsetY, transform.Matrix.OffsetY, 1e-9);
+        });
+    }
+
+    [TestMethod]
+    [DataRow(200, 400, 500, 300)]
+    [DataRow(400, 200, 300, 500)]
+    public void FitRendersWholePortraitAndLandscapeWithoutPreTransformLayoutClip(
+        int documentWidth, int documentHeight, int viewportWidth, int viewportHeight)
+    {
+        RunSta(() =>
+        {
+            var pixels = Enumerable.Repeat(new byte[] { 255, 255, 255, 255 },
+                documentWidth * documentHeight).SelectMany(pixel => pixel).ToArray();
+            var session = new EditorSession();
+            session.Open(new CutworkDocument(new OriginalAsset(
+                "fixture.png", new(documentWidth, documentHeight), documentWidth * 4, pixels)));
+            var canvas = new DocumentCanvas();
+            canvas.AttachSession(session);
+            canvas.Measure(new Size(viewportWidth, viewportHeight));
+            canvas.Arrange(new Rect(0, 0, viewportWidth, viewportHeight));
+            canvas.Present(session.Document!);
+            canvas.Measure(new Size(viewportWidth, viewportHeight));
+            canvas.Arrange(new Rect(0, 0, viewportWidth, viewportHeight));
+            canvas.UpdateLayout();
+
+            var bottomRight = session.Viewport.DocumentToViewport(
+                new DocumentPoint(documentWidth, documentHeight));
+            var rendered = new RenderTargetBitmap(
+                viewportWidth, viewportHeight, 96, 96, PixelFormats.Pbgra32);
+            rendered.Render(canvas);
+            var buffer = new byte[viewportWidth * viewportHeight * 4];
+            rendered.CopyPixels(buffer, viewportWidth * 4, 0);
+            var sampleX = (int)Math.Floor(bottomRight.X) - 2;
+            var sampleY = (int)Math.Floor(bottomRight.Y) - 2;
+            var offset = (sampleY * viewportWidth + sampleX) * 4;
+
+            Assert.IsTrue(buffer[offset] > 240, "The bitmap edge was clipped before rendering.");
+            Assert.IsTrue(buffer[offset + 1] > 240, "The bitmap edge was clipped before rendering.");
+            Assert.IsTrue(buffer[offset + 2] > 240, "The bitmap edge was clipped before rendering.");
+            Assert.IsTrue(buffer[offset + 3] > 240, "The bitmap edge was clipped before rendering.");
         });
     }
 
