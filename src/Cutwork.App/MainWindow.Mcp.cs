@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Mcp;
+using Flamoris.Capture.Wpf;
 using Flamoris.Mcp.Core;
 using Flamoris.Mcp.Wpf;
 
@@ -12,6 +13,7 @@ namespace Flamoris.Cutwork.App;
 
 public partial class MainWindow
 {
+    private EmbeddedWindowCapture? _capture;
     private CutworkMcpHost? _mcpHost;
     private McpBoundary? _mcpBoundary;
     private CapabilityGrant? _mcpGrant;
@@ -28,31 +30,35 @@ public partial class MainWindow
             "FLAMORIS.Cutwork", Path.Combine(AppContext.BaseDirectory, "mcp", "Flamoris.Mcp.Bridge.exe"),
             AttachMcp, () => _session.Document is not null, () => LocalizationService.Current.Culture);
         McpStatusPanel.Content = _mcpUi.StatusIndicator;
-        _session.DocumentReplacing += (_, _) => StopMcp();
+        _capture = new EmbeddedWindowCapture(this, StopMcp);
+        CaptureStatusPanel.Content = _capture.Control;
+        _session.DocumentReplacing += (_, _) => { _capture.Stop(); StopMcp(); };
         Closed += (_, _) => ShutdownMcp();
         Dispatcher.ShutdownStarted += (_, _) => ShutdownMcp();
         UpdateMcp();
     }
     private async Task<McpDesktopAttachment> AttachMcp(McpPermission permission)
     {
-        var editor = new LiveEditor(_session, permission, HumanBusy, SetRemoteEditing,
-            CutworkLog.Current, currentGrant: () => _mcpGrant);
-        var boundary = new McpBoundary(_mcpHost!, CutworkMcpTools.Create(editor), new McpOptions {
-            Permission = permission, PipeName = "flamoris-cutwork-" + Guid.NewGuid().ToString("N"),
-            MaxConcurrentRequests = 1, MaxRequestBytes = LiveLimits.FrameBytes,
-        }, new McpDiagnostics(CutworkLog.Current));
+        var captureLease = _capture!.BeginConnection();
+        McpBoundary? boundary = null;
         try
         {
+            var editor = new LiveEditor(_session, permission, HumanBusy, SetRemoteEditing,
+                CutworkLog.Current, currentGrant: () => _mcpGrant);
+            boundary = new McpBoundary(_mcpHost!, CutworkMcpTools.Create(editor).Concat(_capture.Tools()), new McpOptions {
+                Permission = permission, PipeName = "flamoris-cutwork-" + Guid.NewGuid().ToString("N"),
+                MaxConcurrentRequests = 1, MaxRequestBytes = LiveLimits.FrameBytes,
+            }, new McpDiagnostics(CutworkLog.Current));
             _mcpBoundary = boundary;
             _mcpGrant = await boundary.EnableAsync(permission);
-            return new(boundary, _mcpGrant);
+            return new(boundary, _mcpGrant, () => { captureLease.Dispose(); return Task.CompletedTask; });
         }
-        catch { boundary.Dispose(); throw; }
+        catch { captureLease.Dispose(); boundary?.Dispose(); throw; }
     }
     private void LocalizeMcp() => _mcpUi?.Refresh();
     private void UpdateMcp() { _mcpUi?.Refresh(); _mcpUi?.NotifyHostReady(); }
     private void StopMcp() { _mcpUi?.Invalidate(); _mcpGrant = null; _mcpBoundary = null; SetRemoteEditing(false); }
-    private void ShutdownMcp() { _mcpUi?.Shutdown(); _mcpHost?.Shutdown(); }
+    private void ShutdownMcp() { _capture?.Dispose(); _mcpUi?.Shutdown(); _mcpHost?.Shutdown(); }
     private Task DispatchMcp(Action action, CancellationToken cancellationToken)
     {
         if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)

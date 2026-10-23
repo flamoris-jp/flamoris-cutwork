@@ -188,6 +188,7 @@
 
         <Border DockPanel.Dock="Bottom" Background="#292B2F" Padding="8,5">
             <DockPanel>
+                <ContentControl x:Name="CaptureStatusPanel" DockPanel.Dock="Right" Margin="12,0,0,0" />
                 <ContentControl x:Name="McpStatusPanel" DockPanel.Dock="Right" Margin="12,0,0,0" />
                 <TextBlock x:Name="StatusText" Foreground="#E7E7E7" />
             </DockPanel>

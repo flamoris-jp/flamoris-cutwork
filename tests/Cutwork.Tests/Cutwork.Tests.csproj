@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
-    <UseWPF Condition="'$(TargetFramework)' == 'net10.0-windows'">true</UseWPF>
+    <TargetFrameworks>net10.0;net10.0-windows10.0.19041.0</TargetFrameworks>
+    <UseWPF Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">true</UseWPF>
     <EnableDefaultCompileItems Condition="'$(TargetFramework)' == 'net10.0'">false</EnableDefaultCompileItems>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
@@ -10,13 +10,13 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.4.0" />
     <PackageReference Include="MSTest.TestFramework" Version="4.4.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.2.0" Condition="'$(TargetFramework)' == 'net10.0-windows'" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.3.1" Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.Imaging\Cutwork.Imaging.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
     <ProjectReference Include="..\..\src\Cutwork.App\Cutwork.App.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.Bridge\Cutwork.Bridge.csproj" />
   </ItemGroup>
