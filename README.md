@@ -269,7 +269,8 @@ The shared MCP UI migration and package release order are documented in [shared 
 
 ## AI screen observation / AIの画面確認
 
-The embedded Capture candidate adds opt-in **画面共有** to the bottom bar.
-Enable it locally, then reconnect the existing MCP connection to use
-`capture.screenshot.get` (`{"input":{}}`). No separate Capture EXE is needed.
-See [usage, build dependency and Windows acceptance](docs/embedded-capture.md).
+The embedded Capture candidate includes screen observation whenever the editor's
+MCP connection is enabled. Connect normally (read-only or edit), then request
+`capture.screenshot.get` (`{"input":{}}`). The bottom bar shows **MCP画面共有中**.
+No separate sharing checkbox or Capture EXE is needed; disconnecting MCP stops
+sharing. See [usage, build dependency and Windows acceptance](docs/embedded-capture.md).

@@ -10,21 +10,23 @@ window selection is installed. The normal editor MCP connection is reused.
 ## Use
 
 1. Start the editor and open artwork/a project.
-2. Enable **画面共有** in the bottom bar and acknowledge the safety notice.
-3. Connect/reconnect using the existing **MCP / AI** menu (read-only or edit).
-4. Request `capture.screenshot.get` with `{"input":{}}` through that editor's
-   connection. `capture.session.get` reports consent and bounded image limits.
+2. Connect using the existing **MCP / AI** menu (read-only or edit). The connection
+   also authorizes screenshots of this editor window; no additional checkbox or
+   safety dialog is required.
+3. Request `capture.screenshot.get` with `{"input":{}}` through that editor's
+   connection. `capture.session.get` reports the session and bounded image limits.
    In Hub these names are prefixed with the editor namespace.
-5. Turn sharing OFF to revoke pending/new images. Changing sharing invalidates
-   the MCP connection, so reconnect to keep using ordinary editor tools.
+4. Disconnect MCP to stop sharing. Failed/cancelled connection attempts also stop
+   their capture session. A stale connection cannot stop a newer connection.
 
-The checkbox displays **画面共有中** in yellow while enabled and always starts OFF.
-Right-click it to restore the safety notice. Notice suppression is per application;
-sharing consent is never saved. Lock/disconnect/suspend/window loss/exit stops
-sharing. Unlock/restart never resumes it. Minimized/hidden windows fail capture;
+The bottom bar displays **MCP画面共有中** in yellow during the MCP attachment.
+There is no independent saved sharing preference. Lock/disconnect/suspend/window
+loss/exit revokes the current capture session; subsequent connections follow the
+existing MCP provider/reconnect settings. Minimized/hidden windows fail capture;
 there is no desktop fallback. Separate modal HWNDs are outside the image.
 Screenshots use Capture's default bounded JPEG (max edge 1280, <=1 MiB); callers
 may request ROI, PNG, or max edge up to 1920. No images are written to disk.
+The standalone Capture EXE retains its separate consent controls and notice.
 
 ## Build ownership
 
@@ -45,11 +47,11 @@ results. Windows build 19041 is the API floor; WGC/D3D11 support is required.
 
 - Build/portable package must include Capture DLLs and MCP Core 1.3.1.
 - Existing document/edit/Undo tests must still pass.
-- Windows: request screenshots with sharing OFF/ON in read-only and edit modes;
+- Windows: connect MCP and immediately request screenshots in read-only/edit modes;
   verify canvas, selections and panels reflect the current window.
-- Change sharing during a pending shot; no old pixels may be disclosed.
+- Disconnect during a pending shot; no old pixels may be disclosed.
 - Lock/unlock, suspend/resume, minimize, replace a document and close/reopen;
-  verify revoked grants fail and sharing never resumes after OS lock or restart.
+  verify revoked grants fail and only a new valid MCP attachment permits images.
 - Existing normal MCP edits and ordinary manual editing remain usable.
 
 Cross-platform builds cannot certify real WGC/GPU/DPI behavior.
