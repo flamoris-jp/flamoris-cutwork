@@ -37,7 +37,7 @@ Current milestone:
 - Phase 8: self-contained Windows packaging complete;
 - Phase 9-1: separate Parts / Layers panels, contextual tool options and Part-owned Repairs complete;
 - Phase 9-2: Fixed / Offset Clone modes complete;
-- Live MCP and managed Manual / OpenAI tunnel-client connections complete (`Flamoris.Mcp.Core` 1.2.0);
+- Live MCP and managed Manual / OpenAI tunnel-client connections complete (`Flamoris.Mcp.Core` 1.3.1);
 - current: v0.1 hands-on fixes and workflow polish, with remaining visual/performance acceptance tracked explicitly.
 
 The current writer is `.flimg` **v2**; v1 reading/migration remains supported.
@@ -54,7 +54,7 @@ See [connection and operation guide](docs/live-mcp.md) and
 [MCP Core migration ADR](docs/decisions/0003-mcp-core-migration.md) and
 [managed connection ADR](docs/decisions/0004-managed-mcp-connections.md). Shared
 transport, capability and lifecycle infrastructure comes from
-`Flamoris.Mcp.Core` 1.2.0;
+`Flamoris.Mcp.Core` 1.3.1;
 no filesystem tools are exposed.
 
 ## Design authority
@@ -266,3 +266,10 @@ FLAMORISのキャラクター、キャラクターデザイン、イラスト、
 ## Shared desktop MCP connection
 
 The shared MCP UI migration and package release order are documented in [shared MCP connection](docs/shared-mcp-connection.md).
+
+## AI screen observation / AIの画面確認
+
+The embedded Capture candidate adds opt-in **画面共有** to the bottom bar.
+Enable it locally, then reconnect the existing MCP connection to use
+`capture.screenshot.get` (`{"input":{}}`). No separate Capture EXE is needed.
+See [usage, build dependency and Windows acceptance](docs/embedded-capture.md).

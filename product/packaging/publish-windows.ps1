@@ -58,6 +58,10 @@ Remove-ExactPath -Path $packageRoot
 Remove-ExactPath -Path $zipPath
 Remove-ExactPath -Path $inventoryPath
 
+# Restore the reviewed Capture source dependency before evaluating project references.
+& git -C $repositoryRoot submodule update --init --recursive -- dependencies/flamoris-capture
+if ($LASTEXITCODE -ne 0) { throw 'Capture submodule initialization failed.' }
+
 Write-Host "Publishing Cutwork ($Configuration, $RuntimeIdentifier, self-contained)..."
 & dotnet publish $projectPath `
     --configuration $Configuration `
@@ -92,6 +96,10 @@ $requiredPublishFiles = @(
     "Flamoris.Logging.dll",
     "Flamoris.Mcp.Core.dll",
     "Flamoris.Mcp.Wpf.dll",
+    "Flamoris.Capture.Wpf.dll",
+    "Flamoris.Capture.Core.dll",
+    "Flamoris.Capture.Windows.dll",
+    "Flamoris.Capture.Mcp.dll",
     "coreclr.dll",
     "hostfxr.dll",
     "hostpolicy.dll",
@@ -110,8 +118,8 @@ foreach ($coreAssembly in @(
     (Join-Path $bridgePath "Flamoris.Mcp.Core.dll")
 )) {
     $coreProductVersion = (Get-Item -LiteralPath $coreAssembly).VersionInfo.ProductVersion
-    if ($coreProductVersion -notmatch '^1\.2\.0(?:[+.-]|$)') {
-        throw "Packaged MCP Core must be 1.2.0; found $coreProductVersion at $coreAssembly"
+    if ($coreProductVersion -notmatch '^1\.3\.1(?:[+.-]|$)') {
+        throw "Packaged MCP Core must be 1.3.1; found $coreProductVersion at $coreAssembly"
     }
 }
 

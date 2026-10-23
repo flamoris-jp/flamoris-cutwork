@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Mcp;
+using Flamoris.Capture.Wpf;
 using Flamoris.Mcp.Core;
 using Flamoris.Mcp.Wpf;
 
@@ -12,6 +13,7 @@ namespace Flamoris.Cutwork.App;
 
 public partial class MainWindow
 {
+    private EmbeddedWindowCapture? _capture;
     private CutworkMcpHost? _mcpHost;
     private McpBoundary? _mcpBoundary;
     private CapabilityGrant? _mcpGrant;
@@ -28,7 +30,10 @@ public partial class MainWindow
             "FLAMORIS.Cutwork", Path.Combine(AppContext.BaseDirectory, "mcp", "Flamoris.Mcp.Bridge.exe"),
             AttachMcp, () => _session.Document is not null, () => LocalizationService.Current.Culture);
         McpStatusPanel.Content = _mcpUi.StatusIndicator;
-        _session.DocumentReplacing += (_, _) => StopMcp();
+        _capture = new EmbeddedWindowCapture(this,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FLAMORIS", "Cutwork", "capture-preferences.json"), StopMcp);
+        CaptureStatusPanel.Content = _capture.Control;
+        _session.DocumentReplacing += (_, _) => { _capture.Stop(); StopMcp(); };
         Closed += (_, _) => ShutdownMcp();
         Dispatcher.ShutdownStarted += (_, _) => ShutdownMcp();
         UpdateMcp();
@@ -37,7 +42,7 @@ public partial class MainWindow
     {
         var editor = new LiveEditor(_session, permission, HumanBusy, SetRemoteEditing,
             CutworkLog.Current, currentGrant: () => _mcpGrant);
-        var boundary = new McpBoundary(_mcpHost!, CutworkMcpTools.Create(editor), new McpOptions {
+        var boundary = new McpBoundary(_mcpHost!, CutworkMcpTools.Create(editor).Concat(_capture!.Tools()), new McpOptions {
             Permission = permission, PipeName = "flamoris-cutwork-" + Guid.NewGuid().ToString("N"),
             MaxConcurrentRequests = 1, MaxRequestBytes = LiveLimits.FrameBytes,
         }, new McpDiagnostics(CutworkLog.Current));
@@ -52,7 +57,7 @@ public partial class MainWindow
     private void LocalizeMcp() => _mcpUi?.Refresh();
     private void UpdateMcp() { _mcpUi?.Refresh(); _mcpUi?.NotifyHostReady(); }
     private void StopMcp() { _mcpUi?.Invalidate(); _mcpGrant = null; _mcpBoundary = null; SetRemoteEditing(false); }
-    private void ShutdownMcp() { _mcpUi?.Shutdown(); _mcpHost?.Shutdown(); }
+    private void ShutdownMcp() { _capture?.Dispose(); _mcpUi?.Shutdown(); _mcpHost?.Shutdown(); }
     private Task DispatchMcp(Action action, CancellationToken cancellationToken)
     {
         if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)

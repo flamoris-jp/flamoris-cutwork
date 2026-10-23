@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWPF>true</UseWPF>
     <RootNamespace>Flamoris.Cutwork.App</RootNamespace>
     <AssemblyName>Cutwork</AssemblyName>
@@ -15,8 +16,9 @@
     <Copyright>Copyright © 2026 FLAMORIS contributors</Copyright>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../dependencies/flamoris-capture/src/Flamoris.Capture.Wpf/Flamoris.Capture.Wpf.csproj" />
     <PackageReference Include="Flamoris.Logging" Version="1.0.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.2.0" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.3.1" />
     <ProjectReference Include="..\Cutwork.Mcp\Cutwork.Mcp.csproj" />
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
@@ -25,6 +27,6 @@
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Flamoris.Mcp.Wpf" Version="1.2.0" />
+    <PackageReference Include="Flamoris.Mcp.Wpf" Version="1.3.1" />
   </ItemGroup>
 </Project>

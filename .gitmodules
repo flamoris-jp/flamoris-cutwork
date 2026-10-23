@@ -1,0 +1,3 @@
+[submodule "dependencies/flamoris-capture"]
+	path = dependencies/flamoris-capture
+	url = https://github.com/flamoris-jp/flamoris-capture.git
