@@ -207,3 +207,12 @@ canvas-focus keyboard Ctrl+Z/Ctrl+Y; Japanese/English copy flow; 100/125/150/200
 DPI. Different-user, elevation and separate-machine SMB tests are not implied by
 same-user automated pipe tests. Intended local AI client setup is also separate
 from official SDK interoperability.
+
+## Proposed AI repair and saving extensions (not implemented)
+
+[ADR 0006](decisions/0006-ai-repair-and-project-checkpoints.md) proposes transformed/soft Clone,
+frozen Composite sampling, bounded inspection and candidate commit, finishing tools,
+and separately authorized revisioned checkpoint/save operations. These are design names,
+not tools available in this release. Existing denial of file lifecycle calls remains in
+force until the new exact-target contract is implemented and reviewed. See the
+[AI operation guide](ai-guide/README.md) for current hands-on findings.
