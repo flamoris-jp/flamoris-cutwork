@@ -274,3 +274,11 @@ MCP connection is enabled. Connect normally (read-only or edit), then request
 `capture.screenshot.get` (`{"input":{}}`). The bottom bar shows **MCP画面共有中**.
 No separate sharing checkbox or Capture EXE is needed; disconnecting MCP stops
 sharing. See [usage, build dependency and Windows acceptance](docs/embedded-capture.md).
+
+## AI repair guide and proposed extensions
+
+- [AI guide](docs/ai-guide/README.md): hands-on repair findings, visual acceptance and operation notes.
+- [AI repair and revisioned project saves — proposed, not implemented](docs/decisions/0006-ai-repair-and-project-checkpoints.md): transformed Clone sampling, frozen Composite sources, trial/commit tools, and exact-target checkpoint/save contracts.
+
+Current runtime tools and permissions remain those in [Live MCP](docs/live-mcp.md).
+The design does not enable AI saving in existing builds.
