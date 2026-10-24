@@ -1,6 +1,6 @@
 # Embedded window observation / 画面共有
 
-Implemented candidate, 2026-10-24. Real Windows acceptance is pending.
+Implemented candidate, 2026-10-24. The existing Hub catalog was refreshed to 11 tools, and the external client discovered the two embedded Capture tools. Physical image and revoke/lifecycle acceptance remain pending; catalog visibility alone is not image acceptance.
 
 The editor embeds `Flamoris.Capture.Wpf` over Capture Core/Windows/Mcp.
 The editor remains authoritative for its document, commands and Undo/Redo.
