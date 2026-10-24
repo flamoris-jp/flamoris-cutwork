@@ -42,3 +42,11 @@ An interactive Windows desktop is required for this check; CI does not claim it.
 6. Move/zoom heavily, export Composite PNG, and confirm exported dimensions and pixels are viewport-independent.
 7. Export Layer Handoff and inspect `handoff.json`, Part crops, frozen Patch-local pixels, and Repair crops.
 8. Try a damaged or unsupported `.flimg`; confirm a localized error and no replacement of the current live document.
+
+## Proposed AI revisioned saving (not implemented)
+
+[ADR 0006](decisions/0006-ai-repair-and-project-checkpoints.md) defines a proposed
+exact-target MCP checkpoint/save extension using independent, validated v2 `.flimg`
+versions. Persistent checkpoint IDs differ from concurrency and history revisions.
+Checkpoint-only success does not clear dirty state; normal Save may clear it only after
+the current working file is durably replaced. Existing UI-only saving remains current.
