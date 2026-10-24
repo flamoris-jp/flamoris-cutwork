@@ -75,6 +75,7 @@
                 <Separator />
                 <MenuItem x:Name="SaveMenuItem" IsEnabled="False" Click="SaveMenuItem_Click" />
                 <MenuItem x:Name="SaveAsMenuItem" IsEnabled="False" Click="SaveAsMenuItem_Click" />
+                <MenuItem x:Name="AiSaveMenuItem" IsCheckable="True" Click="AiSaveMenuItem_Click" />
                 <Separator />
                 <MenuItem x:Name="ExitMenuItem" Click="ExitMenuItem_Click" />
             </MenuItem>
@@ -163,6 +164,15 @@
                                  Checked="CloneSamplingMode_Checked" />
                     <TextBlock x:Name="CloneRadiusLabel" VerticalAlignment="Center" Margin="0,0,4,0" />
                     <TextBox x:Name="CloneRadiusEditor" Width="48" Margin="0,0,8,0" />
+                    <TextBlock x:Name="CloneScaleLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="CloneScaleEditor" Width="40" />
+                    <TextBlock x:Name="CloneRotationLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="CloneRotationEditor" Width="40" />
+                    <TextBlock x:Name="CloneHardnessLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="CloneHardnessEditor" Width="40" />
+                    <TextBlock x:Name="CloneOpacityLabel" VerticalAlignment="Center" Margin="4,0" />
+                    <TextBox x:Name="CloneOpacityEditor" Width="40" />
+                    <CheckBox x:Name="CloneCompositeCheck" VerticalAlignment="Center" Margin="4,0" />
                     <Button x:Name="CloneApplyButton" Padding="8,2" Click="CloneApply_Click" />
                 </StackPanel>
                 <StackPanel x:Name="FinishingPropertiesPanel" Orientation="Horizontal" Visibility="Collapsed"

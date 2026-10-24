@@ -23,8 +23,9 @@ OpenAI control-plane API keyはWindows Credential Managerへ保存され、
 
 読み取り専用でも現在の画像ピクセルをクライアントへ公開します。
 編集を許可すると、切り出し・補修・レイヤー編集と共有Undo/Redoが使えます。
-Open/Save/書き出し先の指定、フォルダー閲覧、シェル実行は公開していません。
-保存は通常のWPFメニューから行ってください。
+Open/書き出し先の指定、フォルダー閲覧、シェル実行は公開していません。
+保存は指定済みプロジェクトだけをUIで別途許可すると、版付きのSave/Checkpointを使えます。
+[補修・保存の手順](ai-guide/repair-tools-and-saving.md)を参照してください。
 
 同時接続は1つです。無効化、権限変更、文書を開き直す操作、終了によって
 古い接続は失効します。同じファイルの再Openも、新しく有効化が必要です。
@@ -185,7 +186,8 @@ failures return bounded tool errors. Logs do not contain artwork or arguments.
 | Original/Composite/Part/mask/ROI | Base64 PNG query, bounded; no disk write |
 | Blur/Smudge | UI only in this release |
 | Selection, tool settings, hover, pan/zoom | UI only |
-| Open/import/document replacement, Save/MarkSaved, export, filesystem/process | Denied; later exact-target file grant would require separate review |
+| Exact authorized project checkpoint/save | Exposed as bounded async jobs; separate UI authorization + Edit; no arbitrary path |
+| Open/import/document replacement, direct MarkSaved, export, filesystem/process | Denied |
 | Raw RasterPatch, arbitrary commands/uploads, future operation types | Denied until explicitly reviewed |
 
 ## Verification boundary
@@ -207,3 +209,15 @@ canvas-focus keyboard Ctrl+Z/Ctrl+Y; Japanese/English copy flow; 100/125/150/200
 DPI. Different-user, elevation and separate-machine SMB tests are not implied by
 same-user automated pipe tests. Intended local AI client setup is also separate
 from official SDK interoperability.
+
+## AI repair and revisioned saving
+
+[ADR 0006](decisions/0006-ai-repair-and-project-checkpoints.md) and the
+[operation guide](ai-guide/repair-tools-and-saving.md) define the implemented extensions:
+`repair_inspect`, `clone_candidates`, `repair_commit_candidate`, `project_context`,
+`project_checkpoint`, `project_save`, `project_save_status`, `project_save_cancel`,
+`project_checkpoints_list`; `edit` adds transformed Clone, Blur/Smudge and explicit Patch bake.
+Current names use underscores at tool level and dots for operations within `edit`.
+All ordinary guards, grants, budgets and shared history remain in force.
+Separate UI authorization is required for exact-target saving; old Edit connections acquire
+no file authority automatically. Real-artwork visual/playback QA is separate from code tests.

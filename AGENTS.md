@@ -284,3 +284,12 @@ Organization-wide repository, licensing, security, contribution, and public-rele
 - `flamoris-jp/flamoris-commons/AGENTS.md`
 
 This repository-specific `AGENTS.md` remains authoritative for product/domain rules. Where the shared policy and repository-specific rules differ, preserve the more specific product rule unless an explicit FLAMORIS-wide policy change says otherwise.
+
+## AI artwork operation guide
+
+Before operating Cutwork on artwork, read [docs/ai-guide/README.md](docs/ai-guide/README.md)
+and applicable hands-on notes. Preserve the distinction between observed outcomes,
+human intent, unverified hypotheses, and proposed tools. Observe the live document
+rather than reusing example layer IDs or coordinates. A successful operation or a
+restored full composite does not establish visual acceptance of hidden repairs.
+

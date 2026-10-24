@@ -65,3 +65,4 @@ product identity, namespace, routes and credentials. The fragment is an array,
 not a replacement catalog. Do not create a new Capture upstream for this mode.
 Reload the Hub catalog using the deployment's normal procedure, then refresh the
 external client's tools. This source change does not modify a running Hub.
+

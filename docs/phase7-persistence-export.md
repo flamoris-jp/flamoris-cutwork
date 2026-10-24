@@ -42,3 +42,11 @@ An interactive Windows desktop is required for this check; CI does not claim it.
 6. Move/zoom heavily, export Composite PNG, and confirm exported dimensions and pixels are viewport-independent.
 7. Export Layer Handoff and inspect `handoff.json`, Part crops, frozen Patch-local pixels, and Repair crops.
 8. Try a damaged or unsupported `.flimg`; confirm a localized error and no replacement of the current live document.
+
+## AI revisioned saving
+
+[ProjectCheckpoints](../src/Cutwork.Imaging/Persistence/ProjectCheckpoints.cs) adds separately
+UI-authorized exact-target archives, durable receipts, conflict detection and shared file locking.
+[Workflow, limits and recovery](ai-guide/repair-tools-and-saving.md) describes the async MCP tools.
+Checkpoint-only success never clears dirty; Save does so only after working-copy replacement
+and matching document/history checks. Open/Save As revoke previous target authority.

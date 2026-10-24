@@ -44,7 +44,8 @@ public partial class MainWindow
         try
         {
             var editor = new LiveEditor(_session, permission, HumanBusy, SetRemoteEditing,
-                CutworkLog.Current, currentGrant: () => _mcpGrant);
+                CutworkLog.Current, currentGrant: () => _mcpGrant,workspace:_workspace,
+                dispatchCompletion: action => DispatchMcp(action,CancellationToken.None));
             boundary = new McpBoundary(_mcpHost!, CutworkMcpTools.Create(editor).Concat(_capture.Tools()), new McpOptions {
                 Permission = permission, PipeName = "flamoris-cutwork-" + Guid.NewGuid().ToString("N"),
                 MaxConcurrentRequests = 1, MaxRequestBytes = LiveLimits.FrameBytes,
@@ -57,7 +58,7 @@ public partial class MainWindow
     }
     private void LocalizeMcp() => _mcpUi?.Refresh();
     private void UpdateMcp() { _mcpUi?.Refresh(); _mcpUi?.NotifyHostReady(); }
-    private void StopMcp() { _mcpUi?.Invalidate(); _mcpGrant = null; _mcpBoundary = null; SetRemoteEditing(false); }
+    private void StopMcp() { _workspace.RevokeAiSave(); AiSaveMenuItem.IsChecked=false; _mcpUi?.Invalidate(); _mcpGrant = null; _mcpBoundary = null; SetRemoteEditing(_workspace.IsSaving); }
     private void ShutdownMcp() { _capture?.Dispose(); _mcpUi?.Shutdown(); _mcpHost?.Shutdown(); }
     private Task DispatchMcp(Action action, CancellationToken cancellationToken)
     {
@@ -93,6 +94,7 @@ public partial class MainWindow
         WorkArea.IsEnabled = MainToolbar.IsEnabled = !active;
         FileMenu.IsEnabled = EditMenu.IsEnabled = ViewMenu.IsEnabled = LayerMenu.IsEnabled
             = ExportMenu.IsEnabled = HelpMenu.IsEnabled = !active;
+        if(!active)UpdateFileCommandState();
         CommandManager.InvalidateRequerySuggested();
     }
 

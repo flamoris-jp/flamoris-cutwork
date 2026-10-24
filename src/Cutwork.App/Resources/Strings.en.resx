@@ -187,4 +187,13 @@
   <data name="Common_Save" xml:space="preserve"><value>Save</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="MaskTool_PendingPart" xml:space="preserve"><value>A Part is still being edited. Use Enter to finish the fence and confirm the Part, or Escape to cancel, then select Mask Brush again. Your current fence and mask have been preserved.</value></data>
+<data name="Menu_File_AiSave" xml:space="preserve"><value>Allow AI revisioned saving for this project</value></data>
+<data name="AiSave_TargetRequired" xml:space="preserve"><value>Save the project first. Only a regular local project target can be authorized.</value></data>
+<data name="AiSave_Conflict" xml:space="preserve"><value>The save target changed outside Cutwork. Review it and use Save As.</value></data>
+<data name="CloneTool_Scale" xml:space="preserve"><value>Source scale</value></data>
+<data name="CloneTool_Rotation" xml:space="preserve"><value>Rotation°</value></data>
+<data name="CloneTool_Hardness" xml:space="preserve"><value>Hardness%</value></data>
+<data name="CloneTool_Opacity" xml:space="preserve"><value>Opacity%</value></data>
+<data name="CloneTool_Composite" xml:space="preserve"><value>Sample composite</value></data>
+<data name="CloneTool_Status_SourceBudget" xml:space="preserve"><value>Source footprint exceeds the budget. Use Fixed mode or a smaller brush.</value></data>
 </root>

@@ -25,6 +25,7 @@
     <Compile Include="Usings.cs" />
     <Compile Include="CanvasInputRouterTests.cs" />
     <Compile Include="CloneRepairTests.cs" />
+    <Compile Include="TransformedCloneTests.cs" />
     <Compile Include="CompositeTests.cs" />
     <Compile Include="DeveloperFixtureTests.cs" />
     <Compile Include="DisplayPixelsTests.cs" />
@@ -40,5 +41,8 @@
     <Compile Include="RepairFinishingTests.cs" />
     <Compile Include="StrokeSamplerTests.cs" />
     <Compile Include="ViewportTransformTests.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <None Include="../../config/cutwork.json" Link="cutwork-catalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

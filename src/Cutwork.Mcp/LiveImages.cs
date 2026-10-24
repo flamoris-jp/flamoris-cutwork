@@ -84,6 +84,18 @@ public static class LiveImages
         double scale = Math.Min(1, (double)edge / Math.Max(crop.Width, crop.Height));
         return (Math.Max(1, (int)Math.Floor(crop.Width * scale)), Math.Max(1, (int)Math.Floor(crop.Height * scale)));
     }
+    public static LiveImage Pixels(byte[] pixels, DocumentRect bounds, int maxEdge)
+    {
+        var (width,height)=Size(bounds,maxEdge);
+        var output=new byte[width*height*4];
+        for(int y=0;y<height;y++) for(int x=0;x<width;x++)
+        {
+            int sx=Math.Min(bounds.Width-1,(int)((x+.5)*bounds.Width/width));
+            int sy=Math.Min(bounds.Height-1,(int)((y+.5)*bounds.Height/height));
+            pixels.AsSpan((sy*bounds.Width+sx)*4,4).CopyTo(output.AsSpan((y*width+x)*4,4));
+        }
+        return Encode(output,false,bounds,bounds,width,height);
+    }
     private static LiveImage Encode(byte[] pixels, bool premultiplied, DocumentRect bounds, DocumentRect crop, int width, int height)
     {
         var bitmap = BitmapSource.Create(width, height, 96, 96,

@@ -31,6 +31,11 @@ public partial class MainWindow
         CloneOffsetModeRadio.Content = text["CloneTool_Mode_Offset"];
         CloneRadiusLabel.Text = text["CloneTool_Radius"];
         CloneApplyButton.Content = text["Properties_Apply"];
+        CloneScaleLabel.Text=text["CloneTool_Scale"];
+        CloneRotationLabel.Text=text["CloneTool_Rotation"];
+        CloneHardnessLabel.Text=text["CloneTool_Hardness"];
+        CloneOpacityLabel.Text=text["CloneTool_Opacity"];
+        CloneCompositeCheck.Content=text["CloneTool_Composite"];
         FinishingRadiusLabel.Text = text["FinishingTool_Radius"];
         FinishingStrengthLabel.Text = text["FinishingTool_Strength"];
         FinishingApplyButton.Content = text["Properties_Apply"];
@@ -116,12 +121,19 @@ public partial class MainWindow
 
     private void CloneApply_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryRead(CloneRadiusEditor.Text, out var radius))
+        if (!TryRead(CloneRadiusEditor.Text, out var radius)
+            || !TryRead(CloneScaleEditor.Text,out var scale) || !TryRead(CloneRotationEditor.Text,out var rotation)
+            || !TryRead(CloneHardnessEditor.Text,out var hardness) || !TryRead(CloneOpacityEditor.Text,out var opacity))
         {
             ShowToolInputError();
             return;
         }
-        try { _cloneTool.SetRadius(radius); }
+        try
+        {
+            _cloneTool.SetBrush(scale,rotation,hardness/100,opacity/100,
+                CloneCompositeCheck.IsChecked==true?CloneSourceKind.CompositeAtStrokeStart:CloneSourceKind.Original);
+            _cloneTool.SetRadius(radius);
+        }
         catch (ArgumentOutOfRangeException) { ShowToolInputError(); }
         CanvasView.Focus();
     }
@@ -238,6 +250,12 @@ public partial class MainWindow
             CloneFixedModeRadio.IsEnabled = _cloneTool.State == CloneRepairState.Idle;
             CloneOffsetModeRadio.IsEnabled = _cloneTool.State == CloneRepairState.Idle;
             CloneRadiusEditor.Text = _cloneTool.Radius.ToString("0.##", LocalizationService.Current.Culture);
+            CloneScaleEditor.Text=_cloneTool.Brush.SourceScale.ToString("0.##",LocalizationService.Current.Culture);
+            CloneRotationEditor.Text=_cloneTool.Brush.SourceRotationDegrees.ToString("0.##",LocalizationService.Current.Culture);
+            CloneHardnessEditor.Text=(_cloneTool.Brush.Hardness*100).ToString("0.##",LocalizationService.Current.Culture);
+            CloneOpacityEditor.Text=(_cloneTool.Brush.Opacity*100).ToString("0.##",LocalizationService.Current.Culture);
+            CloneCompositeCheck.IsChecked=_cloneTool.Brush.SourceKind==CloneSourceKind.CompositeAtStrokeStart;
+            CloneApplyButton.IsEnabled=_cloneTool.State==CloneRepairState.Idle;
 
             var finishing = _blurTool.IsActive ? _blurTool : _smudgeTool.IsActive ? _smudgeTool : null;
             FinishingPropertiesPanel.Visibility = finishing is null
@@ -289,6 +307,7 @@ public partial class MainWindow
             var snapshot = _cloneTool.Snapshot();
             status = snapshot.Status.Message switch
             {
+                CloneRepairMessage.SourceBudgetExceeded => text["CloneTool_Status_SourceBudget"],
                 CloneRepairMessage.SourceRequired => text["CloneTool_Status_SourceRequired"],
                 CloneRepairMessage.SourceSet => string.Format(text.Culture,
                     text["CloneTool_Status_SourceSet"], snapshot.SourceAnchor!.Value.X,

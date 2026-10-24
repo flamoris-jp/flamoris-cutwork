@@ -5,9 +5,29 @@ namespace Flamoris.Cutwork.Imaging;
 /// <summary>Deterministic hard-circle Clone kernel over a conservative destination ROI.</summary>
 public sealed class CloneRepairKernel : ICloneRepairKernel
 {
+    public ICloneStroke? BeginStroke(CutworkDocument document, CloneStrokeMapping mapping, double radius)
+    {
+        mapping.Validate();
+        if (mapping.IsLegacy) return null;
+        // Pointer input has no future path. Fixed sampling needs only its footprint;
+        // Offset sampling freezes a bounded full source once. MCP supplies an exact path ROI.
+        var bounds = mapping.Mode == CloneSamplingMode.Fixed
+            ? TransformedCloneStroke.SourceBounds([mapping.DestinationAnchor], mapping, radius, document.Dimensions)
+            : DocumentRect.FromSize(document.Dimensions);
+        return new TransformedCloneStroke(document, mapping, radius, bounds);
+    }
     public CloneRepairPatch CreatePatch(OriginalAsset original, RepairLayer target,
         IReadOnlyList<DocumentPoint> destinationSamples, CloneStrokeMapping mapping, double radius)
     {
+        mapping.Validate();
+        if (!mapping.IsLegacy)
+        {
+            if (mapping.SourceKind != CloneSourceKind.Original)
+                throw new InvalidOperationException("Composite sampling requires BeginStroke.");
+            return new TransformedCloneStroke(new CutworkDocument(original), mapping, radius,
+                TransformedCloneStroke.SourceBounds(destinationSamples, mapping, radius, original.Dimensions))
+                .Apply(target, destinationSamples);
+        }
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(destinationSamples);

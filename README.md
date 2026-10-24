@@ -194,7 +194,7 @@ The production tool model remains intentionally small:
 - Part Tool: rough polygon/fence + Guriguri refinement;
 - Mask Brush: add/erase through one brush workflow;
 - Patch Tool: source selection + placement/transform;
-- Clone Tool: point-source repair using immutable Original;
+- Clone Tool: point-source repair using Original or frozen Composite, scale/rotation and soft opacity;
 - Blur / Smudge: local repair finishing;
 - Hand/Pan: viewport-only navigation.
 
@@ -274,3 +274,14 @@ MCP connection is enabled. Connect normally (read-only or edit), then request
 `capture.screenshot.get` (`{"input":{}}`). The bottom bar shows **MCP画面共有中**.
 No separate sharing checkbox or Capture EXE is needed; disconnecting MCP stops
 sharing. See [usage, build dependency and Windows acceptance](docs/embedded-capture.md).
+
+## AI repair and revisioned saving
+
+- [AI guide](docs/ai-guide/README.md): hands-on repair findings, visual acceptance and operation notes.
+- [AI repair and revisioned project saves](docs/decisions/0006-ai-repair-and-project-checkpoints.md): transformed Clone sampling, frozen Composite sources, trial/commit tools, and exact-target checkpoint/save contracts.
+
+[Tool and save workflow](docs/ai-guide/repair-tools-and-saving.md) describes transformed/soft
+Clone, frozen Composite sampling, candidate comparison/commit, finishing and separately
+UI-authorized revisioned saving. See [Live MCP](docs/live-mcp.md) for runtime contracts.
+Artwork repair and animation playback quality still need visual acceptance.
+

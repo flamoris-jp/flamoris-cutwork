@@ -88,6 +88,7 @@ public partial class MainWindow : Window
         OpenProjectMenuItem.Header = text["Menu_File_OpenProject"];
         SaveMenuItem.Header = text["Menu_File_Save"];
         SaveAsMenuItem.Header = text["Menu_File_SaveAs"];
+        AiSaveMenuItem.Header=text["Menu_File_AiSave"];
         ExitMenuItem.Header = text["Menu_File_Exit"];
         EditMenu.Header = text["Menu_Edit"];
         ViewMenu.Header = text["Menu_View"];
