@@ -4,6 +4,7 @@ AIが次の制作へ引き継ぐための、操作と視覚判断のメモ。
 人間が補修の考え方を伝え、AIが観測・操作・比較した結果を記録する。
 
 - [2026-10-24: パーツの余白、顔の下地、頬の赤み、髪の補完](2026-10-24-portrait-repair.md)
+- [2026-10-24: 2Dでのまばたき・二重の切り分け・呼吸の実再生メモ](https://github.com/flamoris-jp/flamoris-2D/blob/main/docs/ai-guide/2026-10-24-blink-and-breath.md) — 下地の取り残しと2Dの固定領域を区別する。
 - [現在の補修ツールと版付き保存の操作手順](repair-tools-and-saving.md)
 - [AI向け補修・版付き保存の設計](../decisions/0006-ai-repair-and-project-checkpoints.md)
 - [現在のMCP操作契約](../live-mcp.md)
