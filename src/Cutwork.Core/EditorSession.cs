@@ -12,6 +12,7 @@ public sealed class EditorSession
     private readonly List<HistoryEntry> _redo = [];
     private EditTransaction? _active;
     private long _nextStateRevision;
+    private int _savedWorkLogCount;
 
     public EditorSession(long historyBudgetBytes = 128L * 1024 * 1024)
     {
@@ -28,7 +29,8 @@ public sealed class EditorSession
     public Guid? SelectedLayerId { get; private set; }
     public long CurrentRevision { get; private set; }
     public long SavedRevision { get; private set; }
-    public bool IsDirty => CurrentRevision != SavedRevision || _active?.Edits.Count > 0;
+    public bool IsDirty => CurrentRevision != SavedRevision || _active?.Edits.Count > 0
+        || (Document?.WorkLog.Count??0)!=_savedWorkLogCount;
     public bool CanUndo => _active is null && _undo.Count > 0;
     public bool CanRedo => _active is null && _redo.Count > 0;
     public int UndoCount => _undo.Count;
@@ -53,6 +55,7 @@ public sealed class EditorSession
         Viewport.Reset();
         _undo.Clear(); _redo.Clear();
         CurrentRevision = SavedRevision = _nextStateRevision = 0;
+        _savedWorkLogCount=document.WorkLog.Count;
         SelectedLayerId = document.Base.Id;
         NotifyChanged();
     }
@@ -74,7 +77,23 @@ public sealed class EditorSession
     {
         EnsureIdle(); RequireDocument();
         SavedRevision = CurrentRevision;
+        _savedWorkLogCount=Document!.WorkLog.Count;
         NotifyChanged();
+    }
+    public ArtworkWorkLogEntry AppendWorkLog(Guid requestId,string decision,string observation,DateTimeOffset recordedUtc)
+    {
+        EnsureIdle();var document=RequireDocument();
+        if(requestId==Guid.Empty)throw new WorkLogException("work_log_invalid_request_id");
+        _=ArtworkWorkLog.TextBytes(decision,observation);
+        var existing=document.WorkLog.SingleOrDefault(x=>x.RequestId==requestId);
+        if(existing is not null)
+        {
+            if(existing.Decision!=decision || existing.Observation!=observation)throw new WorkLogException("work_log_request_conflict");
+            return existing;
+        }
+        var entry=new ArtworkWorkLogEntry(document.WorkLog.Count+1,Guid.NewGuid(),requestId,
+            recordedUtc.ToUniversalTime(),DocumentToken,document.Revision,decision,observation);
+        document.AppendWorkLog(entry);NotifyChanged();return entry;
     }
     public EditTransaction BeginTransaction()
     {
@@ -91,10 +110,10 @@ public sealed class EditorSession
         transaction.Commit();
     }
     /// <summary>Read-only cost projection of the next ordinary history entry.</summary>
-    public (DocumentRect DirtyRegion, long RetainedBytes, int EditCount, int TouchedLayerCount, long SurfaceBytes) NextHistoryWork(bool redo)
+    public (DocumentRect DirtyRegion, long RetainedBytes, int EditCount, int TouchedLayerCount, long SurfaceBytes, bool SinglePartEdit) NextHistoryWork(bool redo)
     {
         var entries = redo ? _redo : _undo;
-        if (entries.Count == 0) return (default, 0, 0, 0, 0);
+        if (entries.Count == 0) return (default, 0, 0, 0, 0, false);
         var entry = entries[^1];
         var dirty = entry.Edits.Aggregate(default(DocumentRect), (r, e) => r.Union(e.Dirty));
         var layers = entry.Edits.SelectMany(e => e.TouchedLayers()).DistinctBy(l => l.Id).ToArray();
@@ -104,7 +123,8 @@ public sealed class EditorSession
             var bounds = l.Bounds.Union(dirty);
             return (long)bounds.Width * bounds.Height * (l is PartLayer ? 2 : 8);
         });
-        return (dirty, entry.RetainedBytes, entry.Edits.Length, layers.Length, surfaceBytes);
+        return (dirty, entry.RetainedBytes, entry.Edits.Length, layers.Length, surfaceBytes,
+            entry.Edits.Length==1 && entry.Edits[0].Layer is PartLayer);
     }
 
     public void Undo()

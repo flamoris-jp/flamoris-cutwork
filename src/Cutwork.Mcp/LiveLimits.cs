@@ -65,7 +65,8 @@ public static class LiveLimits
     }
 }
 
-public sealed class LiveBudget(long historyLimit = long.MaxValue)
+public sealed class LiveBudget(long historyLimit = long.MaxValue,
+    long workLimit=LiveLimits.WorkUnits,long workingLimit=LiveLimits.WorkingBytes)
 {
     private DocumentRect dirty;
     private int maximumLayers;
@@ -90,6 +91,6 @@ public sealed class LiveBudget(long historyLimit = long.MaxValue)
     public void Add(long work, long bytes)
     {
         Work = checked(Work + work); Bytes = checked(Bytes + bytes);
-        if (Work > LiveLimits.WorkUnits || Bytes > LiveLimits.WorkingBytes) throw new LiveException("work_limit");
+        if (Work > workLimit || Bytes > workingLimit) throw new LiveException("work_limit");
     }
 }

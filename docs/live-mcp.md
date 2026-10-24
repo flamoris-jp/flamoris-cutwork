@@ -221,3 +221,12 @@ Current names use underscores at tool level and dots for operations within `edit
 All ordinary guards, grants, budgets and shared history remain in force.
 Separate UI authorization is required for exact-target saving; old Edit connections acquire
 no file authority automatically. Real-artwork visual/playback QA is separate from code tests.
+
+## Large polygons and work log
+
+`part_polygon_preview` / `part_polygon_create` support exact full-resolution Parts up to
+4,194,304 pixels with separate bounded preparation; create requires Edit and ordinary guard.
+`work_log_read` / `work_log_append` provide paged, append-only authored evidence.
+Append requires Edit, advances revision/dirty without Undo, and is persisted by normal Save.
+See [workflow and limits](ai-guide/large-parts-and-work-log.md). No log mutation/delete,
+arbitrary file write, or semantic boundary inference is implied.

@@ -50,3 +50,9 @@ UI-authorized exact-target archives, durable receipts, conflict detection and sh
 [Workflow, limits and recovery](ai-guide/repair-tools-and-saving.md) describes the async MCP tools.
 Checkpoint-only success never clears dirty; Save does so only after working-copy replacement
 and matching document/history checks. Open/Save As revoke previous target authority.
+
+## Artwork work log
+
+Snapshots and saves now preserve the append-only work log. Nonempty logs use
+[flimg v3](flimg-schema-v3.md); v1/v2 read and empty-log v2 output remain supported.
+MarkSaved includes the captured log count so artwork Undo cannot clear an unsaved log.

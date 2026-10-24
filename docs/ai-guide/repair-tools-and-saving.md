@@ -86,8 +86,10 @@ Cross-machine shared-folder operation is not supported.
 
 ## Hub catalog
 
-[config/cutwork.json](../../config/cutwork.json) includes 20 tools (11 previous + 9 additions),
-including embedded capture and unchanged guard wrappers. Its inner input schemas are tested
+[config/cutwork.json](../../config/cutwork.json) includes 24 tools (including large polygon and work-log operations),
+including embedded capture and ordinary guard wrappers. Its inner input schemas are tested
 against LiveSchema. Deploy the catalog with the existing Internal catalog-update workflow;
 preserve deployment identity and credential references. Rebuilding Cutwork alone does not
 update a static Hub catalog. The live Hub deployment is a separate operation.
+
+Projects containing a work log save complete v3 archives; see [large parts and work log](large-parts-and-work-log.md).

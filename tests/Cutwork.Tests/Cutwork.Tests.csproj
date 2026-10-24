@@ -26,6 +26,8 @@
     <Compile Include="CanvasInputRouterTests.cs" />
     <Compile Include="CloneRepairTests.cs" />
     <Compile Include="TransformedCloneTests.cs" />
+    <Compile Include="WorkLogTests.cs" />
+    <Compile Include="LargePolygonTests.cs" />
     <Compile Include="CompositeTests.cs" />
     <Compile Include="DeveloperFixtureTests.cs" />
     <Compile Include="DisplayPixelsTests.cs" />

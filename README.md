@@ -285,3 +285,10 @@ Clone, frozen Composite sampling, candidate comparison/commit, finishing and sep
 UI-authorized revisioned saving. See [Live MCP](docs/live-mcp.md) for runtime contracts.
 Artwork repair and animation playback quality still need visual acceptance.
 
+
+## Large parts and artwork work log
+
+Large clothing/hair can be cut at full resolution using bounded polygon preview/create.
+The append-only work log stores editorial decisions and actual observations inside the project,
+readable/writable through MCP. See [workflow](docs/ai-guide/large-parts-and-work-log.md)
+and [v3 persistence](docs/flimg-schema-v3.md). Projects without records retain v2 output.
