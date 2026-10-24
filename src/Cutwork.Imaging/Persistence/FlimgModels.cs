@@ -42,6 +42,8 @@ internal sealed class FlimgManifest
     public FlimgOriginal Original { get; set; } = new();
     [JsonRequired]
     public List<FlimgLayer> Layers { get; set; } = [];
+    [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
+    public FlimgWorkLog? WorkLog {get;set;}
 }
 
 internal sealed class FlimgCanvas
@@ -123,4 +125,11 @@ internal sealed class FlimgPoint
     public double X { get; set; }
     [JsonRequired]
     public double Y { get; set; }
+}
+
+internal sealed class FlimgWorkLog
+{
+    [JsonRequired] public string Asset {get;set;}="";
+    [JsonRequired] public string Sha256 {get;set;}="";
+    [JsonRequired] public int Count {get;set;}
 }

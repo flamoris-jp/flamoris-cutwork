@@ -8,6 +8,8 @@ AIが次の制作へ引き継ぐための、操作と視覚判断のメモ。
 - [AI向け補修・版付き保存の設計](../decisions/0006-ai-repair-and-project-checkpoints.md)
 - [現在のMCP操作契約](../live-mcp.md)
 
+- [大きなパーツの切り出しと作品内の追記記録](large-parts-and-work-log.md)
+
 ## 読み方と記録規則
 
 観測した事実、人間の意図、AIの仮説、未実装の機能案を分ける。

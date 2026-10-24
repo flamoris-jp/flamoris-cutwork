@@ -3,6 +3,16 @@ namespace Flamoris.Cutwork.Core;
 public sealed class CutworkDocument
 {
     private readonly List<Layer> _layers = [];
+    private readonly List<ArtworkWorkLogEntry> _workLog=[];
+    public IReadOnlyList<ArtworkWorkLogEntry> WorkLog => _workLog.AsReadOnly();
+    public int WorkLogBytes {get; private set;}
+    internal void AppendWorkLog(ArtworkWorkLogEntry entry)
+    {
+        var proposed=_workLog.Append(entry).ToArray();
+        int bytes=ArtworkWorkLog.Validate(proposed);
+        _workLog.Add(entry);WorkLogBytes=bytes;
+        Publish(default,default,[]);
+    }
     private object? _sessionOwner;
     private int _nextPartOrder;
 
@@ -23,7 +33,7 @@ public sealed class CutworkDocument
     }
 
     public static CutworkDocument Restore(Guid id, OriginalAsset original,
-        IReadOnlyList<LayerRestoreState> layers)
+        IReadOnlyList<LayerRestoreState> layers, IReadOnlyList<ArtworkWorkLogEntry>? workLog=null)
     {
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(layers);
@@ -71,6 +81,9 @@ public sealed class CutworkDocument
             document._layers.Add(layer);
         }
         document._nextPartOrder = partOrders.Count == 0 ? 0 : checked(partOrders.Values.Max() + 1);
+        var entries=workLog?.ToArray()??[];
+        document.WorkLogBytes=ArtworkWorkLog.Validate(entries);
+        document._workLog.AddRange(entries);
         return document;
     }
 

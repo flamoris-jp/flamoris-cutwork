@@ -168,13 +168,14 @@ public static class PolygonMaskRasterizer
         return right <= left || bottom <= top ? default : new(left, top, right - left, bottom - top);
     }
 
-    public static byte[] Rasterize(IReadOnlyList<DocumentPoint> points, DocumentRect bounds)
+    public static byte[] Rasterize(IReadOnlyList<DocumentPoint> points, DocumentRect bounds, CancellationToken cancellationToken=default)
     {
         ArgumentNullException.ThrowIfNull(points);
         if (points.Count < 3 || bounds.IsEmpty) return [];
         var mask = new byte[checked(bounds.Width * bounds.Height)];
         for (var localY = 0; localY < bounds.Height; localY++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             for (var localX = 0; localX < bounds.Width; localX++)
             {
                 var point = new DocumentPoint(bounds.X + localX, bounds.Y + localY);

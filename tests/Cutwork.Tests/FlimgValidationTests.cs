@@ -35,9 +35,9 @@ public sealed class FlimgValidationTests
     public void FutureVersionDispatchDoesNotRequireV1Shape()
     {
         AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
-            """{"format":"flamoris-cutwork","schemaVersion":3,"future":{"mode":"new"}}"""));
+            """{"format":"flamoris-cutwork","schemaVersion":99,"future":{"mode":"new"}}"""));
         AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
-            """{"format":"flamoris-cutwork","schemaVersion":3}"""));
+            """{"format":"flamoris-cutwork","schemaVersion":99}"""));
         AssertRejected(FlimgError.UnsupportedVersion, ManifestOnly(
             """{"format":"flamoris-cutwork","schemaVersion":0,"legacyShape":true}"""));
     }

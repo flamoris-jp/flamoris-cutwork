@@ -12,6 +12,8 @@ namespace Flamoris.Cutwork.Imaging.Persistence;
 public sealed class FlimgArchiveCodec
 {
     public const int SchemaVersion = 2;
+    public const int WorkLogSchemaVersion = 3;
+    private const string WorkLogPath="work-log.jsonl";
     private const int LegacySchemaVersion = 1;
     public const int MaximumDimension = 16_384;
     public const long MaximumPixels = 100_000_000;
@@ -45,7 +47,7 @@ public sealed class FlimgArchiveCodec
         var manifest = new FlimgManifest
         {
             Format = "flamoris-cutwork",
-            SchemaVersion = SchemaVersion,
+            SchemaVersion = document.WorkLog.Count==0?SchemaVersion:WorkLogSchemaVersion,
             DocumentId = FormatId(document.Id),
             Canvas = new()
             {
@@ -109,6 +111,15 @@ public sealed class FlimgArchiveCodec
             manifest.Layers.Add(item);
         }
 
+        if(document.WorkLog.Count>0)
+        {
+            _=ArtworkWorkLog.Validate(document.WorkLog);
+            using var text=new MemoryStream();
+            foreach(var entry in document.WorkLog){text.Write(ArtworkWorkLog.Encode(entry));text.WriteByte((byte)'\n');}
+            var bytes=text.ToArray();
+            manifest.WorkLog=new(){Asset=WorkLogPath,Sha256=Hash(bytes),Count=document.WorkLog.Count};
+            assets.Add((WorkLogPath,bytes));
+        }
         var manifestBytes = JsonSerializer.SerializeToUtf8Bytes(manifest, JsonOptions);
         using var archive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true,
             entryNameEncoding: Encoding.UTF8);
@@ -135,7 +146,7 @@ public sealed class FlimgArchiveCodec
             var manifestBytes = ReadEntry(manifestEntry, MaximumManifestBytes, readBudget);
             ValidateNoDuplicateJsonProperties(manifestBytes);
             var schemaVersion = ReadEnvelope(manifestBytes);
-            if (schemaVersion is not LegacySchemaVersion and not SchemaVersion)
+            if (schemaVersion is not LegacySchemaVersion and not SchemaVersion and not WorkLogSchemaVersion)
                 throw new FlimgException(FlimgError.UnsupportedVersion);
             FlimgManifest manifest;
             try
@@ -202,7 +213,7 @@ public sealed class FlimgArchiveCodec
                 case "part":
                     if (layer.Transform is not null || layer.SourcePolygon is not null
                         || layer.OwnerPartId is not null
-                        || schemaVersion == SchemaVersion && !layer.PartOrder.HasValue)
+                        || schemaVersion >= SchemaVersion && !layer.PartOrder.HasValue)
                         throw new FlimgException(FlimgError.InvalidLayer);
                     var maskPath = RequireAssetPath(layer, id, "mask.png");
                     referenced.Add(maskPath);
@@ -255,10 +266,46 @@ public sealed class FlimgArchiveCodec
                     throw new FlimgException(FlimgError.InvalidLayer);
             }
         }
+        var workLog=ReadWorkLog(manifest,schemaVersion,entries,readBudget);
+        if(manifest.WorkLog is not null)referenced.Add(WorkLogPath);
         if (entries.Keys.Any(path => !referenced.Contains(path)))
             throw new FlimgException(FlimgError.InvalidArchivePath);
-        try { return CutworkDocument.Restore(documentId, original, restored); }
+        try { return CutworkDocument.Restore(documentId, original, restored,workLog); }
         catch (EditException exception) { throw new FlimgException(FlimgError.InvalidLayer, exception); }
+    }
+
+    private static IReadOnlyList<ArtworkWorkLogEntry> ReadWorkLog(FlimgManifest manifest,int version,
+        IReadOnlyDictionary<string,ZipArchiveEntry> entries,ArchiveReadBudget budget)
+    {
+        if(version<WorkLogSchemaVersion)
+        {
+            if(manifest.WorkLog is not null)throw new FlimgException(FlimgError.MalformedManifest);
+            return [];
+        }
+        var metadata=manifest.WorkLog;
+        if(metadata is null || metadata.Asset!=WorkLogPath || metadata.Count<1 || metadata.Count>ArtworkWorkLog.MaximumEntries)
+            throw new FlimgException(FlimgError.MalformedManifest);
+        if(!entries.TryGetValue(WorkLogPath,out var asset))throw new FlimgException(FlimgError.MissingAsset);
+        if(asset.Length>ArtworkWorkLog.MaximumBytes)throw new FlimgException(FlimgError.SizeLimitExceeded);
+        var bytes=ReadRequiredAsset(entries,WorkLogPath,metadata.Sha256,budget);
+        try
+        {
+            var text=new UTF8Encoding(false,true).GetString(bytes);
+            if(!text.EndsWith('\n'))throw new FlimgException(FlimgError.MalformedManifest);
+            var lines=text[..^1].Split('\n');
+            if(lines.Length!=metadata.Count)throw new FlimgException(FlimgError.MalformedManifest);
+            var records=new List<ArtworkWorkLogEntry>(lines.Length);
+            foreach(var line in lines)
+            {
+                var encoded=Encoding.UTF8.GetBytes(line);ValidateNoDuplicateJsonProperties(encoded);
+                records.Add(JsonSerializer.Deserialize<ArtworkWorkLogEntry>(encoded,ArtworkWorkLog.Json)
+                    ??throw new FlimgException(FlimgError.MalformedManifest));
+            }
+            _=ArtworkWorkLog.Validate(records);return records;
+        }
+        catch(FlimgException){throw;}
+        catch(Exception e)when(e is JsonException or DecoderFallbackException or WorkLogException)
+        {throw new FlimgException(FlimgError.MalformedManifest,e);}
     }
 
     private static Dictionary<string, ZipArchiveEntry> ValidateEntries(ZipArchive archive)

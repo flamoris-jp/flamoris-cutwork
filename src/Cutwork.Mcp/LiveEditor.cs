@@ -26,6 +26,8 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
     {
         try
         {
+            if(name is "part_polygon_preview" or "part_polygon_create")
+                return await PolygonPartAsync(context,name,input,cancellationToken);
             if(name=="project_save_cancel")
                 return await context.CommitAsync(()=>ProjectQuery(name,input,cancellationToken));
             if (name is "project_save" or "project_checkpoint")
@@ -49,6 +51,7 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
                 or McpErrors.StaleDocument or McpErrors.Forbidden ? LogLevel.Warn : LogLevel.Debug);
             throw new McpFault(exception.Code);
         }
+        catch (WorkLogException exception) {throw new McpFault(exception.Code);}
         catch (CloneBudgetException) { throw new McpFault("work_limit"); }
         catch (ProjectSaveException exception) { throw new McpFault(exception.Code); }
         catch (OperationCanceledException) { throw; }
@@ -75,6 +78,7 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
             "context" => Element(Context()),
             "layers" => Layers(args),
             "image" => ImageQuery(args, cancellationToken),
+            "work_log_read" => ReadWorkLog(args),
             "repair_inspect" => RepairInspect(args,cancellationToken),
             _ => throw new LiveException(McpErrors.UnsupportedCapability),
         };
@@ -93,12 +97,21 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
                 var cost = session.NextHistoryWork(name == "redo");
                 if (cost.EditCount > LiveLimits.Dabs * LiveLimits.Operations)
                     throw new LiveException("history_work_limit");
-                new LiveBudget().Add(LiveLimits.Area(cost.DirtyRegion)
+                var historyBudget=cost.SinglePartEdit && LiveLimits.Area(cost.DirtyRegion)<=PolygonPart.MaximumPixels
+                    ? new LiveBudget(workLimit:PolygonPart.MaximumWork,workingLimit:PolygonPart.MaximumWorkingBytes)
+                    : new LiveBudget();
+                historyBudget.Add(LiveLimits.Area(cost.DirtyRegion)
                     * Math.Max(1L, (Document.Layers.Count + (long)cost.TouchedLayerCount) * 2),
                     cost.RetainedBytes * 2 + cost.SurfaceBytes);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (name == "undo") session.Undo(); else session.Redo();
                 return Element(Context());
+            }
+            if(name=="work_log_append")
+            {
+                var entry=session.AppendWorkLog(Guid.Parse(args.GetProperty("requestId").GetString()!),
+                    args.GetProperty("decision").GetString()!,args.GetProperty("observation").GetString()!,clock.GetUtcNow());
+                return Element(new{documentToken=session.DocumentToken,revision=Revision(),entry,dirty=session.IsDirty});
             }
             if (name == "repair_commit_candidate") return CommitRepairCandidate(args,cancellationToken);
             if (name != "edit") throw new LiveException(McpErrors.UnsupportedCapability);
@@ -106,7 +119,16 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
             // Resolve against the starting revision before the batch's own edits
             // advance it. Candidate creation never re-runs the fitter.
             preparedParts = ResolveCandidates(args, preparedParts);
-            var budget = new LiveBudget(session.HistoryBudgetBytes);
+            var requested=args.GetProperty("operations").EnumerateArray().ToArray();
+            bool largePartMetadata=requested.Length==1
+                && requested[0].GetProperty("type").GetString() is "layer.visible" or "layer.reorder" or "layer.delete"
+                && Guid.TryParse(requested[0].GetProperty("target").GetString(),out var metadataId)
+                && Document.GetLayer(metadataId) is PartLayer metadataPart
+                && LiveLimits.Area(metadataPart.Bounds)>LiveLimits.SurfacePixels
+                && LiveLimits.Area(metadataPart.Bounds)<=PolygonPart.MaximumPixels;
+            var budget = largePartMetadata
+                ? new LiveBudget(session.HistoryBudgetBytes,PolygonPart.MaximumWork,PolygonPart.MaximumWorkingBytes)
+                : new LiveBudget(session.HistoryBudgetBytes);
             var ids = new List<Guid?>();
             using var transaction = session.BeginTransaction();
             int operationIndex = 0;
@@ -206,6 +228,8 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
         coordinateSpace = "document-pixels; half-open rectangles; pixel centers x+0.5,y+0.5",
         busy = humanBusy() || session.HasActiveTransaction,
         dirty = session.IsDirty,
+        workLogCount=Document.WorkLog.Count,
+        workLogBytes=Document.WorkLogBytes,
         selectedLayerId = session.SelectedLayerId,
         canUndo = session.CanUndo,
         canRedo = session.CanRedo,
@@ -393,7 +417,10 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
                 (region, point) => region.Union(MaskBrushKernel.DabBounds(point, radius, Document.Dimensions)));
             budget.ReserveHistory(128 + LiveLimits.Area(roi) * channels * 2);
             var next = bounds.Union(roi);
-            LiveLimits.Surface(next);
+            // A local mask edit within an existing large Part allocates only its dab ROI.
+            // Preserve small growth limits; never silently reallocate an unbounded mask.
+            if(!(channels==1 && next==bounds && LiveLimits.Area(bounds)<=PolygonPart.MaximumPixels))
+                LiveLimits.Surface(next);
             if (next != bounds) budget.Add(LiveLimits.Area(next), LiveLimits.Area(next) * channels * 2);
             budget.Dirty(roi, Document.Layers.Count + 1);
             bounds = next;
