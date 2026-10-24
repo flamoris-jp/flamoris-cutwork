@@ -92,6 +92,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
     private Guid? _sourceDocumentId;
     private CloneStrokeMapping? _strokeMapping;
     private ICloneStroke? _rasterStroke;
+    private double _strokeRadius;
     private bool _createdRepair;
     private bool _hasRasterChange;
     private bool _finishPending;
@@ -173,6 +174,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
         }
 
+        _strokeRadius=Radius;
         _strokeMapping = Brush with { Mode = SamplingMode, SourceAnchor = source, DestinationAnchor = point };
         // Freeze before adding or painting the destination Repair.
         try { _rasterStroke = _kernel.BeginStroke(document, _strokeMapping.Value, Radius); }
@@ -209,11 +211,13 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
     public CanvasInputEffects PointerMove(DocumentPoint? point, CanvasModifiers modifiers)
     {
         var changed = _hover != point;
+        bool painting=State==CloneRepairState.Painting;
         _hover = point;
         if (State == CloneRepairState.Painting && !_finishPending
             && point is { } current && _sampler is not null)
             ApplySamples(_sampler.Add(current));
         if (changed) NotifyChanged();
+        if(painting && State==CloneRepairState.Idle)return CanvasInputEffects.Handled | CanvasInputEffects.ReleasePointer;
         return changed ? CanvasInputEffects.ToolOverlayChanged : CanvasInputEffects.None;
     }
 
@@ -314,7 +318,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             transaction.ApplyBatch(() =>
             {
                 var patch = _rasterStroke?.Apply(repair, samples)
-                    ?? _kernel.CreatePatch(_session.Document!.Original, repair, samples, mapping, Radius);
+                    ?? _kernel.CreatePatch(_session.Document!.Original, repair, samples, mapping, _strokeRadius);
                 if (patch.Region.IsEmpty || !patch.HasChanges) return;
                 transaction.Apply(new RasterPatch(repair.Id, patch.Region,
                     patch.StraightBgra.Span));

@@ -224,7 +224,7 @@ public sealed class ProjectCheckpoints
             JsonSerializer.Serialize(s,items,Json),p=>
             {using var input=File.OpenRead(p);_ = JsonSerializer.Deserialize<List<CheckpointReceipt>>(input,Json)??throw new ProjectSaveException("checkpoint_index_invalid");});
     }
-    private long StoredBytes()=>Directory.Exists(versions)?Directory.EnumerateFiles(versions,"*.flimg").Sum(p=>new FileInfo(p).Length):0;
+    private long StoredBytes()=>Directory.Exists(versions)?Directory.EnumerateFiles(versions,"r*.flimg").Sum(p=>new FileInfo(p).Length):0;
     private static string Hash(string file)
     {RejectLinks(file);using var s=new FileStream(file,FileMode.Open,FileAccess.Read,FileShare.Read);return Convert.ToHexString(SHA256.HashData(s)).ToLowerInvariant();}
     // Creation identity is preserved by File.Replace on supported local Windows volumes.
@@ -254,7 +254,8 @@ public sealed class ProjectCheckpoints
     {
         var full=Path.GetFullPath(path);
         foreach(var ancestor in Ancestors(Path.GetDirectoryName(full)!))
-            if((File.GetAttributes(ancestor)&FileAttributes.ReparsePoint)!=0)throw new ProjectSaveException("save_target_link");
+            if((Directory.Exists(ancestor) && (File.GetAttributes(ancestor)&FileAttributes.ReparsePoint)!=0)
+                || new DirectoryInfo(ancestor).LinkTarget is not null)throw new ProjectSaveException("save_target_link");
         if((File.Exists(full)||Directory.Exists(full)) && (File.GetAttributes(full)&FileAttributes.ReparsePoint)!=0)
             throw new ProjectSaveException("save_target_link");
         // A dangling link also has a LinkTarget even though Exists is false.

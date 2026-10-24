@@ -94,6 +94,7 @@ public partial class MainWindow
         WorkArea.IsEnabled = MainToolbar.IsEnabled = !active;
         FileMenu.IsEnabled = EditMenu.IsEnabled = ViewMenu.IsEnabled = LayerMenu.IsEnabled
             = ExportMenu.IsEnabled = HelpMenu.IsEnabled = !active;
+        if(!active)UpdateFileCommandState();
         CommandManager.InvalidateRequerySuggested();
     }
 

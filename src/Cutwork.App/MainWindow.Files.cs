@@ -74,6 +74,7 @@ public partial class MainWindow
         try
         {
             _inputRouter.CancelActiveTool();
+            if(forceSaveAs)_workspace.RevokeAiSave();
             _workspace.Save(path);
             UpdateStatus();
             return true;

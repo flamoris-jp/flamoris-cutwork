@@ -26,6 +26,17 @@ public sealed class ProjectCheckpointTests
     {try{action();Assert.Fail("Expected "+code);}catch(ProjectSaveException e){Assert.AreEqual(code,e.Code);}}
 
     [TestMethod]
+    public void AuthorizedContextWorksBeforeRevisionDirectoryExists()
+    {
+        using var f=new Fixture();
+        Assert.IsFalse(Directory.Exists(f.PathName+".revisions"));
+        var value=System.Text.Json.JsonSerializer.SerializeToElement(f.Store.Context());
+        Assert.AreEqual(System.Text.Json.JsonValueKind.Null,value.GetProperty("checkpointId").ValueKind);
+        Assert.AreEqual(f.Store.SaveTargetId,value.GetProperty("saveTargetId").GetString());
+        Assert.AreEqual(0,f.Store.List(0,20).Count);
+    }
+
+    [TestMethod]
     public void CheckpointIsFullReopenableArchiveAndDoesNotChangeDirtyOrHistory()
     {
         using var f=new Fixture();f.Session.Execute(new RenameLayer(f.Session.Document!.Base.Id,"unsaved"));
