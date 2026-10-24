@@ -69,9 +69,37 @@ public sealed class ProjectWorkspace
 
     public EditorSession Session { get; }
     public string? ProjectPath { get; private set; }
+    public ProjectCheckpoints? Checkpoints { get; private set; }
+    public bool IsSaving { get; private set; }
+    public void AuthorizeAiSave()
+    {
+        if(IsSaving || ProjectPath is null || Session.HasActiveTransaction) throw new ProjectSaveException("save_target_required");
+        RevokeAiSave();Checkpoints=new ProjectCheckpoints(ProjectPath,_store);
+    }
+    public void RevokeAiSave(){Checkpoints?.Revoke();Checkpoints=null;}
+    public CutworkDocument BeginAiSave()
+    {
+        if(IsSaving || Session.HasActiveTransaction)throw new ProjectSaveException("save_busy");
+        if(Checkpoints is null || Session.Document is null)throw new ProjectSaveException("save_not_authorized");
+        if(DocumentSnapshot.EstimatedBytes(Session.Document)+Session.Document.Original.ByteLength>ProjectCheckpoints.MaximumSnapshotBytes)
+            throw new ProjectSaveException("save_snapshot_limit");
+        var snapshot=DocumentSnapshot.Capture(Session.Document);IsSaving=true;return snapshot;
+    }
+    public void EndAiSave(CheckpointReceipt? receipt)
+    {
+        try
+        {
+            if(receipt?.WorkingCopySaved==true && receipt.DocumentToken==Session.DocumentToken
+                && receipt.DocumentRevision==Session.Document?.Revision && receipt.HistoryStateRevision==Session.CurrentRevision)
+                Session.MarkSaved();
+        }
+        finally{IsSaving=false;}
+    }
 
     public void OpenArtwork(CutworkDocument document)
     {
+        if(IsSaving)throw new ProjectSaveException("save_busy");
+        RevokeAiSave();
         Session.Open(document ?? throw new ArgumentNullException(nameof(document)));
         ProjectPath = null;
         _logger?.Info("document.open", "Artwork opened", Properties("import"));
@@ -81,8 +109,10 @@ public sealed class ProjectWorkspace
     {
         try
         {
+            if(IsSaving)throw new ProjectSaveException("save_busy");
             var fullPath = Path.GetFullPath(path);
             var document = _store.Load(fullPath);
+            RevokeAiSave();
             Session.Open(document);
             ProjectPath = fullPath;
             _logger?.Info("document.open", "Project opened", Properties("open"));
@@ -102,7 +132,10 @@ public sealed class ProjectWorkspace
             var destination = path is null ? ProjectPath : Path.GetFullPath(path);
             if (destination is null || Session.Document is null)
                 throw new InvalidOperationException("A document and project path are required.");
-            _store.Save(Session.Document, destination);
+            if(IsSaving)throw new ProjectSaveException("save_busy");
+            if(Checkpoints is {} checkpoints && string.Equals(destination,ProjectPath,StringComparison.OrdinalIgnoreCase))
+                checkpoints.SaveFromUi(Session.Document);
+            else {RevokeAiSave();_store.Save(Session.Document, destination);}
             ProjectPath = destination;
             Session.MarkSaved();
             _logger?.Info("document.save", "Project saved", Properties("save"));

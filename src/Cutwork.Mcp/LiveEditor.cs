@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging;
+using Flamoris.Cutwork.Imaging.Persistence;
 using Flamoris.Logging;
 using Flamoris.Mcp.Core;
 
@@ -10,7 +11,8 @@ namespace Flamoris.Cutwork.Mcp;
 /// <summary>Cutwork-owned typed operations over the one authoritative session.</summary>
 public sealed partial class LiveEditor(EditorSession session, McpPermission permission, Func<bool> humanBusy,
     Action<bool> editing, FlamorisLogger? logger = null, IPartBoundaryFitter? partFitter = null,
-    Func<CapabilityGrant?>? currentGrant = null, TimeProvider? timeProvider = null)
+    Func<CapabilityGrant?>? currentGrant = null, TimeProvider? timeProvider = null,
+    ProjectWorkspace? workspace = null, Func<Action,Task>? dispatchCompletion = null)
 {
     private readonly FlamorisLogger? log = logger;
     private readonly IPartBoundaryFitter fitter = partFitter ?? new GuriguriPartFitter();
@@ -24,6 +26,12 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
     {
         try
         {
+            if(name=="project_save_cancel")
+                return await context.CommitAsync(()=>ProjectQuery(name,input,cancellationToken));
+            if (name is "project_save" or "project_checkpoint")
+                return await StartProjectSaveAsync(context,name,input,cancellationToken);
+            if (name is "clone_candidates")
+                return await context.ReadAsync(() => CloneCandidates(input, cancellationToken));
             if (name == "part_preview")
                 return await PartPreviewAsync(context, input, cancellationToken);
             if (name == "part_candidates")
@@ -41,6 +49,8 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
                 or McpErrors.StaleDocument or McpErrors.Forbidden ? LogLevel.Warn : LogLevel.Debug);
             throw new McpFault(exception.Code);
         }
+        catch (CloneBudgetException) { throw new McpFault("work_limit"); }
+        catch (ProjectSaveException exception) { throw new McpFault(exception.Code); }
         catch (OperationCanceledException) { throw; }
         catch (EditException exception)
         {
@@ -57,12 +67,15 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
 
     private JsonElement Query(string name, JsonElement args, CancellationToken cancellationToken)
     {
+        if(name is "project_context" or "project_save_status" or "project_checkpoints_list" or "project_save_cancel")
+            return ProjectQuery(name,args,cancellationToken);
         DemandIdle(cancellationToken);
         return name switch
         {
             "context" => Element(Context()),
             "layers" => Layers(args),
             "image" => ImageQuery(args, cancellationToken),
+            "repair_inspect" => RepairInspect(args,cancellationToken),
             _ => throw new LiveException(McpErrors.UnsupportedCapability),
         };
     }
@@ -87,6 +100,7 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
                 if (name == "undo") session.Undo(); else session.Redo();
                 return Element(Context());
             }
+            if (name == "repair_commit_candidate") return CommitRepairCandidate(args,cancellationToken);
             if (name != "edit") throw new LiveException(McpErrors.UnsupportedCapability);
 
             // Resolve against the starting revision before the batch's own edits
@@ -113,7 +127,7 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
     private void DemandIdle(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (session.HasActiveTransaction || humanBusy()) throw new LiveException(McpErrors.Busy);
+        if (session.HasActiveTransaction || humanBusy() || workspace?.IsSaving == true) throw new LiveException(McpErrors.Busy);
     }
 
     private JsonElement Layers(JsonElement args)
@@ -339,6 +353,11 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
                 return maskPart.Id;
             case "clone.stroke":
                 return Clone(operation, ids, transaction, budget, cancellationToken);
+            case "blur.stroke":
+            case "smudge.stroke":
+                return FinishRepair(operation,Target(),transaction,budget,cancellationToken);
+            case "patch.bakeToRepair":
+                return BakePatch(Target(),transaction,budget,cancellationToken);
             case "patch.create":
                 var fence = Points(operation.GetProperty("fence"));
                 var sourceBounds = LiveLimits.Fence(fence, Document.Dimensions, budget);
@@ -384,41 +403,8 @@ public sealed partial class LiveEditor(EditorSession session, McpPermission perm
     private Guid? Clone(JsonElement operation, List<Guid?> ids, EditTransaction transaction,
         LiveBudget budget, CancellationToken cancellationToken)
     {
-        var target = ResolveNullable(operation.GetProperty("target"), ids);
-        var owner = ResolveNullable(operation.GetProperty("ownerPart"), ids);
-        bool global = operation.GetProperty("global").GetBoolean();
-        if ((target.HasValue ? 1 : 0) + (owner.HasValue ? 1 : 0) + (global ? 1 : 0) != 1)
-            throw new LiveException("clone_target_required");
-        if (owner is { } partId && Document.GetLayer(partId) is not PartLayer)
-            throw new LiveException("invalid_owner");
-        var points = Points(operation.GetProperty("points"));
-        double radius = operation.GetProperty("radius").GetDouble();
-        var batches = LiveLimits.Stroke(points, radius, Document.Dimensions, budget);
-        var anchor = Point(operation.GetProperty("source"));
-        LiveLimits.Point(anchor, Document.Dimensions);
-        var mapping = new CloneStrokeMapping(Enum.Parse<CloneSamplingMode>(operation.GetProperty("mode").GetString()!),
-            anchor, points[0]);
-        var repair = target is { } id
-            ? Document.GetLayer(id) as RepairLayer ?? throw new LiveException("invalid_target")
-            : new RepairLayer(new((int)Math.Floor(points[0].X), (int)Math.Floor(points[0].Y), 1, 1),
-                new byte[4], ownerPartId: owner);
-        ValidateGrowth(repair.Bounds, batches, radius, budget, 4);
-        if (target is null) budget.ReserveHistory(132 + repair.Name.Length * 2L);
-        bool added = target.HasValue;
-        var kernel = new CloneRepairKernel();
-        foreach (var batch in batches)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var patch = kernel.CreatePatch(Document.Original, repair, batch, mapping, radius);
-            if (!patch.HasChanges) continue;
-            if (!added)
-            {
-                transaction.Apply(new AddLayer(repair));
-                added = true;
-            }
-            transaction.Apply(new RasterPatch(repair.Id, patch.Region, patch.StraightBgra.Span));
-        }
-        return added ? repair.Id : null;
+        var prepared = PrepareClone(operation,ids,budget,cancellationToken);
+        return ApplyClone(prepared,transaction);
     }
 
     private void LogFailure(string tool, string code, Exception exception, LogLevel level)

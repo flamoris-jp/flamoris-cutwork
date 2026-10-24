@@ -4,7 +4,8 @@ AIが次の制作へ引き継ぐための、操作と視覚判断のメモ。
 人間が補修の考え方を伝え、AIが観測・操作・比較した結果を記録する。
 
 - [2026-10-24: パーツの余白、顔の下地、頬の赤み、髪の補完](2026-10-24-portrait-repair.md)
-- [AI向け補修・版付き保存の設計提案](../decisions/0006-ai-repair-and-project-checkpoints.md)
+- [現在の補修ツールと版付き保存の操作手順](repair-tools-and-saving.md)
+- [AI向け補修・版付き保存の設計](../decisions/0006-ai-repair-and-project-checkpoints.md)
 - [現在のMCP操作契約](../live-mcp.md)
 
 ## 読み方と記録規則
@@ -20,3 +21,4 @@ layer UUID、revision、ローカル保存先を別作品に流用しない。
 
 このguideは作業知識であり、Product契約は実装・README・設計記録が権威を持つ。
 AI用の計画ガイドを通常UIへ常設することを意味しない。
+

@@ -1,8 +1,9 @@
 namespace Flamoris.Cutwork.Core;
 
 public enum CloneRepairState { Idle, Painting }
-public enum CloneRepairMessage { Ready, SourceRequired, SourceSet, Painting, Cancelled, Committed }
+public enum CloneRepairMessage { Ready, SourceRequired, SourceSet, Painting, Cancelled, Committed, SourceBudgetExceeded }
 public enum CloneSamplingMode { Fixed, Offset }
+public enum CloneSourceKind { Original, CompositeAtStrokeStart }
 
 public readonly record struct CloneRepairStatus(CloneRepairMessage Message);
 
@@ -22,8 +23,22 @@ public sealed record CloneRepairSnapshot(
 public readonly record struct CloneStrokeMapping(
     CloneSamplingMode Mode,
     DocumentPoint SourceAnchor,
-    DocumentPoint DestinationAnchor)
+    DocumentPoint DestinationAnchor,
+    double SourceScale = 1, double SourceRotationDegrees = 0,
+    double Hardness = 1, double Opacity = 1, CloneSourceKind SourceKind = CloneSourceKind.Original)
 {
+    public bool IsLegacy => SourceKind == CloneSourceKind.Original && SourceScale == 1
+        && SourceRotationDegrees == 0 && Hardness == 1 && Opacity == 1;
+
+    public void Validate()
+    {
+        if (!Enum.IsDefined(Mode) || !Enum.IsDefined(SourceKind)
+            || !double.IsFinite(SourceScale) || SourceScale < 0.25 || SourceScale > 8
+            || !double.IsFinite(SourceRotationDegrees) || Math.Abs(SourceRotationDegrees) > 180
+            || !double.IsFinite(Hardness) || Hardness < 0 || Hardness > 1
+            || !double.IsFinite(Opacity) || Opacity < 0 || Opacity > 1)
+            throw new ArgumentOutOfRangeException(nameof(SourceScale));
+    }
     public CloneStrokeMapping(DocumentPoint sourceAnchor, DocumentPoint destinationAnchor)
         : this(CloneSamplingMode.Offset, sourceAnchor, destinationAnchor) { }
 
@@ -33,8 +48,9 @@ public readonly record struct CloneStrokeMapping(
     public DocumentPoint SourceCenterFor(DocumentPoint destinationSample) => Mode switch
     {
         CloneSamplingMode.Fixed => SourceAnchor,
-        CloneSamplingMode.Offset => new(destinationSample.X + Offset.X,
-            destinationSample.Y + Offset.Y),
+        CloneSamplingMode.Offset => IsLegacy
+            ? new(destinationSample.X+Offset.X,destinationSample.Y+Offset.Y)
+            : SourceFor(destinationSample, DestinationAnchor),
         _ => throw new InvalidOperationException($"Unsupported clone sampling mode: {Mode}."),
     };
 
@@ -44,9 +60,18 @@ public readonly record struct CloneStrokeMapping(
     public DocumentPoint SourceFor(DocumentPoint destinationPixelCenter,
         DocumentPoint destinationSampleCenter)
     {
-        var center = SourceCenterFor(destinationSampleCenter);
-        return new(center.X + destinationPixelCenter.X - destinationSampleCenter.X,
-            center.Y + destinationPixelCenter.Y - destinationSampleCenter.Y);
+        if(IsLegacy)
+        {
+            var center=SourceCenterFor(destinationSampleCenter);
+            return new(center.X+destinationPixelCenter.X-destinationSampleCenter.X,
+                center.Y+destinationPixelCenter.Y-destinationSampleCenter.Y);
+        }
+        var origin = Mode == CloneSamplingMode.Fixed ? destinationSampleCenter : DestinationAnchor;
+        var dx = (destinationPixelCenter.X - origin.X) / SourceScale;
+        var dy = (destinationPixelCenter.Y - origin.Y) / SourceScale;
+        var angle = SourceRotationDegrees * Math.PI / 180;
+        return new(SourceAnchor.X + Math.Cos(angle) * dx + Math.Sin(angle) * dy,
+            SourceAnchor.Y - Math.Sin(angle) * dx + Math.Cos(angle) * dy);
     }
 }
 
@@ -66,6 +91,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
     private DocumentPoint? _sourceAnchor;
     private Guid? _sourceDocumentId;
     private CloneStrokeMapping? _strokeMapping;
+    private ICloneStroke? _rasterStroke;
     private bool _createdRepair;
     private bool _hasRasterChange;
     private bool _finishPending;
@@ -77,6 +103,13 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         _kernel = kernel ?? throw new ArgumentNullException(nameof(kernel));
     }
 
+    public CloneStrokeMapping Brush { get; private set; } = new(CloneSamplingMode.Fixed, default, default);
+    public void SetBrush(double scale, double rotation, double hardness, double opacity, CloneSourceKind source)
+    {
+        if (State != CloneRepairState.Idle) throw new InvalidOperationException("Stroke active.");
+        var brush = new CloneStrokeMapping(SamplingMode, default, default, scale, rotation, hardness, opacity, source);
+        brush.Validate(); Brush = brush; NotifyChanged();
+    }
     public bool IsActive { get; private set; }
     public CloneRepairState State { get; private set; }
     public CloneSamplingMode SamplingMode { get; private set; } = CloneSamplingMode.Fixed;
@@ -140,6 +173,14 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
         }
 
+        _strokeMapping = Brush with { Mode = SamplingMode, SourceAnchor = source, DestinationAnchor = point };
+        // Freeze before adding or painting the destination Repair.
+        try { _rasterStroke = _kernel.BeginStroke(document, _strokeMapping.Value, Radius); }
+        catch(CloneBudgetException)
+        {
+            ClearStroke();Status=new(CloneRepairMessage.SourceBudgetExceeded);NotifyChanged();
+            return CanvasInputEffects.Handled | CanvasInputEffects.ToolOverlayChanged;
+        }
         _transaction = _session.BeginTransaction();
         var selectedLayer = _session.SelectedLayerId is { } selected
             ? document.GetLayer(selected) : null;
@@ -154,11 +195,12 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
             _transaction.Apply(new AddLayer(_repair));
         }
 
-        _strokeMapping = new CloneStrokeMapping(SamplingMode, source, point);
+
         _sampler = new StrokeSampler(Radius);
         State = CloneRepairState.Painting;
         Status = new(CloneRepairMessage.Painting);
         ApplySamples(_sampler.Begin(point));
+        if(State==CloneRepairState.Idle)return CanvasInputEffects.Handled | CanvasInputEffects.ReleasePointer;
         NotifyChanged();
         return CanvasInputEffects.Handled | CanvasInputEffects.CapturePointer
             | CanvasInputEffects.ToolOverlayChanged;
@@ -180,6 +222,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         if (State != CloneRepairState.Painting || button != CanvasPointerButton.Left)
             return CanvasInputEffects.None;
         if (point is { } current && _sampler is not null) ApplySamples(_sampler.Add(current));
+        if(State==CloneRepairState.Idle)return CanvasInputEffects.Handled | CanvasInputEffects.ReleasePointer;
         if (_sampler is { HasPendingSamples: true })
         {
             _finishPending = true;
@@ -193,6 +236,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
     {
         if (!HasPendingWork || _sampler is null) return CanvasInputEffects.None;
         ApplySamples(_sampler.TakePendingBatch());
+        if (_sampler is null)return CanvasInputEffects.Handled | CanvasInputEffects.ReleasePointer;
         if (_sampler.HasPendingSamples) return CanvasInputEffects.Handled;
         return _finishPending ? CompletePointerUp(_finishPoint) : CanvasInputEffects.Handled;
     }
@@ -269,13 +313,17 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         {
             transaction.ApplyBatch(() =>
             {
-                var patch = _kernel.CreatePatch(_session.Document!.Original, repair,
-                    samples, mapping, Radius);
+                var patch = _rasterStroke?.Apply(repair, samples)
+                    ?? _kernel.CreatePatch(_session.Document!.Original, repair, samples, mapping, Radius);
                 if (patch.Region.IsEmpty || !patch.HasChanges) return;
                 transaction.Apply(new RasterPatch(repair.Id, patch.Region,
                     patch.StraightBgra.Span));
                 _hasRasterChange = true;
             });
+        }
+        catch(CloneBudgetException)
+        {
+            transaction.Cancel();ClearStroke();Status=new(CloneRepairMessage.SourceBudgetExceeded);NotifyChanged();
         }
         catch
         {
@@ -293,6 +341,7 @@ public sealed class CloneRepairController : ICanvasToolInput, ICanvasDeferredWor
         _repair = null;
         _sampler = null;
         _strokeMapping = null;
+        _rasterStroke = null;
         _createdRepair = false;
         _hasRasterChange = false;
         _finishPending = false;

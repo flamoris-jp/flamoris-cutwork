@@ -15,10 +15,10 @@ public static class CutworkMcpTools
         {
             "undo" => OperationKind.Undo,
             "redo" => OperationKind.Redo,
-            "edit" => OperationKind.Transaction,
+            "edit" or "repair_commit_candidate" or "project_save" or "project_checkpoint" or "project_save_cancel" => OperationKind.Transaction,
             _ => OperationKind.Query,
         };
-        bool foreground = name is not ("context" or "layers");
+        bool foreground = name is not ("context" or "layers" or "project_context" or "project_save_status" or "project_checkpoints_list" or "project_save_cancel");
         return new HostTool<JsonElement>(name, LiveSchema.Description(name), schema, kind,
             input => Decode(name, input),
             (context, input, token) => editor.ExecuteAsync(context, name, input, token),

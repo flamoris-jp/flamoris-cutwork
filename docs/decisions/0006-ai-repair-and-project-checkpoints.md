@@ -1,10 +1,22 @@
 # ADR 0006: AI repair workflow and revisioned project saving
 
-Status: **Proposed / 設計提案・未実装** — 2026-10-24.
+Status: **Accepted and implemented baseline** — 2026-10-24.
 
-This document proposes extensions to the current production baseline. It does not
-enable new tools or supersede current runtime permissions until implementation,
-review, and acceptance are complete. Current contracts remain in
+Implementation contracts and explicit limits are in
+[repair-tools-and-saving](../ai-guide/repair-tools-and-saving.md).
+The sections below preserve the design rationale and acceptance goals. Runtime tool names
+use underscores (repair_inspect, clone_candidates, repair_commit_candidate, project_save,
+project_checkpoint, project_save_status, project_save_cancel, project_checkpoints_list).
+Current inspect provides mask/contour/mean color, without inferred tangent confidence.
+UI Offset Composite must conservatively freeze its bounded full source because the future
+pointer path is unknown; MCP freezes the exact planned ROI. Capacity is currently fixed at
+1000 checkpoints / 2 GiB / 256 MiB snapshot. The filesystem guarantee covers cooperative local
+Cutwork writers, with conflict detection for external edits; it is not an OS-wide transaction
+against arbitrary writers. Review the operational guide before claiming stronger acceptance.
+Portrait seams and final motion remain unaccepted until real-image playback QA.
+
+This document records the extension rationale. Implemented contracts are described in the
+operation guide above. Related baseline contracts remain in
 [Live MCP](../live-mcp.md), [Clone](../phase5-clone-repair.md),
 [finishing](../phase6-repair-finishing.md), and
 [persistence](../phase7-persistence-export.md).
@@ -203,3 +215,4 @@ commit後の応答はreceiptに従う。保存jobに紐づく文書の排他を�
 実画像QAは、非表示時の取り残し、通常表示での復元、まばたき/口閉じ/小移動の
 実際の書き出しを分ける。肌境界、頬の丸み、髪の連続性を拡大と最終再生サイズで
 確認する。目と眉の今回の結果は未合格。数値やテスト合格だけで美的完成としない。
+

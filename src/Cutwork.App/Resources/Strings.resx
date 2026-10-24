@@ -187,4 +187,13 @@
   <data name="Common_Save" xml:space="preserve"><value>保存</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>キャンセル</value></data>
   <data name="MaskTool_PendingPart" xml:space="preserve"><value>未確定のパーツがあります。Enterで囲いを完成・パーツを確定するか、Escで取り消してから、マスク補正を選んでください。現在の囲い・マスクは保持されています。</value></data>
+<data name="Menu_File_AiSave" xml:space="preserve"><value>AIからこのプロジェクトの版付き保存を許可</value></data>
+<data name="AiSave_TargetRequired" xml:space="preserve"><value>先にプロジェクトを保存してください。ローカルの通常フォルダーにある保存先だけを許可できます。</value></data>
+<data name="AiSave_Conflict" xml:space="preserve"><value>保存先が外部で変更されています。内容を確認して、別名で保存してください。</value></data>
+<data name="CloneTool_Scale" xml:space="preserve"><value>採取倍率</value></data>
+<data name="CloneTool_Rotation" xml:space="preserve"><value>回転°</value></data>
+<data name="CloneTool_Hardness" xml:space="preserve"><value>硬さ%</value></data>
+<data name="CloneTool_Opacity" xml:space="preserve"><value>濃度%</value></data>
+<data name="CloneTool_Composite" xml:space="preserve"><value>合成画像から採取</value></data>
+<data name="CloneTool_Status_SourceBudget" xml:space="preserve"><value>採取範囲が大きすぎます。固定モードか、より小さいブラシで試してください。</value></data>
 </root>

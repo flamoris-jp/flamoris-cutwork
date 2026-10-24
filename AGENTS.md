@@ -292,3 +292,4 @@ and applicable hands-on notes. Preserve the distinction between observed outcome
 human intent, unverified hypotheses, and proposed tools. Observe the live document
 rather than reusing example layer IDs or coordinates. A successful operation or a
 restored full composite does not establish visual acceptance of hidden repairs.
+

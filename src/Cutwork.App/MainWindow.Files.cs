@@ -10,6 +10,20 @@ namespace Flamoris.Cutwork.App;
 public partial class MainWindow
 {
     private bool _closeApproved;
+    private void AiSaveMenuItem_Click(object sender,RoutedEventArgs e)
+    {
+        try
+        {
+            if(AiSaveMenuItem.IsChecked) _workspace.AuthorizeAiSave();
+            else _workspace.RevokeAiSave();
+        }
+        catch(Exception ex) when(ex is ProjectSaveException or IOException or UnauthorizedAccessException)
+        {
+            AiSaveMenuItem.IsChecked=false;
+            MessageBox.Show(this,LocalizationService.Current["AiSave_TargetRequired"],
+                LocalizationService.Current["ProjectError_Title"],MessageBoxButton.OK,MessageBoxImage.Information);
+        }
+    }
 
     private void OpenProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -63,6 +77,11 @@ public partial class MainWindow
             _workspace.Save(path);
             UpdateStatus();
             return true;
+        }
+        catch(ProjectSaveException)
+        {
+            MessageBox.Show(this,LocalizationService.Current["AiSave_Conflict"],LocalizationService.Current["ProjectError_Title"],MessageBoxButton.OK,MessageBoxImage.Warning);
+            return false;
         }
         catch (FlimgException exception)
         {
@@ -174,6 +193,8 @@ public partial class MainWindow
 
     private void UpdateFileCommandState()
     {
+        AiSaveMenuItem.IsChecked=_workspace.Checkpoints is not null;
+        AiSaveMenuItem.IsEnabled=_workspace.ProjectPath is not null && !_workspace.IsSaving;
         var enabled = _session.Document is not null;
         SaveMenuItem.IsEnabled = enabled;
         SaveAsMenuItem.IsEnabled = enabled;
@@ -207,6 +228,7 @@ public partial class MainWindow
 
     private void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        if(_workspace.IsSaving){e.Cancel=true;return;}
         if (_remoteEditing) { StopMcp(); e.Cancel = true; return; }
         using var coordination = CoordinateFiles();
         if (_closeApproved) return;
