@@ -7,7 +7,7 @@
         MinWidth="920"
         MinHeight="560"
         Closing="MainWindow_Closing"
-        Background="#202124">
+        Background="#202124" Icon="Assets/cutwork.ico">
     <Window.Resources>
         <Style x:Key="CommandIconButton" TargetType="{x:Type Button}">
             <Setter Property="Width" Value="34" />
