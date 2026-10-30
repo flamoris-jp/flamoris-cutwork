@@ -24,15 +24,15 @@ public partial class MainWindow
 
     private void InitializeMcp()
     {
-        _mcpHost = new CutworkMcpHost(_session, HumanBusy, DispatchMcp);
+        _mcpHost = new CutworkMcpHost(_session, HumanBusy, DispatchMcp, applicationLifetime: true);
         _mcpUi = new McpDesktopUi(this, McpMenu, "flamoris-cutwork",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FLAMORIS", "Cutwork", "mcp-connection.json"),
             "FLAMORIS.Cutwork", Path.Combine(AppContext.BaseDirectory, "mcp", "Flamoris.Mcp.Bridge.exe"),
-            AttachMcp, () => _session.Document is not null, () => LocalizationService.Current.Culture);
+            AttachMcp, () => true, () => LocalizationService.Current.Culture);
         McpStatusPanel.Content = _mcpUi.StatusIndicator;
-        _capture = new EmbeddedWindowCapture(this, StopMcp);
+        _capture = new EmbeddedWindowCapture(this);
         CaptureStatusPanel.Content = _capture.Control;
-        _session.DocumentReplacing += (_, _) => { _capture.Stop(); StopMcp(); };
+        _session.DocumentReplacing += (_, _) => { _capture.Stop(); _workspace.RevokeAiSave(); AiSaveMenuItem.IsChecked = false; };
         Closed += (_, _) => ShutdownMcp();
         Dispatcher.ShutdownStarted += (_, _) => ShutdownMcp();
         UpdateMcp();
@@ -47,7 +47,7 @@ public partial class MainWindow
                 CutworkLog.Current, currentGrant: () => _mcpGrant,workspace:_workspace,
                 dispatchCompletion: action => DispatchMcp(action,CancellationToken.None));
             boundary = new McpBoundary(_mcpHost!, CutworkMcpTools.Create(editor).Concat(_capture.Tools()), new McpOptions {
-                Permission = permission, PipeName = "flamoris-cutwork-" + Guid.NewGuid().ToString("N"),
+                ApplicationLifetime = true, Permission = permission, PipeName = "flamoris-cutwork-" + Guid.NewGuid().ToString("N"),
                 MaxConcurrentRequests = 1, MaxRequestBytes = LiveLimits.FrameBytes,
             }, new McpDiagnostics(CutworkLog.Current));
             _mcpBoundary = boundary;

@@ -43,6 +43,10 @@ internal static class Program
             await Until(()=>{process.Refresh();if(process.HasExited)throw new Exception("Editor exited.");if(process.MainWindowHandle==0)return false;main=AutomationElement.FromHandle(process.MainWindowHandle);return main is not null;});
             var window=main!;
             string? durableLayers=null; byte[]? durableComposite=null; byte[]? durableMask=null; Guid durablePart=default;
+            await Menu(window,"McpMenu","McpReadMenu");
+            var startupConnection = await Connection(process.Id);
+            await using (var startup = new ClientHandle(await Connect(bridge, startupConnection)))
+                Check(!(await Common(startup.Client)).GetProperty("hasDocument").GetBoolean(), "Startup invented a document.");
             await FileMenu(window,process.Id,"OpenMenuItem",image);
             Console.WriteLine("Opened synthetic artwork through WPF.");
             await Menu(window,"ViewMenu","ActualSizeMenuItem");
@@ -113,9 +117,10 @@ internal static class Program
             await OldPipeRejected(connection.Pipe);connection=await Connection(process.Id);
             await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
-                await FileMenu(window,process.Id,"OpenProjectMenuItem",project);await Rejected(handle.Client);
+                var oldToken = (await Common(handle.Client)).GetProperty("documentToken").GetString();
+                await FileMenu(window,process.Id,"OpenProjectMenuItem",project);
+                Check((await Common(handle.Client)).GetProperty("documentToken").GetString() != oldToken, "Reopen reused document token.");
             }
-            await OldPipeRejected(connection.Pipe);
             await Menu(window,"McpMenu","McpReadMenu");connection=await Connection(process.Id);
             await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
@@ -124,22 +129,22 @@ internal static class Program
                 Check(Enumerable.SequenceEqual(durableMask!,await Mask(handle.Client,durablePart)),"Reopen changed authored mask pixels.");
                 Console.WriteLine("UI Save/v2 reopen preserves IDs, ownership/order, mask and composite pixels: PASS");
                 // Reopen exact same persistent document identity.
-                await FileMenu(window,process.Id,"OpenProjectMenuItem",project);await Rejected(handle.Client);
+                var oldToken = (await Common(handle.Client)).GetProperty("documentToken").GetString();
+                await FileMenu(window,process.Id,"OpenProjectMenuItem",project);
+                Check((await Common(handle.Client)).GetProperty("documentToken").GetString() != oldToken, "Reopen reused document token.");
             }
-            await OldPipeRejected(connection.Pipe);
             await Menu(window,"McpMenu","McpEditMenu");connection=await Connection(process.Id);
             await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 await Context(handle.Client);await Menu(window,"McpMenu","McpStopMenu");await Rejected(handle.Client);
             }
-            await OldPipeRejected(connection.Pipe);
             await Menu(window,"McpMenu","McpReadMenu");connection=await Connection(process.Id);
             await BridgeEof(bridge,connection);
             await using(var handle=new ClientHandle(await Connect(bridge,connection)))
             {
                 await Context(handle.Client);await Task.Run(()=>((WindowPattern)window.GetCurrentPattern(WindowPattern.Pattern)).Close());await process.WaitForExitAsync().WaitAsync(Limit);await Rejected(handle.Client);
             }
-            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core/Wpf 1.3.1 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/same-file reopen/close/bridge stdin EOF/old endpoint rejection.");
+            Console.WriteLine("PASS: published editor+Flamoris.Mcp.Bridge outside source with System32-only PATH; Flamoris.Mcp.Core/Wpf 1.4.0 / official SDK 2.2.0 / MCP 2026-07-28; Read only image and direct denial; Part+Mask+Clone+Patch; automatic WPF projection; WPF Undo/Redo exact pixel restoration; UI edit -> MCP; stale/rollback; UI Save/v2 reopen; downgrade/Stop/close/bridge stdin EOF rejection; same-file reopen preserves client with fresh document token.");
         }
         catch { DumpUi(process.Id); throw; }
         finally {if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}try{Directory.Delete(temp,true);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){} }

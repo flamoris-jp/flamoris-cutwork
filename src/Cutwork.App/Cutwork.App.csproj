@@ -18,7 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="../../dependencies/flamoris-capture/src/Flamoris.Capture.Wpf/Flamoris.Capture.Wpf.csproj" />
     <PackageReference Include="Flamoris.Logging" Version="1.0.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.3.1" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.4.0" />
     <ProjectReference Include="..\Cutwork.Mcp\Cutwork.Mcp.csproj" />
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
@@ -27,7 +27,7 @@
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Flamoris.Mcp.Wpf" Version="1.3.1" />
+    <PackageReference Include="Flamoris.Mcp.Wpf" Version="1.4.0" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets/cutwork.ico" />

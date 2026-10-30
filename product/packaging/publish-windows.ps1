@@ -118,8 +118,8 @@ foreach ($coreAssembly in @(
     (Join-Path $bridgePath "Flamoris.Mcp.Core.dll")
 )) {
     $coreProductVersion = (Get-Item -LiteralPath $coreAssembly).VersionInfo.ProductVersion
-    if ($coreProductVersion -notmatch '^1\.3\.1(?:[+.-]|$)') {
-        throw "Packaged MCP Core must be 1.3.1; found $coreProductVersion at $coreAssembly"
+    if ($coreProductVersion -notmatch '^1\.4\.0(?:[+.-]|$)') {
+        throw "Packaged MCP Core must be 1.4.0; found $coreProductVersion at $coreAssembly"
     }
 }
 

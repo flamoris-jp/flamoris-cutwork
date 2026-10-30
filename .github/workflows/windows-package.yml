@@ -37,6 +37,24 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - name: Checkout coordinated MCP 1.4 source for preview validation
+        uses: actions/checkout@v4
+        with:
+          repository: flamoris-jp/flamoris-mcp-core
+          ref: 873a8747d544c6c9d4ad75ddb39cabaa7978eef3
+          path: .ci/mcp-core
+          persist-credentials: false
+      - name: Build coordinated MCP packages into temporary CI feed
+        shell: pwsh
+        run: |
+          $feed = Join-Path $PWD 'artifacts/mcp-preview-feed'
+          dotnet pack .ci/mcp-core/src/Flamoris.Mcp.Core -c Release -o $feed
+          if ($LASTEXITCODE -ne 0) { throw 'Core pack failed.' }
+          dotnet pack .ci/mcp-core/src/Flamoris.Mcp.Wpf -c Release -o $feed
+          if ($LASTEXITCODE -ne 0) { throw 'Wpf pack failed.' }
+          if (!(Test-Path NuGet.config)) { '<configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>' | Set-Content NuGet.config }
+          dotnet nuget add source $feed --name coordinated-mcp-preview --configfile NuGet.config
+          if ($LASTEXITCODE -ne 0) { throw 'Preview feed setup failed.' }
       - run: dotnet restore Cutwork.sln
       - run: dotnet build Cutwork.sln --configuration Release --no-restore
       - run: dotnet test Cutwork.sln --configuration Release --no-build --framework net10.0-windows10.0.19041.0

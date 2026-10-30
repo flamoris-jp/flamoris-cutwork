@@ -271,7 +271,7 @@ The shared MCP UI migration and package release order are documented in [shared 
 
 The embedded Capture candidate includes screen observation whenever the editor's
 MCP connection is enabled. Connect normally (read-only or edit), then request
-`capture.screenshot.get` (`{"input":{}}`). The bottom bar shows **MCP画面共有中**.
+`capture.screenshot.get` (`{"input":{}}`). The bottom bar provides an independent **画面共有 ON/OFF** checkbox. Enable it explicitly after connecting; connection alone does not share pixels.
 No separate sharing checkbox or Capture EXE is needed; disconnecting MCP stops
 sharing. See [usage, build dependency and Windows acceptance](docs/embedded-capture.md).
 
@@ -292,3 +292,8 @@ Large clothing/hair can be cut at full resolution using bounded polygon preview/
 The append-only work log stores editorial decisions and actual observations inside the project,
 readable/writable through MCP. See [workflow](docs/ai-guide/large-parts-and-work-log.md)
 and [v3 persistence](docs/flimg-schema-v3.md). Projects without records retain v2 output.
+
+
+## MCP startup and sharing
+
+See [startup/consent behavior and Windows acceptance](docs/mcp-startup.md). MCP can connect at application startup before opening a file; connection alone never enables screen sharing. Document changes preserve the connection and invalidate old target guards.
