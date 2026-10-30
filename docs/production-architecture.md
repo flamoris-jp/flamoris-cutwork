@@ -648,5 +648,7 @@ None of these questions blocks the foundation or first real-image canvas. They m
 [ADR 0002](decisions/0002-live-mcp.md) adds a bounded external adapter on the same
 WPF dispatcher/session. Core and Imaging remain independent of wire types.
 Mask dabs and per-pixel composition have shared helpers; the UI retains its
-controllers and cache. DocumentReplacing revokes before successful installation.
+controllers and cache. Document replacement rotates target tokens and cancels old
+request/save/capture authority while preserving the application MCP connection;
+see [startup lifetime](mcp-startup.md).
 No document/schema/history authority is duplicated.

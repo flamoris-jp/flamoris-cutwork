@@ -2,12 +2,14 @@
 
 # Cutwork MCP / AI
 
-Cutworkを起動して画像または`.flimg`を開き、上部の **MCP / AI** から
-接続方法を選び、「読み取り専用で有効」または「編集を許可して有効」を選びます。
+Cutworkは画像や`.flimg`を開く前から接続できます。上部の **MCP / AI** で
+接続方法と読み取り専用／編集可を選びます。新規設定では起動時にManual・読み取り専用で
+自動接続し、保存済みの自動接続OFFは維持します。現在の共通UIは
+[接続ガイド](shared-mcp-connection.md)を参照してください。
 ブリッジは配布物内の`mcp/Flamoris.Mcp.Bridge.exe`です。起動済みの、
 このウィンドウだけに接続します。
 
-接続方法は次の2つです。
+接続方法はManual、OpenAI tunnel-client、FLAMORIS MCP Hubです。以下はlocal bridgeを使う2方式の補足です。
 
 - **Manual**: 従来どおり、表示されたJSONを同じWindowsユーザーで動く
   MCPクライアントへコピーします。managed helperを起動しなくても利用できます。
@@ -27,9 +29,11 @@ Open/書き出し先の指定、フォルダー閲覧、シェル実行は公開
 保存は指定済みプロジェクトだけをUIで別途許可すると、版付きのSave/Checkpointを使えます。
 [補修・保存の手順](ai-guide/repair-tools-and-saving.md)を参照してください。
 
-同時接続は1つです。無効化、権限変更、文書を開き直す操作、終了によって
-古い接続は失効します。同じファイルの再Openも、新しく有効化が必要です。
-grant/pipe/capabilityは保存されず、再起動時はMCP Offです。Manual通信停止時は、
+同時接続は1つです。無効化、権限変更、終了で古いgrantは失効します。
+文書の開閉・切替・同一ファイルの再Openでは接続を維持し、対象tokenを更新します。
+古いguardや取得途中の結果は新しい文書へ引き継ぎません。未オープン時も
+`mcp.context`とdiscoveryは利用でき、文書必須ツールは`no_document`を返します。
+grant/pipe/capability自体は保存しません。Manual通信停止時は、
 エディターを確認してから新しい接続設定をコピーしてください。
 編集要求を自動再送しないでください。
 
@@ -40,14 +44,14 @@ transient capability境界を使います。
 
 ## Protocol / configuration
 
-`Flamoris.Mcp.Core` **1.1.0** / official C# SDK **2.2.0**; MCP
+`Flamoris.Mcp.Core` **1.4.0** / official C# SDK **2.2.0**; MCP
 **2026-07-28** with the Core-supported legacy initialization path, standard stdio.
 Core owns SDK protocol objects; all editing stays in the existing running WPF
 session. Example configuration (the UI supplies fresh exact values):
 
 `ReadTimeoutMs` bounds a frame only after bytes for that frame have started.
 Ordinary idle time between requests does not expire a healthy connection. Stop,
-permission change, document replacement and application shutdown still revoke and
+permission change and application shutdown still revoke and
 disconnect an idle bridge immediately.
 
 ```json
@@ -73,7 +77,7 @@ helperが起動しているだけでは、外部client接続中とは表示し�
 helper stoppedのまま外部clientが接続できます。helperの起動・更新・停止に失敗しても
 通常の画像編集とManual接続は利用できます。
 
-無効化、権限変更、文書置換、終了では、current grantを先にrevokeし、その後で
+無効化、権限変更、終了では、current grantを先にrevokeし、その後で
 このCutwork instanceが起動・追跡している正確なchildだけを停止します。プロセス名の
 検索や他の`tunnel-client`の停止は行いません。grant発行またはrotationが成功した後は、
 caller cancellationが同時に成立してもlifecycle/providerの整合を完了します。

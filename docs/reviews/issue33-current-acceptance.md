@@ -1,5 +1,7 @@
 # Issue #33 current implementation and acceptance audit
 
+> The document-replacement grant/connection lifecycle below describes the original implementation. Current Core/Wpf 1.4.0 uses [application-lifetime startup](../mcp-startup.md): document changes preserve MCP, rotate target guards and cancel old document-scoped results/resources. Explicit Stop, permission changes and runtime loss/shutdown still revoke. Original test evidence remains historical.
+
 Date: 2026-09-26. Original audit baseline: reviewed main `21636ed2417790c7aa79ca8a37fb71f7e0d9049a`.
 PR #43 and PR #44 were subsequently reviewed and merged. This audit does not
 replace the remaining hands-on acceptance for Issue #33.

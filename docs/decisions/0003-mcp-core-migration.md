@@ -1,5 +1,7 @@
 # ADR 0003: Migrate live MCP to Flamoris.Mcp.Core 1.0.1
 
+> The document-replacement grant/connection lifecycle below describes the original implementation. Current Core/Wpf 1.4.0 uses [application-lifetime startup](../mcp-startup.md): document changes preserve MCP, rotate target guards and cancel old document-scoped results/resources. Explicit Stop, permission changes and runtime loss/shutdown still revoke. Original test evidence remains historical.
+
 Status: accepted for Issue #36 implementation. Baseline `7791306a`.
 Managed connection lifecycle additions are recorded separately in ADR 0004.
 
