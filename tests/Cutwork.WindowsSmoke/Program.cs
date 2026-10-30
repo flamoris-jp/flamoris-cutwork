@@ -205,7 +205,8 @@ internal static class Program
     {
         bool connect = parent == "McpMenu" && child is "McpReadMenu" or "McpReadOnlyMenu" or "McpEditMenu";
         ((ExpandCollapsePattern)Find(root, parent).GetCurrentPattern(ExpandCollapsePattern.Pattern)).Expand();
-        if (!connect) { await Invoke(Find(root, child)); return; }
+        if (!connect) { await Until(() => Find(root, child).Current.IsEnabled); await Invoke(Find(root, child)); return; }
+        await Until(() => Find(root, "McpConnectMenu").Current.IsEnabled);
         var opening = Invoke(Find(root, "McpConnectMenu"));
         int pid = root.Current.ProcessId;
         AutomationElement? permission = null;
