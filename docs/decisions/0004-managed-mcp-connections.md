@@ -1,5 +1,7 @@
 # ADR 0004: Cutwork-owned managed MCP connections
 
+> The document-replacement grant/connection lifecycle below describes the original implementation. Current Core/Wpf 1.4.0 uses [application-lifetime startup](../mcp-startup.md): document changes preserve MCP, rotate target guards and cancel old document-scoped results/resources. Explicit Stop, permission changes and runtime loss/shutdown still revoke. Original test evidence remains historical.
+
 Status: accepted for Issue #40 implementation.
 
 ## Decision

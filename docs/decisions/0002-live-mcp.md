@@ -1,5 +1,7 @@
 # ADR 0002: Cutwork live MCP
 
+> The document-replacement grant/connection lifecycle below describes the original implementation. Current Core/Wpf 1.4.0 uses [application-lifetime startup](../mcp-startup.md): document changes preserve MCP, rotate target guards and cancel old document-scoped results/resources. Explicit Stop, permission changes and runtime loss/shutdown still revoke. Original test evidence remains historical.
+
 Supersession note: Issue #36 moves the shared transport, capability and protocol
 infrastructure to `Flamoris.Mcp.Core` 1.0.1. Cutwork-specific authority and tool
 semantics below remain current; see [ADR 0003](0003-mcp-core-migration.md).

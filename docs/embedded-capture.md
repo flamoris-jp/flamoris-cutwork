@@ -1,6 +1,8 @@
 # Embedded window observation / 画面共有
 
-Implemented candidate, 2026-10-24. The existing Hub catalog was refreshed to 11 tools, and the external client discovered the two embedded Capture tools. Physical image and revoke/lifecycle acceptance remain pending; catalog visibility alone is not image acceptance.
+Application-lifetime MCP and independent sharing are implemented. See
+[startup policy](mcp-startup.md). Historical catalog/image observations and the
+remaining physical platform checks are separate from source/CI acceptance.
 
 The editor embeds `Flamoris.Capture.Wpf` over Capture Core/Windows/Mcp.
 The editor remains authoritative for its document, commands and Undo/Redo.
@@ -9,21 +11,24 @@ window selection is installed. The normal editor MCP connection is reused.
 
 ## Use
 
-1. Start the editor and open artwork/a project.
-2. Connect using the existing **MCP / AI** menu (read-only or edit). The connection
-   also authorizes screenshots of this editor window; no additional checkbox or
-   safety dialog is required.
-3. Request `capture.screenshot.get` with `{"input":{}}` through that editor's
-   connection. `capture.session.get` reports the session and bounded image limits.
-   In Hub these names are prefixed with the editor namespace.
-4. Disconnect MCP to stop sharing. Failed/cancelled connection attempts also stop
-   their capture session. A stale connection cannot stop a newer connection.
+1. Start the editor. MCP can connect before artwork/a project is opened. New
+   preferences auto-connect locally read-only; saved OFF remains OFF.
+2. Use **MCP / AI** for connection/settings (read-only or edit). Connection only
+   enables the independent **画面共有 OFF** checkbox in the bottom bar.
+3. Enable that checkbox and confirm the notice. Only then may
+   `capture.screenshot.get` with `{"input":{}}` return this owner window.
+   `capture.session.get` reports safe status even with sharing OFF.
+   In Hub the existing editor namespace prefixes these tool names.
+4. Turn sharing OFF to cancel new/pending image disclosure without disconnecting
+   MCP. Disconnect/failure stops that attachment's sharing; a stale connection
+   cannot stop a newer one.
 
-The bottom bar displays **MCP画面共有中** in yellow during the MCP attachment.
-There is no independent saved sharing preference. Lock/disconnect/suspend/window
-loss/exit revokes the current capture session; subsequent connections follow the
-existing MCP provider/reconnect settings. Minimized/hidden windows fail capture;
-there is no desktop fallback. Separate modal HWNDs are outside the image.
+The checkbox displays **画面共有 ON** in yellow only while sharing. Screen consent
+is not persisted or restored by connection/reconnection. Lock, suspend, window
+loss and document replacement stop sharing while preserving the application MCP
+connection when its runtime remains available. Explicit MCP Stop and app shutdown
+revoke the connection. Minimized/hidden windows fail capture; there is no desktop
+fallback. Separate modal HWNDs are outside the image.
 Screenshots use Capture's default bounded JPEG (max edge 1280, <=1 MiB); callers
 may request ROI, PNG, or max edge up to 1920. No images are written to disk.
 The standalone Capture EXE retains its separate consent controls and notice.
@@ -40,18 +45,20 @@ git submodule update --init --recursive
 ```
 
 The normal publish script does this automatically, and Windows CI checks it out
-recursively. MCP Core/Wpf and the packaged bridge use 1.3.1 for single-image MCP
+recursively. MCP Core/Wpf and the packaged bridge use 1.4.0 for single-image MCP
 results. Windows build 19041 is the API floor; WGC/D3D11 support is required.
 
 ## Acceptance
 
-- Build/portable package must include Capture DLLs and MCP Core 1.3.1.
+- Build/portable package must include Capture DLLs and MCP Core 1.4.0.
 - Existing document/edit/Undo tests must still pass.
-- Windows: connect MCP and immediately request screenshots in read-only/edit modes;
-  verify canvas, selections and panels reflect the current window.
-- Disconnect during a pending shot; no old pixels may be disclosed.
-- Lock/unlock, suspend/resume, minimize, replace a document and close/reopen;
-  verify revoked grants fail and only a new valid MCP attachment permits images.
+- Windows: connect with no document and sharing OFF; status works, pixels are denied.
+- Explicitly enable sharing and verify canvas, selections and panels in both modes.
+- Turn sharing OFF during a pending shot; no old pixels may be disclosed and the
+  MCP connection remains usable.
+- Lock/unlock, suspend/resume, minimize and replace/reopen a document; sharing
+  stops and requires fresh consent. Reject old target guards without reconnecting.
+- Explicit MCP Stop/shutdown revokes the connection and stops sharing.
 - Existing normal MCP edits and ordinary manual editing remain usable.
 
 Cross-platform builds cannot certify real WGC/GPU/DPI behavior.
