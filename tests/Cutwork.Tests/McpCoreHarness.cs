@@ -14,7 +14,7 @@ internal sealed class McpCoreHarness : IDisposable
         IPartBoundaryFitter? partFitter, McpOptions? options, TimeProvider? timeProvider,ProjectWorkspace? workspace)
     {
         Session = session;
-        Host = new(session, busy, dispatch);
+        Host = new(session, busy, dispatch, applicationLifetime: options?.ApplicationLifetime == true);
         Editor = new(session, permission, busy, editing, logger, partFitter,
             currentGrant: () => Grant, timeProvider: timeProvider,workspace:workspace,dispatchCompletion:action=>dispatch(action,CancellationToken.None));
         var configured = (options ?? new McpOptions()) with
