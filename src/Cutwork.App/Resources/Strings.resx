@@ -196,4 +196,32 @@
 <data name="CloneTool_Opacity" xml:space="preserve"><value>濃度%</value></data>
 <data name="CloneTool_Composite" xml:space="preserve"><value>合成画像から採取</value></data>
 <data name="CloneTool_Status_SourceBudget" xml:space="preserve"><value>採取範囲が大きすぎます。固定モードか、より小さいブラシで試してください。</value></data>
+  <data name="AIRepair_Title" xml:space="preserve"><value>AIで穴埋め…</value></data>
+  <data name="AIRepair_Explanation" xml:space="preserve"><value>選んだパーツの穴を補完します。「画像を送って生成」で、下に表示された灰色の穴を含む周辺画像をStudioへ送ります。生成後に左右を比べ、採用すると補修レイヤーが追加されます。閉じるとローカルの待機だけを終了します。</value></data>
+  <data name="AIRepair_Server" xml:space="preserve"><value>StudioのURL</value></data>
+  <data name="AIRepair_Email" xml:space="preserve"><value>メールアドレス</value></data>
+  <data name="AIRepair_Password" xml:space="preserve"><value>パスワード（保存しません）</value></data>
+  <data name="AIRepair_Connect" xml:space="preserve"><value>接続して編集AIを探す</value></data>
+  <data name="AIRepair_Workflow" xml:space="preserve"><value>画像編集AI</value></data>
+  <data name="AIRepair_Reference" xml:space="preserve"><value>送信する範囲（灰色部分を補完）</value></data>
+  <data name="AIRepair_Comparison" xml:space="preserve"><value>パーツを隠して比較：左＝修正前 ／ 右＝候補</value></data>
+  <data name="AIRepair_Generate" xml:space="preserve"><value>画像を送って生成</value></data>
+  <data name="AIRepair_CancelJob" xml:space="preserve"><value>生成の中止を要求</value></data>
+  <data name="AIRepair_Apply" xml:space="preserve"><value>この候補を採用</value></data>
+  <data name="AIRepair_Close" xml:space="preserve"><value>閉じる</value></data>
+  <data name="AIRepair_Ready" xml:space="preserve"><value>パーツのマスクと送信範囲を確認し、Studioへ接続してください。</value></data>
+  <data name="AIRepair_Connecting" xml:space="preserve"><value>Studioへ接続しています…</value></data>
+  <data name="AIRepair_NoWorkflow" xml:space="preserve"><value>現在、対応する単一参照の画像編集ワークフローを利用できません。Studioの接続と登録済みワークフローを確認してください。</value></data>
+  <data name="AIRepair_Instruction" xml:space="preserve"><value>Fill only the neutral gray missing area with the natural continuation of the surrounding skin, hair, clothing or background. Preserve the illustration style, lighting and colors. Do not restore the removed foreground feature. Keep the rest of the image unchanged.</value></data>
+  <data name="AIRepair_Stale" xml:space="preserve"><value>文書が変更されたため、この候補は採用できません。閉じて現在のパーツからやり直してください。</value></data>
+  <data name="AIRepair_Sending" xml:space="preserve"><value>周辺画像を送信して生成を開始します…</value></data>
+  <data name="AIRepair_Running" xml:space="preserve"><value>生成待機中。実行ID：</value></data>
+  <data name="AIRepair_Fetching" xml:space="preserve"><value>結果を取得しています…</value></data>
+  <data name="AIRepair_Compare" xml:space="preserve"><value>左右の穴と境界を確認してください。採用はUndoで戻せます。</value></data>
+  <data name="AIRepair_JobState" xml:space="preserve"><value>生成状態：</value></data>
+  <data name="AIRepair_Resume" xml:space="preserve"><value>状態確認・結果取得</value></data>
+  <data name="AIRepair_LayerName" xml:space="preserve"><value>AI穴埋め</value></data>
+  <data name="AIRepair_Error" xml:space="preserve"><value>完了できませんでした：</value></data>
+  <data name="AIRepair_Uncertain" xml:space="preserve"><value>自動再送はしていません。Studioの実行履歴で状態を確認できます。</value></data>
+  <data name="AIRepair_CannotStart" xml:space="preserve"><value>パーツを選び、編集中の操作を完了してから実行してください。初期版は周辺を含む範囲262,144画素までに対応します。</value></data>
 </root>

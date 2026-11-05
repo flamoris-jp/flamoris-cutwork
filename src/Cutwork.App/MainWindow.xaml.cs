@@ -40,6 +40,7 @@ public partial class MainWindow : Window
         _inputRouter = new CanvasInputRouter(_session);
         InitializeLayerEditing();
         InitializeMcp();
+        InitializeImageRepair();
         CanvasView.AttachSession(_session);
         CanvasView.AttachInputRouter(_inputRouter, _partTool, _maskTool, _patchTool, _cloneTool,
             _blurTool, _smudgeTool);
@@ -91,6 +92,7 @@ public partial class MainWindow : Window
         AiSaveMenuItem.Header=text["Menu_File_AiSave"];
         ExitMenuItem.Header = text["Menu_File_Exit"];
         EditMenu.Header = text["Menu_Edit"];
+        ImageRepairMenuItem.Header = text["AIRepair_Title"];
         ViewMenu.Header = text["Menu_View"];
         FitMenuItem.Header = text["Menu_View_Fit"];
         ActualSizeMenuItem.Header = text["Menu_View_ActualSize"];

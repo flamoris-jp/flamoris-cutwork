@@ -77,7 +77,7 @@ public partial class MainWindow
         }, DispatcherPriority.Background, cancellationToken).Task;
     }
 
-    private bool HumanBusy() => _fileCoordination > 0 || _inlineName is not null
+    private bool HumanBusy() => _imageRepairOpen || _fileCoordination > 0 || _inlineName is not null
         || _partTool.State != PartToolState.Idle || _maskTool.State != MaskBrushState.Idle
         || _cloneTool.State != CloneRepairState.Idle || _inputRouter.HasPendingToolWork
         || _patchTool.HasPending || _blurTool.State != RepairFinishingState.Idle
@@ -93,20 +93,202 @@ public partial class MainWindow
         _remoteEditing = active;
         WorkArea.IsEnabled = MainToolbar.IsEnabled = !active;
         FileMenu.IsEnabled = EditMenu.IsEnabled = ViewMenu.IsEnabled = LayerMenu.IsEnabled
-            = ExportMenu.IsEnabled = HelpMenu.IsEnabled = !active;
-        if(!active)UpdateFileCommandState();
-        CommandManager.InvalidateRequerySuggested();
-    }
-
-    private IDisposable CoordinateFiles()
-    {
-        if (_remoteEditing) throw new InvalidOperationException("Remote operation active.");
-        _fileCoordination++;
-        return new Coordination(() => _fileCoordination--);
-    }
-
-    private sealed class Coordination(Action end) : IDisposable
-    {
-        public void Dispose() => end();
-    }
-}
+            = Ex…16466 tokens truncated…308fせへ進みます。</value></data>
+  <data name="PartTool_Status_NeedsThreePoints" xml:space="preserve"><value>囲いには3点以上必要です（現在{0}点）。</value></data>
+  <data name="PartTool_Status_FenceTooSmall" xml:space="preserve"><value>囲いが小さすぎます（{0} px）。少し広く囲んでください。</value></data>
+  <data name="PartTool_Status_FittingPreview" xml:space="preserve"><value>境界合わせ：段階 {0}、{1}/{2} px。ホイール前回転＝内側、後ろ回転＝戻す、Ctrl+ホイール＝ズーム、Enter＝確定。</value></data>
+  <data name="PartTool_Status_Cancelled" xml:space="preserve"><value>未確定のパーツを取り消しました。</value></data>
+  <data name="PartTool_Status_Committed" xml:space="preserve"><value>パーツを作成しました。元に戻す1回で作成全体を取り消せます。</value></data>
+  <data name="Panel_Layers" xml:space="preserve"><value>レイヤー</value></data>
+  <data name="Panel_Parts" xml:space="preserve"><value>パーツ</value></data>
+  <data name="Part_Add" xml:space="preserve"><value>パーツツールで追加</value></data>
+  <data name="Part_Delete" xml:space="preserve"><value>選択中のパーツを削除</value></data>
+  <data name="Part_SemanticName" xml:space="preserve"><value>識別名</value></data>
+  <data name="Part_SemanticName_None" xml:space="preserve"><value>識別名なし</value></data>
+  <data name="Panel_Properties" xml:space="preserve"><value>プロパティ</value></data>
+  <data name="Canvas_NoDocument" xml:space="preserve"><value>画像を開いてください</value></data>
+  <data name="Status_Ready" xml:space="preserve"><value>準備完了</value></data>
+  <data name="Status_ImageOpened" xml:space="preserve"><value>{0} — {1}×{2} px — {3:F0}%</value></data>
+  <data name="Status_CanvasPosition" xml:space="preserve"><value>X: {0:F1}  Y: {1:F1} — {2:F0}%</value></data>
+  <data name="Dialog_ImageFilter" xml:space="preserve"><value>画像ファイル (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg|PNG (*.png)|*.png|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg</value></data>
+  <data name="Error_Title" xml:space="preserve"><value>画像を開けません</value></data>
+  <data name="Error_UnsupportedFormat" xml:space="preserve"><value>PNGまたはJPEGファイルを選択してください。</value></data>
+  <data name="Error_InvalidImage" xml:space="preserve"><value>画像ファイルが壊れているか、読み取れません。</value></data>
+  <data name="Error_IoFailure" xml:space="preserve"><value>画像ファイルへアクセスできません。</value></data>
+  <data name="Edit_Undo" xml:space="preserve"><value>元に戻す</value></data>
+  <data name="Edit_Redo" xml:space="preserve"><value>やり直す</value></data>
+  <data name="Developer_AddLayers" xml:space="preserve"><value>開発用：確認レイヤーを追加</value></data>
+  <data name="Layer_MoveUp" xml:space="preserve"><value>上へ</value></data>
+  <data name="Layer_MoveDown" xml:space="preserve"><value>下へ</value></data>
+  <data name="Layer_Delete" xml:space="preserve"><value>削除</value></data>
+  <data name="Layer_Name" xml:space="preserve"><value>名前</value></data>
+  <data name="Layer_Rename" xml:space="preserve"><value>名前を適用</value></data>
+  <data name="Layer_Visible" xml:space="preserve"><value>表示／非表示</value></data>
+  <data name="LayerKind_Base" xml:space="preserve"><value>ベース</value></data>
+  <data name="LayerKind_Part" xml:space="preserve"><value>パーツ</value></data>
+  <data name="LayerKind_Patch" xml:space="preserve"><value>パッチ</value></data>
+  <data name="LayerKind_Repair" xml:space="preserve"><value>補修・ペイント</value></data>
+  <data name="Layer_RepairOwner" xml:space="preserve"><value>補修・ペイント · {0}</value></data>
+  <data name="Properties_NoSelection" xml:space="preserve"><value>レイヤーを選択してください</value></data>
+  <data name="Layer_Bounds" xml:space="preserve"><value>範囲：X {0}, Y {1} / {2} × {3} px</value></data>
+  <data name="LayerDescription_Base" xml:space="preserve"><value>元画像から生成される固定レイヤーです。移動・削除はできません。パーツを非表示にしても穴は残ります。</value></data>
+  <data name="LayerDescription_Part" xml:space="preserve"><value>元画像をマスクで切り出したパーツです。ベースより上の範囲で並べ替えできます。</value></data>
+  <data name="LayerDescription_Patch" xml:space="preserve"><value>元画像から凍結した局所画像を保持する下塗りパッチです。配置・拡縮・回転を編集できます。</value></data>
+  <data name="LayerDescription_Repair" xml:space="preserve"><value>補修用の下塗り画素レイヤーです。ベースより下の範囲で並べ替えできます。</value></data>
+  <data name="Status_UnsavedMarker" xml:space="preserve"><value> — 未保存</value></data>
+  <data name="Edit_ErrorTitle" xml:space="preserve"><value>編集できません</value></data>
+  <data name="EditError_NoDocument" xml:space="preserve"><value>先に画像を開いてください。</value></data>
+  <data name="EditError_MissingLayer" xml:space="preserve"><value>対象のレイヤーが見つかりません。</value></data>
+  <data name="EditError_BaseFixed" xml:space="preserve"><value>ベースは移動・削除できません。</value></data>
+  <data name="EditError_BandCrossing" xml:space="preserve"><value>ベースを越えて並べ替えることはできません。</value></data>
+  <data name="EditError_InvalidLayer" xml:space="preserve"><value>このレイヤーは追加できません。</value></data>
+  <data name="EditError_InvalidPatch" xml:space="preserve"><value>編集範囲または画素データが無効です。</value></data>
+  <data name="EditError_HistoryBudgetExceeded" xml:space="preserve"><value>この操作は履歴のメモリ上限を超えたため取り消しました。</value></data>
+  <data name="EditError_TransactionActive" xml:space="preserve"><value>進行中の編集を確定または取り消してください。</value></data>
+  <data name="MaskTool_Name" xml:space="preserve"><value>マスク</value></data>
+  <data name="MaskTool_Tooltip" xml:space="preserve"><value>選択中のパーツマスクを補正</value></data>
+  <data name="MaskTool_Radius" xml:space="preserve"><value>半径（画像px）</value></data>
+  <data name="MaskTool_Add" xml:space="preserve"><value>追加</value></data>
+  <data name="MaskTool_Erase" xml:space="preserve"><value>消去</value></data>
+  <data name="MaskTool_Status_Ready" xml:space="preserve"><value>パーツを選択してドラッグ。Altで一時的に追加／消去を反転します。</value></data>
+  <data name="MaskTool_Status_SelectPart" xml:space="preserve"><value>マスクを編集するパーツレイヤーを選択してください。</value></data>
+  <data name="MaskTool_Status_Painting" xml:space="preserve"><value>マスク編集中。離すと1操作として確定、Escで取り消します。</value></data>
+  <data name="MaskTool_Status_Cancelled" xml:space="preserve"><value>マスク編集を取り消しました。</value></data>
+  <data name="MaskTool_Status_Committed" xml:space="preserve"><value>マスク編集を確定しました。</value></data>
+  <data name="MaskTool_Target" xml:space="preserve"><value>マスク：{0}</value></data>
+  <data name="MaskTool_Target_None" xml:space="preserve"><value>マスク：パーツ未選択</value></data>
+  <data name="PatchTool_Name" xml:space="preserve"><value>パッチ</value></data>
+  <data name="PatchTool_Tooltip" xml:space="preserve"><value>元画像から補修片を作成して配置</value></data>
+  <data name="PatchTool_Commit" xml:space="preserve"><value>確定</value></data>
+  <data name="PatchTool_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="PatchTool_Position" xml:space="preserve"><value>中心 X / Y（画像px）</value></data>
+  <data name="PatchTool_Scale" xml:space="preserve"><value>拡大率（%・最大1000）</value></data>
+  <data name="PatchTool_Rotation" xml:space="preserve"><value>回転（度）</value></data>
+  <data name="PatchTool_Status_Ready" xml:space="preserve"><value>元画像上で補修元を囲み、Enterまたはダブルクリックで配置へ進みます。</value></data>
+  <data name="PatchTool_Status_DrawingSource" xml:space="preserve"><value>補修元を選択中：{0}点。Enterまたはダブルクリックで確定。</value></data>
+  <data name="PatchTool_Status_NeedsThreePoints" xml:space="preserve"><value>補修元には3点以上必要です（現在{0}点）。</value></data>
+  <data name="PatchTool_Status_InvalidSource" xml:space="preserve"><value>この範囲から補修元を作成できません。</value></data>
+  <data name="PatchTool_Status_Placing" xml:space="preserve"><value>ドラッグで配置。上のツールオプションで拡大率と回転を調整し、確定してください。</value></data>
+  <data name="PatchTool_Status_Cancelled" xml:space="preserve"><value>パッチ作成を取り消しました。</value></data>
+  <data name="PatchTool_Status_Committed" xml:space="preserve"><value>パッチを確定しました。</value></data>
+  <data name="Properties_Apply" xml:space="preserve"><value>適用</value></data>
+  <data name="Tool_InvalidNumber" xml:space="preserve"><value>入力値が範囲外か、数値として読み取れません。パッチは画像内、拡大率は1〜1000%にしてください。</value></data>
+  <data name="CloneTool_Name" xml:space="preserve"><value>クローン</value></data>
+  <data name="CloneTool_Tooltip" xml:space="preserve"><value>元画像の一点を基準に補修画素を描画</value></data>
+  <data name="CloneTool_Mode" xml:space="preserve"><value>クローンモード</value></data>
+  <data name="CloneTool_Mode_Fixed" xml:space="preserve"><value>固定クローン</value></data>
+  <data name="CloneTool_Mode_Offset" xml:space="preserve"><value>移動クローン</value></data>
+  <data name="CloneTool_Radius" xml:space="preserve"><value>半径（画像px）</value></data>
+  <data name="CloneTool_Status_Ready" xml:space="preserve"><value>Alt+クリックで複製元を指定し、ドラッグで補修します。ホイール前＝小さく、後ろ＝大きく。</value></data>
+  <data name="CloneTool_Status_SourceRequired" xml:space="preserve"><value>先にAlt+クリックで複製元を指定してください。</value></data>
+  <data name="CloneTool_Status_SourceSet" xml:space="preserve"><value>複製元 X {0:F1}, Y {1:F1}。ドラッグで補修、Ctrl+ホイールでズーム。</value></data>
+  <data name="CloneTool_Status_Painting" xml:space="preserve"><value>クローン補修中。離すと1操作として確定、Escで取り消します。</value></data>
+  <data name="CloneTool_Status_Cancelled" xml:space="preserve"><value>クローン補修を取り消しました。</value></data>
+  <data name="CloneTool_Status_Committed" xml:space="preserve"><value>クローン補修を確定しました。</value></data>
+  <data name="BlurTool_Name" xml:space="preserve"><value>ぼかし</value></data>
+  <data name="BlurTool_Tooltip" xml:space="preserve"><value>選択中の補修レイヤーの継ぎ目をぼかす</value></data>
+  <data name="SmudgeTool_Name" xml:space="preserve"><value>引きずり</value></data>
+  <data name="SmudgeTool_Tooltip" xml:space="preserve"><value>選択中の補修画素をストローク方向へ引きずる</value></data>
+  <data name="FinishingTool_Radius" xml:space="preserve"><value>半径（画像px）</value></data>
+  <data name="FinishingTool_Strength" xml:space="preserve"><value>強さ（%）</value></data>
+  <data name="BlurTool_Status_Ready" xml:space="preserve"><value>補修レイヤーを選択してドラッグすると、局所的にぼかします。</value></data>
+  <data name="SmudgeTool_Status_Ready" xml:space="preserve"><value>補修レイヤーを選択して、動かしたい方向へドラッグします。</value></data>
+  <data name="FinishingTool_Status_SelectRepair" xml:space="preserve"><value>補修・ペイントレイヤーを選択してください。元画像、ベース、パーツ、パッチは変更しません。</value></data>
+  <data name="FinishingTool_Status_Painting" xml:space="preserve"><value>補修仕上げ中。離すと1操作として確定、Escで取り消します。</value></data>
+  <data name="FinishingTool_Status_Cancelled" xml:space="preserve"><value>補修仕上げを取り消しました。</value></data>
+  <data name="FinishingTool_Status_Committed" xml:space="preserve"><value>補修仕上げを確定しました。</value></data>
+  <data name="FinishingTool_InvalidNumber" xml:space="preserve"><value>半径は0.5〜512画像px、強さは1〜100%で入力してください。</value></data>
+  <data name="Menu_File_OpenProject" xml:space="preserve"><value>プロジェクトを開く...</value></data>
+  <data name="Menu_File_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Menu_File_SaveAs" xml:space="preserve"><value>名前を付けて保存...</value></data>
+  <data name="Menu_Export_Composite" xml:space="preserve"><value>合成画像 PNG...</value></data>
+  <data name="Menu_Export_Handoff" xml:space="preserve"><value>レイヤー受け渡し...</value></data>
+  <data name="Dialog_ProjectFilter" xml:space="preserve"><value>Cutwork プロジェクト (*.flimg)|*.flimg</value></data>
+  <data name="Dialog_PngFilter" xml:space="preserve"><value>PNG 画像 (*.png)|*.png</value></data>
+  <data name="Dialog_HandoffFilter" xml:space="preserve"><value>Cutwork レイヤー受け渡し (*.zip)|*.zip</value></data>
+  <data name="UnsavedChanges_Title" xml:space="preserve"><value>未保存の変更</value></data>
+  <data name="UnsavedChanges_Message" xml:space="preserve"><value>変更を保存しますか？「いいえ」を選ぶと、未保存の変更は失われます。</value></data>
+  <data name="ProjectError_Title" xml:space="preserve"><value>ファイル操作に失敗しました</value></data>
+  <data name="ProjectError_IoFailure" xml:space="preserve"><value>ファイルを読み書きできません。場所とアクセス権を確認してください。</value></data>
+  <data name="ProjectError_UnsupportedVersion" xml:space="preserve"><value>このバージョンの Cutwork では開けないプロジェクト形式です。</value></data>
+  <data name="ProjectError_SizeLimit" xml:space="preserve"><value>ファイルまたは画像が安全上の上限を超えています。</value></data>
+  <data name="ProjectError_InvalidFile" xml:space="preserve"><value>ファイルが壊れているか、安全に読み取れない内容を含んでいます。</value></data>
+  <data name="Mcp_Read" xml:space="preserve"><value>読み取り専用で有効</value></data>
+  <data name="Mcp_Edit" xml:space="preserve"><value>編集を許可して有効</value></data>
+  <data name="Mcp_Stop" xml:space="preserve"><value>無効にする</value></data>
+  <data name="Mcp_Copy" xml:space="preserve"><value>接続設定をコピー</value></data>
+  <data name="Mcp_Notice" xml:space="preserve"><value>接続先に現在の画像を公開します（同時接続1つ）</value></data>
+  <data name="Mcp_Connection" xml:space="preserve"><value>MCP接続設定</value></data>
+  <data name="Mcp_CopyBusy" xml:space="preserve"><value>コピーできません。もう一度お試しください。</value></data>
+  <data name="Mcp_Unavailable" xml:space="preserve"><value>MCP接続を開始できません。</value></data>
+  <data name="Mcp_StatusDisabled" xml:space="preserve"><value>MCPは無効です</value></data>
+  <data name="Mcp_StatusAvailable" xml:space="preserve"><value>MCPは接続可能です</value></data>
+  <data name="Mcp_StatusConnected" xml:space="preserve"><value>MCPクライアントが接続中です</value></data>
+  <data name="Mcp_StatusUnavailable" xml:space="preserve"><value>MCP接続を利用できません</value></data>
+  <data name="Mcp_Method" xml:space="preserve"><value>接続方法</value></data>
+  <data name="Mcp_MethodManual" xml:space="preserve"><value>Manual（接続設定をコピー）</value></data>
+  <data name="Mcp_MethodTunnel" xml:space="preserve"><value>OpenAI tunnel-client 0.0.14</value></data>
+  <data name="Mcp_AutoStart" xml:space="preserve"><value>MCP有効時にhelperを自動起動</value></data>
+  <data name="Mcp_StartHelper" xml:space="preserve"><value>managed helperを起動</value></data>
+  <data name="Mcp_StopHelper" xml:space="preserve"><value>managed helperを停止</value></data>
+  <data name="Mcp_Settings" xml:space="preserve"><value>接続設定...</value></data>
+  <data name="Mcp_SettingsTitle" xml:space="preserve"><value>MCP managed connection設定</value></data>
+  <data name="Mcp_TunnelExecutable" xml:space="preserve"><value>tunnel-client.exe</value></data>
+  <data name="Mcp_ProfileDirectory" xml:space="preserve"><value>profileフォルダー</value></data>
+  <data name="Mcp_ProfileName" xml:space="preserve"><value>profile名</value></data>
+  <data name="Mcp_TunnelId" xml:space="preserve"><value>tunnel ID</value></data>
+  <data name="Mcp_HealthAddress" xml:space="preserve"><value>health listen address</value></data>
+  <data name="Mcp_ApiKey" xml:space="preserve"><value>OpenAI API key（空欄なら変更しない）</value></data>
+  <data name="Mcp_DeleteCredential" xml:space="preserve"><value>保存済みAPI keyを削除</value></data>
+  <data name="Mcp_CredentialSaved" xml:space="preserve"><value>API keyはWindows Credential Managerに保存済みです。</value></data>
+  <data name="Mcp_CredentialMissing" xml:space="preserve"><value>API keyはまだ保存されていません。</value></data>
+  <data name="Mcp_SettingsInvalid" xml:space="preserve"><value>パス、profile、tunnel ID、health addressを確認してください。</value></data>
+  <data name="Mcp_HelperStopped" xml:space="preserve"><value>Helper: 停止</value></data>
+  <data name="Mcp_HelperStarting" xml:space="preserve"><value>Helper: 起動中</value></data>
+  <data name="Mcp_HelperRunning" xml:space="preserve"><value>Helper: 実行中</value></data>
+  <data name="Mcp_HelperRefreshing" xml:space="preserve"><value>Helper: 更新中</value></data>
+  <data name="Mcp_HelperStopping" xml:space="preserve"><value>Helper: 停止中</value></data>
+  <data name="Mcp_HelperFaulted" xml:space="preserve"><value>Helper: エラー</value></data>
+  <data name="Mcp_HelperUnavailable" xml:space="preserve"><value>managed helperを開始できません。Manual接続は引き続き利用できます。</value></data>
+  <data name="Mcp_SettingsSaveFailed" xml:space="preserve"><value>接続設定を保存できません。</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>保存</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>キャンセル</value></data>
+  <data name="MaskTool_PendingPart" xml:space="preserve"><value>未確定のパーツがあります。Enterで囲いを完成・パーツを確定するか、Escで取り消してから、マスク補正を選んでください。現在の囲い・マスクは保持されています。</value></data>
+<data name="Menu_File_AiSave" xml:space="preserve"><value>AIからこのプロジェクトの版付き保存を許可</value></data>
+<data name="AiSave_TargetRequired" xml:space="preserve"><value>先にプロジェクトを保存してください。ローカルの通常フォルダーにある保存先だけを許可できます。</value></data>
+<data name="AiSave_Conflict" xml:space="preserve"><value>保存先が外部で変更されています。内容を確認して、別名で保存してください。</value></data>
+<data name="CloneTool_Scale" xml:space="preserve"><value>採取倍率</value></data>
+<data name="CloneTool_Rotation" xml:space="preserve"><value>回転°</value></data>
+<data name="CloneTool_Hardness" xml:space="preserve"><value>硬さ%</value></data>
+<data name="CloneTool_Opacity" xml:space="preserve"><value>濃度%</value></data>
+<data name="CloneTool_Composite" xml:space="preserve"><value>合成画像から採取</value></data>
+<data name="CloneTool_Status_SourceBudget" xml:space="preserve"><value>採取範囲が大きすぎます。固定モードか、より小さいブラシで試してください。</value></data>
+  <data name="AIRepair_Title" xml:space="preserve"><value>AIで穴埋め…</value></data>
+  <data name="AIRepair_Explanation" xml:space="preserve"><value>選んだパーツの穴を補完します。「画像を送って生成」で、下に表示された灰色の穴を含む周辺画像をStudioへ送ります。生成後に左右を比べ、採用すると補修レイヤーが追加されます。閉じるとローカルの待機だけを終了します。</value></data>
+  <data name="AIRepair_Server" xml:space="preserve"><value>StudioのURL</value></data>
+  <data name="AIRepair_Email" xml:space="preserve"><value>メールアドレス</value></data>
+  <data name="AIRepair_Password" xml:space="preserve"><value>パスワード（保存しません）</value></data>
+  <data name="AIRepair_Connect" xml:space="preserve"><value>接続して編集AIを探す</value></data>
+  <data name="AIRepair_Workflow" xml:space="preserve"><value>画像編集AI</value></data>
+  <data name="AIRepair_Reference" xml:space="preserve"><value>送信する範囲（灰色部分を補完）</value></data>
+  <data name="AIRepair_Comparison" xml:space="preserve"><value>パーツを隠して比較：左＝修正前 ／ 右＝候補</value></data>
+  <data name="AIRepair_Generate" xml:space="preserve"><value>画像を送って生成</value></data>
+  <data name="AIRepair_CancelJob" xml:space="preserve"><value>生成の中止を要求</value></data>
+  <data name="AIRepair_Apply" xml:space="preserve"><value>この候補を採用</value></data>
+  <data name="AIRepair_Close" xml:space="preserve"><value>閉じる</value></data>
+  <data name="AIRepair_Ready" xml:space="preserve"><value>パーツのマスクと送信範囲を確認し、Studioへ接続してください。</value></data>
+  <data name="AIRepair_Connecting" xml:space="preserve"><value>Studioへ接続しています…</value></data>
+  <data name="AIRepair_NoWorkflow" xml:space="preserve"><value>現在、対応する単一参照の画像編集ワークフローを利用できません。Studioの接続と登録済みワークフローを確認してください。</value></data>
+  <data name="AIRepair_Instruction" xml:space="preserve"><value>Fill only the neutral gray missing area with the natural continuation of the surrounding skin, hair, clothing or background. Preserve the illustration style, lighting and colors. Do not restore the removed foreground feature. Keep the rest of the image unchanged.</value></data>
+  <data name="AIRepair_Stale" xml:space="preserve"><value>文書が変更されたため、この候補は採用できません。閉じて現在のパーツからやり直してください。</value></data>
+  <data name="AIRepair_Sending" xml:space="preserve"><value>周辺画像を送信して生成を開始します…</value></data>
+  <data name="AIRepair_Running" xml:space="preserve"><value>生成待機中。実行ID：</value></data>
+  <data name="AIRepair_Fetching" xml:space="preserve"><value>結果を取得しています…</value></data>
+  <data name="AIRepair_Compare" xml:space="preserve"><value>左右の穴と境界を確認してください。採用はUndoで戻せます。</value></data>
+  <data name="AIRepair_JobState" xml:space="preserve"><value>生成状態：</value></data>
+  <data name="AIRepair_Resume" xml:space="preserve"><value>状態確認・結果取得</value></data>
+  <data name="AIRepair_LayerName" xml:space="preserve"><value>AI穴埋め</value></data>
+  <data name="AIRepair_Error" xml:space="preserve"><value>完了できませんでした：</value></data>
+  <data name="AIRepair_Uncertain" xml:space="preserve"><value>自動再送はしていません。Studioの実行履歴で状態を確認できます。</value></data>
+  <data name="AIRepair_CannotStart" xml:space="preserve"><value>パーツを選び、編集中の操作を完了してから実行してください。初期版は周辺を含む範囲262,144画素までに対応します。</value></data>
+</root>

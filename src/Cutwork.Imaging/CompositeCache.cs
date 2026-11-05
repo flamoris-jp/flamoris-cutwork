@@ -91,12 +91,20 @@ public sealed class CompositeCache : IDisposable
     }
 
     public static void CompositePixel(CutworkDocument document, int x, int y, byte hole, Span<byte> destination)
+        => CompositePixel(document, x, y, hole, destination, null, null);
+
+    /// <summary>Pure projection of a hidden Part and an uncommitted repair at the top of the underpaint band.</summary>
+    public static void CompositePixel(CutworkDocument document, int x, int y, byte hole, Span<byte> destination,
+        Guid? hiddenPart, RepairLayer? underpaint)
     {
             destination.Clear();
             for (var index = document.Layers.Count - 1; index >= 0; index--)
             {
                 var layer = document.Layers[index];
-                if (!layer.Visible || x < layer.Bounds.X || y < layer.Bounds.Y ||
+                if (layer is BaseLayer && underpaint is not null && x >= underpaint.Bounds.X
+                    && y >= underpaint.Bounds.Y && x < underpaint.Bounds.Right && y < underpaint.Bounds.Bottom)
+                    SourceOver(destination, underpaint.PixelAt(x, y), 255);
+                if (layer.Id == hiddenPart || !layer.Visible || x < layer.Bounds.X || y < layer.Bounds.Y ||
                     x >= layer.Bounds.Right || y >= layer.Bounds.Bottom) continue;
                 switch (layer)
                 {
