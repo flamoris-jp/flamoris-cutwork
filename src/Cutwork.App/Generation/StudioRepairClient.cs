@@ -150,8 +150,9 @@ internal sealed class StudioRepairClient : IDisposable
     {
         if(ExecutionId is not {} id || State!="completed")throw new InvalidOperationException("repair_no_candidate");
         var result=await Json(HttpMethod.Get,$"api/executions/{id:D}/result",null,ct);
-        var images=result.GetProperty("assets").EnumerateArray().Where(a=>a.GetProperty("mimeType").GetString()=="image/png").ToArray();
-        if(images.Length!=1)throw new InvalidOperationException("repair_output_count");
+        var images=result.GetProperty("assets").EnumerateArray().ToArray();
+        if(images.Length!=1 || images[0].GetProperty("mimeType").GetString()!="image/png")
+            throw new InvalidOperationException("repair_output_count");
         Guid asset=images[0].GetProperty("id").GetGuid();
         var data=await Exchange(HttpMethod.Get,$"api/executions/{id:D}/assets/{asset:D}/content",null,ct,8388608);
         if(data.Mime!="image/png")throw new InvalidOperationException("repair_dimensions");

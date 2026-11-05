@@ -224,4 +224,5 @@
   <data name="AIRepair_Error" xml:space="preserve"><value>Could not complete:</value></data>
   <data name="AIRepair_Uncertain" xml:space="preserve"><value>No automatic resubmission was made. Check execution history in Studio.</value></data>
   <data name="AIRepair_CannotStart" xml:space="preserve"><value>Select a Part and finish the active gesture. This version supports up to 262,144 pixels including surrounding context.</value></data>
+  <data name="AIRepair_Connected" xml:space="preserve"><value>Connected. Review the instruction and crop, then choose Send image and generate.</value></data>
 </root>

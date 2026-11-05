@@ -224,4 +224,5 @@
   <data name="AIRepair_Error" xml:space="preserve"><value>完了できませんでした：</value></data>
   <data name="AIRepair_Uncertain" xml:space="preserve"><value>自動再送はしていません。Studioの実行履歴で状態を確認できます。</value></data>
   <data name="AIRepair_CannotStart" xml:space="preserve"><value>パーツを選び、編集中の操作を完了してから実行してください。初期版は周辺を含む範囲262,144画素までに対応します。</value></data>
+  <data name="AIRepair_Connected" xml:space="preserve"><value>接続しました。指示と送信範囲を確認し、「画像を送って生成」を押してください。</value></data>
 </root>

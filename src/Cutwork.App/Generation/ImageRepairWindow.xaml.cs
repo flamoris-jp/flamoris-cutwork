@@ -45,7 +45,7 @@ public partial class ImageRepairWindow : Window
             var choices=await client.Login(Email.Text.Trim(),Password.Password,lifetime.Token);
             Password.Clear();Workflow.ItemsSource=choices;Workflow.IsEnabled=choices.Count>0;
             if(choices.Count==0){Status.Text=T("NoWorkflow");ConnectButton.IsEnabled=true;return;}
-            Workflow.SelectedIndex=0;LoginPanel.IsEnabled=false;Status.Text=T("Ready");
+            Workflow.SelectedIndex=0;LoginPanel.IsEnabled=false;Status.Text=T("Connected");
         }
         catch(Exception e){Failure(e);ConnectButton.IsEnabled=true;Password.Clear();}
     }
@@ -105,7 +105,11 @@ public partial class ImageRepairWindow : Window
                 var png=RepairBitmaps.Png(pixels,workWidth,workHeight);
                 Status.Text=T("Sending");await client.Submit(workflow,values,png,lifetime.Token);
             }
-            else if(client.ExecutionId is null)throw new InvalidOperationException("repair_submission_unknown");
+            else
+            {
+                if(client.ExecutionId is null)throw new InvalidOperationException("repair_submission_unknown");
+                await client.Poll(lifetime.Token);
+            }
             CancelJobButton.IsEnabled=true;
             while(client.State is "queued" or "running")
             {
@@ -127,7 +131,7 @@ public partial class ImageRepairWindow : Window
             running=false;
             if(!closed)
             {
-                bool canResume=client.ExecutionId is not null && client.State is "queued" or "running" or "completed";
+                bool canResume=client.ExecutionId is not null && client.State is "queued" or "running" or "completed" or "unknown" or "submission_unknown";
                 GenerateButton.Content=client.SubmissionBlocked?T("Resume"):T("Generate");
                 GenerateButton.IsEnabled=!hasCandidate && request.IsCurrent(session) && (!client.SubmissionBlocked || canResume);
                 Workflow.IsEnabled=ParameterPanel.IsEnabled=!client.SubmissionBlocked;

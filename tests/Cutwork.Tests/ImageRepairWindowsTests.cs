@@ -2,12 +2,42 @@ using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging;
 using Flamoris.Cutwork.Imaging.Persistence;
 using Flamoris.Cutwork.App.Generation;
+using System.Runtime.ExceptionServices;
+using System.Windows.Controls;
 
 namespace Flamoris.Cutwork.Tests;
 
 [TestClass]
 public sealed class ImageRepairWindowsTests
 {
+    [TestMethod]
+    public void RepairDialogLoadsItsLocalizedControlsAndBeforePreview()
+    {
+        Exception? failure=null;
+        var thread=new Thread(()=>
+        {
+            try
+            {
+                var s=new EditorSession();s.Open(new CutworkDocument(new OriginalAsset("synthetic",new PixelSize(2,1),8,
+                    new byte[]{10,20,30,255,40,50,60,255})));
+                var part=new PartLayer(new DocumentRect(0,0,1,1),new byte[]{255});s.Execute(new AddLayer(part));s.MarkSaved();
+                var window=new ImageRepairWindow(s,new GeneratedRepair(s,part.Id));
+                try
+                {
+                    window.Show();window.UpdateLayout();
+                    Assert.IsNotNull(((Image)window.FindName("Reference")).Source);
+                    Assert.IsNotNull(((Image)window.FindName("Before")).Source);
+                    Assert.IsFalse(((Button)window.FindName("ApplyButton")).IsEnabled);
+                    Assert.IsFalse(((Button)window.FindName("GenerateButton")).IsEnabled);
+                    Assert.IsFalse(s.IsDirty);Assert.IsTrue(part.Visible);
+                }
+                finally{window.Close();}
+            }
+            catch(Exception e){failure=e;}
+        });
+        thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
+        if(failure is not null)ExceptionDispatchInfo.Capture(failure).Throw();
+    }
     [TestMethod]
     public void PngRequiresExactDimensionsAndExplicitResizePreservesCoverage()
     {
