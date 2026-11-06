@@ -47,6 +47,13 @@ check has been executed. See the [current roadmap status](docs/roadmap.md) and
 
 ## Live MCP / AI
 
+An optional **Edit → AI hole fill** dialog sends a selected Part's cropped context
+to Studio using its ordinary account login, previews the result with the Part
+hidden, and applies a masked Part-owned Repair with one Undo. See
+[image repair setup and acceptance](docs/studio-image-repair.md).
+This source feature needs matched Studio/provider availability and Windows
+hands-on acceptance; a static workflow descriptor does not certify fill quality.
+
 The running editor can grant a local client bounded artwork inspection and ordinary
 Part/Mask/Clone/Patch editing through the same Undo/Redo. Access starts disabled.
 See [connection and operation guide](docs/live-mcp.md) and

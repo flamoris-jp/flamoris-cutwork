@@ -77,7 +77,7 @@ public partial class MainWindow
         }, DispatcherPriority.Background, cancellationToken).Task;
     }
 
-    private bool HumanBusy() => _fileCoordination > 0 || _inlineName is not null
+    private bool HumanBusy() => _imageRepairOpen || _fileCoordination > 0 || _inlineName is not null
         || _partTool.State != PartToolState.Idle || _maskTool.State != MaskBrushState.Idle
         || _cloneTool.State != CloneRepairState.Idle || _inputRouter.HasPendingToolWork
         || _patchTool.HasPending || _blurTool.State != RepairFinishingState.Idle

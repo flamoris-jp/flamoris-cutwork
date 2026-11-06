@@ -196,4 +196,33 @@
 <data name="CloneTool_Opacity" xml:space="preserve"><value>Opacity%</value></data>
 <data name="CloneTool_Composite" xml:space="preserve"><value>Sample composite</value></data>
 <data name="CloneTool_Status_SourceBudget" xml:space="preserve"><value>Source footprint exceeds the budget. Use Fixed mode or a smaller brush.</value></data>
+  <data name="AIRepair_Title" xml:space="preserve"><value>AI hole fill…</value></data>
+  <data name="AIRepair_Explanation" xml:space="preserve"><value>Fill the selected Part's hole. Generate sends the displayed crop with its gray missing region to Studio. Compare the previews before applying a repair layer. Closing only stops local waiting.</value></data>
+  <data name="AIRepair_Server" xml:space="preserve"><value>Studio URL</value></data>
+  <data name="AIRepair_Email" xml:space="preserve"><value>Email</value></data>
+  <data name="AIRepair_Password" xml:space="preserve"><value>Password (not saved)</value></data>
+  <data name="AIRepair_Connect" xml:space="preserve"><value>Connect and find editing AI</value></data>
+  <data name="AIRepair_Workflow" xml:space="preserve"><value>Image editing AI</value></data>
+  <data name="AIRepair_Reference" xml:space="preserve"><value>Reference to send (fill the gray region)</value></data>
+  <data name="AIRepair_Comparison" xml:space="preserve"><value>Part hidden: before (left) / candidate (right)</value></data>
+  <data name="AIRepair_Generate" xml:space="preserve"><value>Send image and generate</value></data>
+  <data name="AIRepair_CancelJob" xml:space="preserve"><value>Request job cancellation</value></data>
+  <data name="AIRepair_Apply" xml:space="preserve"><value>Apply candidate</value></data>
+  <data name="AIRepair_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="AIRepair_Ready" xml:space="preserve"><value>Review the mask and crop, then connect to Studio.</value></data>
+  <data name="AIRepair_Connecting" xml:space="preserve"><value>Connecting to Studio…</value></data>
+  <data name="AIRepair_NoWorkflow" xml:space="preserve"><value>No supported single-reference editing workflow is available. Check Studio and its registered workflows.</value></data>
+  <data name="AIRepair_Instruction" xml:space="preserve"><value>Fill only the neutral gray missing area with the natural continuation of the surrounding skin, hair, clothing or background. Preserve the illustration style, lighting and colors. Do not restore the removed foreground feature. Keep the rest of the image unchanged.</value></data>
+  <data name="AIRepair_Stale" xml:space="preserve"><value>The document changed. Close this dialog and start again from the current Part.</value></data>
+  <data name="AIRepair_Sending" xml:space="preserve"><value>Uploading the crop and submitting generation…</value></data>
+  <data name="AIRepair_Running" xml:space="preserve"><value>Waiting for generation. Execution:</value></data>
+  <data name="AIRepair_Fetching" xml:space="preserve"><value>Retrieving the result…</value></data>
+  <data name="AIRepair_Compare" xml:space="preserve"><value>Compare the hole and seams. Applying can be undone.</value></data>
+  <data name="AIRepair_JobState" xml:space="preserve"><value>Generation state:</value></data>
+  <data name="AIRepair_Resume" xml:space="preserve"><value>Check status / retrieve result</value></data>
+  <data name="AIRepair_LayerName" xml:space="preserve"><value>AI hole fill</value></data>
+  <data name="AIRepair_Error" xml:space="preserve"><value>Could not complete:</value></data>
+  <data name="AIRepair_Uncertain" xml:space="preserve"><value>No automatic resubmission was made. Check execution history in Studio.</value></data>
+  <data name="AIRepair_CannotStart" xml:space="preserve"><value>Select a Part and finish the active gesture. This version supports up to 262,144 pixels including surrounding context.</value></data>
+  <data name="AIRepair_Connected" xml:space="preserve"><value>Connected. Review the instruction and crop, then choose Send image and generate.</value></data>
 </root>

@@ -82,6 +82,8 @@
             <MenuItem x:Name="EditMenu">
                 <MenuItem x:Name="UndoMenuItem" />
                 <MenuItem x:Name="RedoMenuItem" />
+                <Separator />
+                <MenuItem x:Name="ImageRepairMenuItem" />
             </MenuItem>
             <MenuItem x:Name="ViewMenu">
                 <MenuItem x:Name="FitMenuItem" IsEnabled="False" Click="FitMenuItem_Click" />
