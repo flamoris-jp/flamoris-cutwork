@@ -9,5 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
+    <ProjectReference Include="..\Cutwork.Mcp\Cutwork.Mcp.csproj" />
   </ItemGroup>
 </Project>
+

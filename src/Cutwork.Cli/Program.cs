@@ -32,6 +32,12 @@ internal static class Program
                 return 0;
             }
 
+            if (args.Length == 1 && args[0] == "mcp-catalog")
+            {
+                CliMcp.WriteCatalog();
+                return 0;
+            }
+
             if (args.Length < 2)
                 throw new ArgumentException("Expected COMMAND and INPUT. Run cutwork-cli --help.");
 
@@ -40,6 +46,10 @@ internal static class Program
             var options = ParseOptions(args, 2);
             switch (command)
             {
+                case "mcp":
+                    Allow(options, "--permission", "--save-to", "--hub");
+                    CliMcp.Run(input, options);
+                    break;
                 case "import":
                     Allow(options, "--out");
                     Import(input, Required(options, "--out"));
@@ -242,9 +252,12 @@ internal static class Program
           cutwork-cli part-add draft.flimg --polygon "20,20;300,20;300,400;20,400" --name character --out parts.flimg [--semantic body] [--step 2]
           cutwork-cli composite parts.flimg --out composite.png
           cutwork-cli handoff parts.flimg --out handoff.zip
+          cutwork-cli mcp IMAGE.png-or-PROJECT.flimg [--permission readOnly|edit] [--save-to NEW.flimg] [--hub wss://HOST/PATH]
+          cutwork-cli mcp-catalog
 
         Coordinates are image pixels, not viewport positions.
         Outputs must not already exist. No automatic segmentation or hole repair.
         """);
     }
 }
+

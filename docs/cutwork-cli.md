@@ -60,3 +60,80 @@ After building the solution on Windows, run:
 The smoke uses generated synthetic artwork and checks:
 import -> Part creation -> inspect -> composite PNG -> handoff ZIP. It does
 not replace perceptual/real-artwork acceptance of masking quality.
+
+## Headless MCP mode (Windows)
+
+`mcp` keeps one production document/session alive, with no editor window. It
+uses the existing MCP Core transport and Cutwork typed tools, not shell access.
+Default permission is read-only. Launch with a PNG/JPEG supported by the importer
+or an existing `.flimg`:
+
+```powershell
+dotnet run --project src/Cutwork.Cli -c Release --no-build -- mcp spy.png
+dotnet run --project src/Cutwork.Cli -c Release --no-build -- mcp spy.png --permission edit --save-to spy-working.flimg
+```
+
+For a stdio MCP client, use the built executable directly; build output must not
+enter MCP stdout. Example (replace paths for your workstation):
+
+```json
+{
+  "mcpServers": {
+    "cutwork-cli": {
+      "command": "dotnet",
+      "args": ["C:/Cutwork/src/Cutwork.Cli/bin/Release/net10.0-windows10.0.19041.0/cutwork-cli.dll", "mcp", "C:/Artwork/spy.png", "--permission", "edit", "--save-to", "C:/Artwork/spy-working.flimg"]
+    }
+  }
+}
+```
+
+The new working path must not exist. Restarting should use the previous working
+file as INPUT and a **new** --save-to path. Without --save-to, MCP edits stay in
+memory and saving is not authorized. --save-to requires edit permission and
+authorizes only the new copy, using the existing checkpoint/receipt machinery.
+There is no autosave when the process exits. The source file is never rewritten.
+
+Call `mcp.context` first; use its runtimeId, documentToken and revision as the
+guard for mutations. Tools include context/layers/image, Guriguri candidates,
+exact polygon preview/create, typed edits, repairs, work log and Undo/Redo.
+For saving, query `project_context`, call `project_save` with its current target
+hash/parent and a new requestId, then poll `project_save_status`. Confirm
+`receipt.workingCopySaved`, not just checkpoint creation. After completed save,
+the ordinary CLI `composite` and `handoff` commands export the working file.
+
+Stdio EOF or Ctrl+C revokes MCP and stops the host. It waits for pending save
+completion; disconnect does not imply a save failed. Check the durable receipts
+after an ambiguous result; never automatically replay an edit.
+
+### ChatGPT through the Hub
+
+Stdio alone does not connect a cloud ChatGPT session. For Work/Chat use a
+dedicated `cutwork-cli` Hub upstream, separate from desktop `cutwork`:
+
+```powershell
+# Export the descriptor generated from the actual registry; contains no secret.
+dotnet run --project src/Cutwork.Cli -c Release --no-build -- mcp-catalog > cutwork-cli.json
+# Set CUTWORK_CLI_CONNECTOR_TOKEN in the process environment through your normal
+# secret provisioning. Do not put its value in source, command arguments or logs.
+dotnet run --project src/Cutwork.Cli -c Release --no-build -- mcp spy.png --permission edit --save-to spy-working.flimg --hub wss://YOUR-HUB/UPSTREAM-PATH
+```
+
+The descriptor's `id` and namespace are `cutwork-cli`; product_id intentionally
+remains `flamoris.cutwork`. Install it using the Hub's normal upstream procedure,
+provision its dedicated token and supply that upstream's WSS URL. The generated
+catalog excludes desktop screenshot/session capture. Hub registration is
+asynchronous: provider startup is not evidence of a connected client. Confirm
+through the Hub and `mcp.context`. Ctrl+C stops Hub mode. No reconnect replays
+mutations. This change does not deploy or reconfigure the live Hub.
+
+### MCP acceptance
+
+```powershell
+dotnet run --project tests/Cutwork.CliSmoke -c Release -- src/Cutwork.Cli/bin/Release/net10.0-windows10.0.19041.0/cutwork-cli.dll
+```
+
+The official MCP client exercises the actual CLI process: read-only discovery
+and denial, original image, polygon Part, stale guards, Undo/Redo, checkpoint save
+and reload, source preservation, target overwrite denial, EOF and catalog output.
+Hub deployment, real-artwork visual quality and Linux portability remain separate.
+

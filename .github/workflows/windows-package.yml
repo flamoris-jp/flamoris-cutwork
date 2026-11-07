@@ -43,6 +43,9 @@ jobs:
       - name: Headless Cutwork CLI smoke
         shell: pwsh
         run: ./tests/cli/cli-smoke.ps1
+      - name: Headless CLI with official MCP client
+        shell: pwsh
+        run: dotnet run --project tests/Cutwork.CliSmoke -c Release -- src/Cutwork.Cli/bin/Release/net10.0-windows10.0.19041.0/cutwork-cli.dll
       - name: Portable archive integrity contracts
         shell: pwsh
         run: ./tests/packaging/portable-package.Tests.ps1
@@ -64,3 +67,4 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
+
