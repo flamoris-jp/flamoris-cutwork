@@ -7,18 +7,32 @@ with the existing ServiceWorkspace mounted at /data/state.
 
 ## Release and production status
 
-The Docker image/catalog are candidates until the reviewed Linux CI artifact is
-published as an immutable cli-v0.1.0 release and registered with Updater.
+The immutable [cli-v0.1.1 release](https://github.com/flamoris-jp/flamoris-cutwork/releases/tag/cli-v0.1.1)
+is the accepted Linux deployment. On 2026-11-07, Updater installation,
+state restoration and start/complete succeeded. The Hub setup verified 29 tools
+and a live context with edit permission and no open document; an independent Hub
+observation confirmed attachment without schema mismatch, alongside Linux 2D
+and Kachinco. Real-artwork and production restart/reboot acceptance remain pending.
+
+Do not deploy cli-v0.1.0: its image omitted the required application/version OCI
+labels and was correctly rejected by Updater. The 0.1.1 image declares both.
+Use the versioned `cli-v0.1.1/catalog.json` release asset, not the Windows
+latest-release catalog. Publication reuses the accepted CI artifact without
+rebuilding or replacing an existing release.
+
 Preparing a catalog, a migration backup or an active process does not establish
-a live Hub connection. This source change does not install, stop or delete
-anything on LIME/DECO PON. Do not run the old native installer; its lime --apply
-entry point now refuses a new installation.
+a live Hub connection. The deployment helpers change hosts only when explicitly
+applied. Do not run the old native installer; its `lime --apply` entry point
+refuses a new installation.
 
 The Linux workflow builds/tests the actual CLI, publishes its self-contained
 bundle with dependency licenses, builds the image from those bytes, verifies
 the read-only container's health, retained state, outage survival, SIGTERM and
 restart, then records the image ID, archive SHA-256 and source revision in the
-Updater candidate artifact. Live external WSS acceptance is a separate step.
+Updater candidate artifact. It also runs the real Updater install/start/complete
+against the image and tests retained state/restart. The invalid-image recovery
+fixture verifies refusal of populated state, audited retirement and a new install.
+CI and the separately observed live external WSS acceptance have different scopes.
 
 ## Ordered cutover after the accepted image is available
 
@@ -76,3 +90,23 @@ performs no cleanup/deletion of the original installation. Cleanup requires a
 separate verified cutover; an Updater installation record or health response
 alone is insufficient. Do not delete shared 2D/Kachinco files or Hub containers.
 
+## Failed 0.1.0 image-stage recovery
+
+The released `quarantine-failed-install.py` is a narrowly pinned recovery helper,
+not a generic retry or repair command. Default invocation only describes the
+plan. Applied recovery validates the exact failed Job, recipe, installed Updater
+runtime, initial-install journal, generated configuration, absent container and
+empty partial state. Any mismatch stops the operation.
+
+It retains the partial installation root, archives the full initial-install
+record before removing its active pointer, and closes the original managed Job
+as failed while preserving its error/history. It briefly stops/restarts the
+Updater control-plane units under its lock; existing application containers
+are not stopped. A subsequent corrected installation uses the normal Updater
+path and image validation. Do not reset journals, replay the rejected Job or
+replace the immutable 0.1.0 assets.
+
+This specific recovery and the subsequent 0.1.1 installation were accepted on
+LIME. Exact Job IDs, retired roots, receipts and private deployment placement
+belong in Internal's dated maintenance record. Native state/backups and the
+rejected partial root remain retained; cleanup has not been accepted.
