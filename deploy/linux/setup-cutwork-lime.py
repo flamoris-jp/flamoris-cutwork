@@ -5,7 +5,10 @@ No changes without --apply. Run from the normal operator account via sudo.
 Credentials remain in private files or subprocess stdin, never terminal output.
 """
 import argparse
+import copy
+import fcntl
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -19,7 +22,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 
 REPOSITORY = "flamoris-jp/flamoris-cutwork"
 RUN_ID = "42355265811"
@@ -247,31 +250,29 @@ def lime(args, user):
 
 
 CONTAINER_ENV = r'''
-import json,os,pathlib,re,sys
+import json,os,sys
 from dotenv import dotenv_values
+from flamoris_mcp_hub.config import env_file
 r=json.load(sys.stdin);key=r['key'];token=r['credential']
-p=pathlib.Path(os.environ.get('FLAMORIS_MCP_HUB_ENV_FILE','.env')).absolute()
+p=env_file().absolute()
 if p.is_symlink():raise SystemExit('Credential env path is a link')
 existing=dict(dotenv_values(p)) if p.exists() else {}
-if existing.get(key) not in (None,'',token):raise SystemExit('Credential conflict')
-if r['action']=='probe':
- print(json.dumps({'path':str(p)}));raise SystemExit(0)
-if r['action']=='write':
- if key not in existing:
-  text=p.read_text() if p.exists() else ''
-  with p.open('a') as f:f.write(('' if not text or text.endswith('\n') else '\n')+key+'='+token+'\n');f.flush();os.fsync(f.fileno())
-  p.chmod(0o600);os.chown(p,r['uid'],r['gid'])
- print(json.dumps({'updated':True}))
+if existing.get(key) not in (None,'',token) or os.environ.get(key) not in (None,'',token):
+ raise SystemExit('Credential conflict')
+print(json.dumps({'validated':True}))
 '''
 
 VALIDATE = r'''
 import json,sys
 from flamoris_mcp_hub.config import UpstreamConfig,load_upstreams,config_dir
 d=UpstreamConfig.model_validate(json.load(sys.stdin))
-for old in load_upstreams(config_dir()):
+previous=load_upstreams(config_dir())
+for old in previous:
  if (old.id==d.id or old.namespace==d.namespace) and old.model_dump()!=d.model_dump():
   raise SystemExit('Existing upstream conflicts; no overwrite')
-print(json.dumps({'validated':True,'tools':len(d.tools)}))
+print(json.dumps({'validated':True,'tools':len(d.tools),'existingTools':[
+ {'name':old.namespace+'.'+tool.name,'inputSchema':tool.input_schema}
+ for old in previous for tool in old.tools]}))
 '''
 
 VERIFY = r'''
@@ -297,6 +298,8 @@ async def main():
     await session.initialize()
     tools=(await session.list_tools()).model_dump(by_alias=True)['tools']
     actual={t['name']:t for t in tools}
+    for tool in expected.get('existingTools',[]):
+     if tool['name'] not in actual or actual[tool['name']]['inputSchema']!=tool['inputSchema']:raise RuntimeError('Existing catalog mismatch')
     for tool in expected['tools']:
      public=expected['namespace']+'.'+tool['name']
      if public not in actual or actual[public]['inputSchema']!=tool['input_schema']:raise RuntimeError('Catalog mismatch')
@@ -310,9 +313,130 @@ asyncio.run(main())
 '''
 
 
+class DockerSocket(http.client.HTTPConnection):
+    def connect(self):
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(self.timeout)
+        self.sock.connect('/var/run/docker.sock')
+
+
+def docker_api(method, path, body=None):
+    """Send credentials over the local daemon socket, never command arguments."""
+    client = DockerSocket('localhost', timeout=60)
+    try:
+        payload = None if body is None else json.dumps(body).encode()
+        client.request(method, path, body=payload, headers={'Content-Type': 'application/json'})
+        response = client.getresponse()
+        data = response.read(4 * 1024 * 1024)
+        if response.status >= 300:
+            # Docker errors can contain the request; do not echo response bodies.
+            raise RuntimeError('Docker API returned HTTP ' + str(response.status))
+        return json.loads(data) if data else None
+    finally:
+        client.close()
+
+
+def replacement_spec(observed, token):
+    """Retain the exact image, hardening, mounts, network and existing settings."""
+    config = copy.deepcopy(observed['Config'])
+    host = copy.deepcopy(observed['HostConfig'])
+    if (not observed['State']['Running'] or not host.get('ReadonlyRootfs')
+            or host.get('NetworkMode') != 'host' or host.get('AutoRemove')
+            or host.get('ContainerIDFile') or host.get('Links') or host.get('VolumesFrom')
+            or any(mount['Type'] not in ('bind', 'tmpfs') for mount in observed.get('Mounts', []))):
+        raise ValueError('Hub replacement requires the running read-only host-network container with bind/tmpfs mounts')
+    current = {}
+    for entry in config.get('Env') or []:
+        key, separator, value = entry.partition('=')
+        if not separator or key in current:
+            raise ValueError('Ambiguous container environment; no replacement')
+        current[key] = value
+    if current.get(KEY) not in (None, '', token):
+        raise ValueError('Container has a different Cutwork credential; no takeover')
+    append_credential('', token)
+    current[KEY] = token
+    config['Env'] = [key + '=' + value for key, value in current.items()]
+    config['Image'] = observed['Image']  # Immutable local image ID, no pull/tag change.
+    config['HostConfig'] = host
+    return config
+
+
+class HubSwap:
+    """Keep the stopped original available until the new route is verified."""
+    def __init__(self, observed, token, api=None):
+        self.observed = observed
+        self.api = api or docker_api
+        self.spec = replacement_spec(observed, token)
+        self.name = observed['Name'].lstrip('/')
+        suffix = secrets.token_hex(6)
+        self.candidate_name = self.name + '-cutwork-candidate-' + suffix
+        self.previous_name = self.name + '-cutwork-previous-' + suffix
+        self.candidate = None
+
+    def prepare(self):
+        self.candidate = self.api('POST', '/containers/create?name=' + quote(self.candidate_name), self.spec)['Id']
+        found = self.api('GET', '/containers/' + self.candidate + '/json')
+        # Refuse a partial/normalized clone before stopping the current Hub.
+        if found['Image'] != self.observed['Image'] or found['HostConfig'] != self.spec['HostConfig']:
+            raise RuntimeError('Replacement container settings differ; original Hub remains running')
+        for key, value in self.spec.items():
+            if key not in ('HostConfig', 'Image') and found['Config'].get(key) != value:
+                raise RuntimeError('Replacement Config.' + key + ' differs; original Hub remains running')
+        wanted_mounts = [{key: mount.get(key) for key in ('Type', 'Source', 'Destination', 'RW', 'Propagation')}
+                         for mount in self.observed.get('Mounts', [])]
+        found_mounts = [{key: mount.get(key) for key in ('Type', 'Source', 'Destination', 'RW', 'Propagation')}
+                        for mount in found.get('Mounts', [])]
+        if wanted_mounts != found_mounts:
+            raise RuntimeError('Replacement mounts differ; original Hub remains running')
+
+    def activate(self):
+        original = '/containers/' + self.observed['Id']
+        current = self.api('GET', original + '/json')
+        if (current['Name'] != self.observed['Name'] or not current['State']['Running']
+                or current['Config'] != self.observed['Config'] or current['HostConfig'] != self.observed['HostConfig']):
+            raise RuntimeError('Hub changed during setup; refusing to switch')
+        self.api('POST', original + '/stop?t=30')
+        self.api('POST', original + '/update', {'RestartPolicy': {'Name': 'no', 'MaximumRetryCount': 0}})
+        self.api('POST', original + '/rename?name=' + quote(self.previous_name))
+        self.api('POST', '/containers/' + self.candidate + '/rename?name=' + quote(self.name))
+        self.api('POST', '/containers/' + self.candidate + '/start')
+
+    def rollback(self):
+        # Resolve a create whose response might have been lost before receiving Id.
+        if self.candidate is None:
+            result = run(['docker', 'inspect', self.candidate_name], check=False)
+            if result.returncode == 0:
+                self.candidate = json.loads(result.stdout)[0]['Id']
+        if self.candidate is not None:
+            self.api('DELETE', '/containers/' + self.candidate + '?force=true&v=false')
+            self.candidate = None
+        original = '/containers/' + self.observed['Id']
+        current = self.api('GET', original + '/json')
+        if current['Name'] != self.observed['Name']:
+            self.api('POST', original + '/rename?name=' + quote(self.name))
+        self.api('POST', original + '/update', {'RestartPolicy': self.observed['HostConfig']['RestartPolicy']})
+        if not current['State']['Running']:
+            self.api('POST', original + '/start')
+        restored = self.api('GET', original + '/json')
+        if not restored['State']['Running'] or restored['Name'] != self.observed['Name']:
+            raise RuntimeError('Original Hub restart could not be confirmed')
+
+
 def hub(args, user):
     if socket.gethostname().split(".")[0].lower() != "decopon":
         raise ValueError("The hub phase must run on DECO PON")
+    lock = HUB_ROOT / 'config/.cutwork-setup.lock'
+    no_links(lock)
+    with lock.open('a') as held:
+        os.fchmod(held.fileno(), 0o600)
+        try:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError('Another Cutwork Hub setup is already running') from None
+        hub_locked(args, user)
+
+
+def hub_locked(args, user):
     path = pathlib.Path(args.connection or (pathlib.Path(user.pw_dir) / "cutwork-lime-connect.json"))
     no_links(path)
     if path.stat().st_mode & 0o077 or path.stat().st_size > 512 * 1024:
@@ -330,6 +454,7 @@ def hub(args, user):
     runtime = HUB_ROOT / "config/runtime.env"
     no_links(runtime)
     old_env = runtime.read_text()
+    runtime_stat = runtime.stat()
     updated = append_credential(old_env, token)
     target = HUB_ROOT / "mcps/cutwork-lime.yaml"
     no_links(target)
@@ -337,66 +462,69 @@ def hub(args, user):
     if target.exists() and json.loads(target.read_text()) != registration:
         raise ValueError("Existing Cutwork descriptor differs; no automatic overwrite")
     previous_target = target.read_bytes() if target.exists() else None
-    run(["docker", "exec", "-i", container, "python", "-c", VALIDATE], data=json.dumps(registration).encode())
-    uid = int(run(["docker", "exec", container, "id", "-u"]).stdout)
-    gid = int(run(["docker", "exec", container, "id", "-g"]).stdout)
-    request = {"key": KEY, "credential": token, "uid": uid, "gid": gid, "action": "probe"}
-    env_path = json.loads(run(["docker", "exec", "--user", "0", "-i", container, "python", "-c", CONTAINER_ENV],
-                              data=json.dumps(request).encode()).stdout)["path"]
+    previous_stat = target.stat() if target.exists() else None
+    checked = json.loads(run(["docker", "exec", "-i", container, "python", "-c", VALIDATE],
+                             data=json.dumps(registration).encode()).stdout)
+    verification = dict(registration, existingTools=checked['existingTools'])
+    request = {"key": KEY, "credential": token}
+    run(["docker", "exec", "--user", "0", "-i", container, "python", "-c", CONTAINER_ENV],
+        data=json.dumps(request).encode())
+    swap = None
+    if current_env.get(KEY) != token:
+        # restart does not reload Docker --env-file. The root filesystem stays
+        # read-only; recreate from the same immutable image and complete inspect.
+        swap = HubSwap(observed, token)
+        daemon = docker_api('GET', '/info')
+        if daemon['ID'] != run(['docker', 'info', '--format', '{{.ID}}']).stdout.decode().strip():
+            raise ValueError('Docker CLI and local socket refer to different daemons')
     backups = HUB_ROOT / "config" / ("cutwork-setup-backup-" + time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(3))
     backups.mkdir(mode=0o700)
     atomic(backups / "runtime.env", old_env.encode())
+    atomic(backups / 'container.json', json.dumps(observed).encode())
+    if previous_target is not None:
+        atomic(backups / 'cutwork-lime.previous', previous_target)
+    phase = 'preparing replacement container' if swap else 'updating runtime configuration'
     try:
+        if swap:
+            swap.prepare()
+        phase = 'updating runtime configuration'
         atomic(runtime, updated.encode(), mode=runtime.stat().st_mode & 0o777,
                uid=runtime.stat().st_uid, gid=runtime.stat().st_gid)
-        # On this Updater layout runtime.env is Docker's env-file, not necessarily
-        # mounted. The current process also needs the new key through its dotenv
-        # path. A future Updater recreation gets it from the retained runtime.env.
-        mapped = None
-        direct = False
-        for mount in observed.get("Mounts", []):
-            destination = pathlib.PurePosixPath(mount["Destination"])
-            requested = pathlib.PurePosixPath(env_path)
-            if requested == destination or destination in requested.parents:
-                mapped = pathlib.Path(mount["Source"]).joinpath(*requested.relative_to(destination).parts)
-                direct = requested == destination
-                break
-        if KEY not in current_env:
-            if mapped is not None:
-                no_links(mapped)
-                previous = mapped.read_text() if mapped.exists() else ""
-                content = append_credential(previous, token).encode()
-                if direct:
-                    # Preserve the inode of an existing read-only file bind mount.
-                    with mapped.open("r+b") as output:
-                        output.write(content);output.truncate();output.flush();os.fsync(output.fileno())
-                else:
-                    atomic(mapped, content, uid=uid, gid=gid)
-            else:
-                request["action"] = "write"
-                run(["docker", "exec", "--user", "0", "-i", container, "python", "-c", CONTAINER_ENV],
-                    data=json.dumps(request).encode())
         atomic(target, registration_bytes, mode=0o644)
-        run(["docker", "restart", "--time", "30", container], timeout=60)
-    except Exception:
-        atomic(runtime, old_env.encode())
-        if previous_target is not None:
-            atomic(target, previous_target, mode=0o644)
-        elif not target.exists() or target.read_bytes() == registration_bytes:
-            target.unlink(missing_ok=True)
-        run(["docker", "restart", "--time", "30", container], check=False)
-        raise RuntimeError("Hub setup did not complete; previous runtime environment/catalog restored") from None
-    deadline = time.monotonic() + 240
-    while time.monotonic() < deadline:
-        verified = run(["docker", "exec", "-i", container, "python", "-c", VERIFY],
-                       data=json.dumps(registration).encode(), check=False, timeout=25)
-        if verified.returncode == 0:
-            print(verified.stdout.decode().strip())
-            path.unlink()
-            return
-        print("Waiting for the LIME connector; no editing request is being sent.", flush=True)
-        time.sleep(10)
-    raise RuntimeError("Hub route installed; LIME connection still pending. Keep the private connection file and rerun hub.")
+        phase = 'starting Hub with the added connector credential'
+        if swap:
+            swap.activate()
+        else:
+            run(["docker", "restart", "--time", "30", container], timeout=60)
+        phase = 'verifying the Hub catalog and LIME connection'
+        deadline = time.monotonic() + 240
+        while time.monotonic() < deadline:
+            verified = run(["docker", "exec", "-i", container, "python", "-c", VERIFY],
+                           data=json.dumps(verification).encode(), check=False, timeout=25)
+            if verified.returncode == 0:
+                result = verified.stdout.decode().strip()
+                break
+            print("Waiting for the LIME connector; no editing request is being sent.", flush=True)
+            time.sleep(10)
+        else:
+            raise RuntimeError('LIME connection was not verified within four minutes')
+    except BaseException as failure:
+        detail = str(failure) if type(failure) is RuntimeError else type(failure).__name__
+        try:
+            atomic(runtime, old_env.encode(), runtime_stat.st_mode & 0o777, runtime_stat.st_uid, runtime_stat.st_gid)
+            if previous_target is not None:
+                atomic(target, previous_target, previous_stat.st_mode & 0o777, previous_stat.st_uid, previous_stat.st_gid)
+            elif not target.exists() or target.read_bytes() == registration_bytes:
+                target.unlink(missing_ok=True)
+            if swap:
+                swap.rollback()
+            else:
+                run(["docker", "restart", "--time", "30", container], timeout=60)
+        except BaseException:
+            raise RuntimeError('Hub setup failed during ' + phase + '; rollback needs investigation. Protected backup: ' + str(backups)) from None
+        raise RuntimeError('Hub setup failed during ' + phase + ' (' + detail + '); original container/runtime/catalog restored. Private connection file retained.') from None
+    print(result)
+    path.unlink()
 
 
 def main():

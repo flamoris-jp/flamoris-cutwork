@@ -1,5 +1,6 @@
 import hashlib
 import contextlib
+import copy
 import importlib.util
 import io
 import json
@@ -18,6 +19,60 @@ SPEC = importlib.util.spec_from_file_location("cutwork_setup", SOURCE)
 SETUP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SETUP)
 TOKEN = "testOnlyCredential" + "x" * 48
+
+
+def running_hub():
+    return {'Id': 'original', 'Name': '/flamoris-mcp-hub', 'Image': 'sha256:immutable',
+            'State': {'Running': True}, 'Config': {'Env': ['EXISTING_TOKEN=untouched', 'PORT=8769'],
+            'Image': 'old-tag', 'User': '10001:10001', 'WorkingDir': '/app',
+            'Entrypoint': ['python'], 'Cmd': ['-m', 'hub'], 'Labels': {'owner': 'updater'}},
+            'HostConfig': {'ReadonlyRootfs': True, 'NetworkMode': 'host', 'AutoRemove': False,
+            'RestartPolicy': {'Name': 'always', 'MaximumRetryCount': 0}, 'Tmpfs': {'/tmp': 'rw,noexec,nosuid'},
+            'CapDrop': ['ALL'], 'SecurityOpt': ['no-new-privileges'], 'Memory': 123456,
+            'Mounts': [{'Type': 'bind', 'Source': '/srv/hub/mcps', 'Target': '/app/config/mcps', 'ReadOnly': True}]},
+            'Mounts': [{'Type': 'bind', 'Source': '/srv/hub/mcps', 'Destination': '/app/config/mcps',
+                        'RW': False, 'Propagation': 'rprivate'}]}
+
+
+class FakeDocker:
+    def __init__(self, original=None, fail=None):
+        self.containers = {'original': copy.deepcopy(original or running_hub())}
+        self.fail = fail
+        self.calls = []
+
+    def __call__(self, method, path, body=None):
+        self.calls.append((method, path))
+        if self.fail and self.fail in path:
+            raise RuntimeError('simulated Docker failure')
+        if path == '/info':
+            return {'ID': 'local-daemon'}
+        if path.startswith('/containers/create?'):
+            item = copy.deepcopy(running_hub())
+            item.update(Id='candidate', Name='/' + path.split('name=')[1], State={'Running': False})
+            item['Config'] = {key: value for key, value in body.items() if key != 'HostConfig'}
+            item['HostConfig'] = copy.deepcopy(body['HostConfig'])
+            self.containers['candidate'] = item
+            return {'Id': 'candidate'}
+        identity = path.split('/')[2].split('?')[0]
+        item = self.containers[identity]
+        if method == 'DELETE':
+            del self.containers[identity]
+        elif path.endswith('/json'):
+            return copy.deepcopy(item)
+        elif '/stop?' in path:
+            item['State']['Running'] = False
+        elif '/rename?' in path:
+            item['Name'] = '/' + path.split('name=')[1]
+        elif path.endswith('/update'):
+            item['HostConfig'].update(copy.deepcopy(body))
+        elif path.endswith('/start'):
+            self.assert_no_other_running(item)
+            item['State']['Running'] = True
+        else:
+            raise AssertionError((method, path))
+
+    def assert_no_other_running(self, target):
+        assert not any(item is not target and item['State']['Running'] for item in self.containers.values())
 
 
 def catalog():
@@ -105,22 +160,65 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(destination.stat().st_mode & 0o777, 0o755)
             self.assertTrue((destination / "cutwork-cli").stat().st_mode & 0o111)
 
-    def test_container_dotenv_uses_real_newlines_and_never_prints_credential(self):
+    def test_container_dotenv_probe_is_read_only_and_never_prints_credential(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "runtime.env"
-            path.write_text("EXISTING_TOKEN=untouched\n")
-            environment = os.environ.copy()
-            environment["FLAMORIS_MCP_HUB_ENV_FILE"] = str(path)
-            request = {"key": SETUP.KEY, "credential": TOKEN, "uid": os.getuid(), "gid": os.getgid(), "action": "write"}
-            for _ in range(2):
-                result = subprocess.run([sys.executable, "-c", SETUP.CONTAINER_ENV], env=environment,
-                                        input=json.dumps(request), text=True, capture_output=True)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotIn(TOKEN, result.stdout + result.stderr)
-            self.assertEqual(path.read_text(), "EXISTING_TOKEN=untouched\n" + SETUP.KEY + "=" + TOKEN + "\n")
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            original = "EXISTING_TOKEN=untouched\n" + SETUP.KEY + '=' + TOKEN + '\n'
+            path.write_text(original)
+            path.chmod(0o400)
+            configuration = types.ModuleType('flamoris_mcp_hub.config')
+            configuration.env_file = lambda: path
+            output = io.StringIO()
+            with patch.dict(sys.modules, {'flamoris_mcp_hub.config': configuration}), \
+                 patch.object(sys, 'stdin', io.StringIO(json.dumps({'key': SETUP.KEY, 'credential': TOKEN}))), \
+                 contextlib.redirect_stdout(output):
+                exec(compile(SETUP.CONTAINER_ENV, 'readonly-dotenv-probe', 'exec'), {})
+            self.assertNotIn(TOKEN, output.getvalue())
+            self.assertTrue(json.loads(output.getvalue())['validated'])
+            self.assertEqual(path.read_text(), original)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o400)
 
-    def test_failed_hub_restart_restores_existing_descriptor_and_runtime(self):
+    def test_replacement_preserves_every_setting_and_uses_immutable_image(self):
+        original = running_hub()
+        spec = SETUP.replacement_spec(original, TOKEN)
+        self.assertEqual(spec['HostConfig'], original['HostConfig'])
+        self.assertEqual(spec['Image'], original['Image'])
+        self.assertEqual(spec['Env'][:-1], original['Config']['Env'])
+        self.assertEqual(spec['Env'][-1], SETUP.KEY + '=' + TOKEN)
+        self.assertNotIn(SETUP.KEY, original['Config']['Env'])
+        for key in ('User', 'WorkingDir', 'Entrypoint', 'Cmd', 'Labels'):
+            self.assertEqual(spec[key], original['Config'][key])
+        for transform in (lambda x: x['HostConfig'].update(ReadonlyRootfs=False),
+                          lambda x: x['HostConfig'].update(NetworkMode='bridge'),
+                          lambda x: x['Mounts'][0].update(Type='volume'),
+                          lambda x: x['Config']['Env'].append(SETUP.KEY + '=different')):
+            unsupported = copy.deepcopy(original)
+            transform(unsupported)
+            with self.assertRaises(ValueError):
+                SETUP.replacement_spec(unsupported, TOKEN)
+
+    def test_container_swap_never_runs_both_and_retains_disabled_original(self):
+        fake = FakeDocker()
+        swap = SETUP.HubSwap(running_hub(), TOKEN, fake)
+        swap.prepare()
+        self.assertTrue(fake.containers['original']['State']['Running'])
+        swap.activate()
+        self.assertTrue(fake.containers['candidate']['State']['Running'])
+        self.assertFalse(fake.containers['original']['State']['Running'])
+        self.assertEqual(fake.containers['original']['HostConfig']['RestartPolicy']['Name'], 'no')
+        swap.rollback()
+        self.assertEqual(fake.containers, {'original': running_hub()})
+
+    def test_failed_replacement_start_restores_original_id_name_and_restart_policy(self):
+        fake = FakeDocker(fail='/candidate/start')
+        swap = SETUP.HubSwap(running_hub(), TOKEN, fake)
+        swap.prepare()
+        with self.assertRaises(RuntimeError):
+            swap.activate()
+        swap.rollback()
+        self.assertEqual(fake.containers, {'original': running_hub()})
+
+    def test_failed_hub_verification_restores_container_descriptor_and_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             (root / "config").mkdir()
@@ -128,6 +226,7 @@ class SetupTests(unittest.TestCase):
             runtime = root / "config/runtime.env"
             original_env = "PORT=8769\nEXISTING_TOKEN=untouched\n"
             runtime.write_text(original_env)
+            runtime.chmod(0o640)
             registration = SETUP.descriptor(catalog())
             target = root / "mcps/cutwork-lime.yaml"
             original_catalog = json.dumps(registration, separators=(",", ":")).encode()
@@ -137,24 +236,27 @@ class SetupTests(unittest.TestCase):
                                              "credential": TOKEN, "descriptor": registration}))
             connection.chmod(0o600)
 
+            fake = FakeDocker()
             def fake_run(arguments, **kwargs):
                 if arguments[:2] == ["docker", "inspect"]:
-                    return types.SimpleNamespace(stdout=json.dumps([{"Config": {"Env": []}, "Mounts": []}]).encode(), returncode=0)
-                if arguments[:2] == ["docker", "restart"]:
-                    if kwargs.get("check", True):
-                        raise RuntimeError("restart failure")
-                if arguments[-2:] in [["id", "-u"], ["id", "-g"]]:
-                    return types.SimpleNamespace(stdout=b"10001", returncode=0)
-                if arguments[-1] == SETUP.CONTAINER_ENV:
-                    return types.SimpleNamespace(stdout=b'{"path":"/app/.env"}', returncode=0)
+                    return types.SimpleNamespace(stdout=json.dumps([running_hub()]).encode(), returncode=0)
+                if arguments[:2] == ['docker', 'info']:
+                    return types.SimpleNamespace(stdout=b'local-daemon\n', returncode=0)
+                if arguments[-1] == SETUP.VALIDATE:
+                    return types.SimpleNamespace(stdout=b'{"validated":true,"existingTools":[]}', returncode=0)
+                if arguments[-1] == SETUP.VERIFY:
+                    raise RuntimeError('verifier transport failed')
                 return types.SimpleNamespace(stdout=b"{}", returncode=0)
 
             with patch.object(SETUP, "HUB_ROOT", root), patch.object(SETUP, "run", fake_run), \
-                 patch.object(SETUP.socket, "gethostname", return_value="decopon"), self.assertRaises(RuntimeError):
+                 patch.object(SETUP, 'docker_api', fake), \
+                 patch.object(SETUP.socket, "gethostname", return_value="decopon"), self.assertRaisesRegex(RuntimeError, 'verifying the Hub catalog'):
                 SETUP.hub(types.SimpleNamespace(connection=str(connection)), types.SimpleNamespace(pw_dir=str(root)))
             self.assertEqual(runtime.read_text(), original_env)
+            self.assertEqual(runtime.stat().st_mode & 0o777, 0o640)
             self.assertEqual(target.read_bytes(), original_catalog)
             self.assertTrue(connection.exists())
+            self.assertEqual(fake.containers, {'original': running_hub()})
 
     def test_default_cli_is_read_only_plan(self):
         result = subprocess.run([sys.executable, str(SOURCE), "lime"], capture_output=True, text=True)
