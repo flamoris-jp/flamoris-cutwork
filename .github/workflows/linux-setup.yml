@@ -1,0 +1,17 @@
+name: Cutwork LIME setup helpers
+on:
+  pull_request:
+    paths: ['deploy/linux/setup-cutwork-lime.py', 'tests/deployment/**', '.github/workflows/linux-setup.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deployment-helper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install python-dotenv 'mcp>=1.29,<3'
+      - run: python -m unittest discover -s tests/deployment -v
