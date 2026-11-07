@@ -159,9 +159,9 @@ def main():
                 result = retire(manager, args.job, apply=True, locked=True)
         else:
             result = retire(manager, args.job)
-        print(json.dumps(result))
     finally:
         if stopped: command('systemctl', 'start', *reversed(UNITS))
+    print(json.dumps(result))
 
 
 if __name__ == '__main__':
