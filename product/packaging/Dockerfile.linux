@@ -1,0 +1,8 @@
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libicu74 libstdc++6 libssl3t64 zlib1g python3 && rm -rf /var/lib/apt/lists/* && useradd --uid 10001 --create-home --home-dir /home/cutwork cutwork
+WORKDIR /app
+COPY artifacts/runtime/ /app/
+COPY product/packaging/updater-entrypoint.py /app/updater-entrypoint.py
+USER 10001:10001
+ENV DOTNET_EnableDiagnostics=0
+ENTRYPOINT ["python3", "/app/updater-entrypoint.py"]

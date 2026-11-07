@@ -180,7 +180,9 @@ class SetupTests(unittest.TestCase):
 
     def test_replacement_preserves_every_setting_and_uses_immutable_image(self):
         original = running_hub()
+        original['Config']['Hostname'] = 'decopon'
         spec = SETUP.replacement_spec(original, TOKEN)
+        self.assertNotIn('Hostname', spec)
         self.assertEqual(spec['HostConfig'], original['HostConfig'])
         self.assertEqual(spec['Image'], original['Image'])
         self.assertEqual(spec['Env'][:-1], original['Config']['Env'])
@@ -252,12 +254,13 @@ class SetupTests(unittest.TestCase):
                 if arguments[:2] == ['docker', 'info']:
                     return types.SimpleNamespace(stdout=b'local-daemon\n', returncode=0)
                 if arguments[-1] == SETUP.VALIDATE:
-                    return types.SimpleNamespace(stdout=b'{"validated":true,"existingTools":[]}', returncode=0)
+                    return types.SimpleNamespace(stdout=json.dumps({'validated': True, 'existingTools': [], 'yaml': json.dumps(registration)}).encode(), returncode=0)
                 if arguments[-1] == SETUP.VERIFY:
                     raise RuntimeError('verifier transport failed')
                 return types.SimpleNamespace(stdout=b"{}", returncode=0)
 
             with patch.object(SETUP, "HUB_ROOT", root), patch.object(SETUP, "run", fake_run), \
+                 patch.object(SETUP, 'ensure_nginx_route'), \
                  patch.object(SETUP, 'docker_api', fake), \
                  patch.object(SETUP.socket, "gethostname", return_value="decopon"), self.assertRaisesRegex(RuntimeError, 'verifying the Hub catalog'):
                 SETUP.hub(types.SimpleNamespace(connection=str(connection)), types.SimpleNamespace(pw_dir=str(root)))
@@ -295,9 +298,17 @@ class SetupTests(unittest.TestCase):
                 value = {"protocolVersion": message["params"]["protocolVersion"], "capabilities": {"tools": {}},
                          "serverInfo": {"name": "test-hub", "version": "1"}}
             elif method == "tools/list":
-                value = {"tools": ([legacy] if include_legacy else []) +
-                         [{"name": "cutwork-lime." + item["name"], "inputSchema": item["input_schema"]}
-                          for item in registration["tools"]]}
+                all_tools = [{"name": "cutwork-lime." + item["name"], "inputSchema": item["input_schema"]}
+                             for item in registration["tools"]]
+                cursor = message.get('params', {}).get('cursor')
+                if cursor is None:
+                    value = {'tools': all_tools[:10], 'nextCursor': 'part2'}
+                elif cursor == 'part2':
+                    value = {'tools': all_tools[10:], 'nextCursor': 'legacy'}
+                elif cursor == 'legacy':
+                    value = {'tools': [legacy] if include_legacy else []}
+                else:
+                    self.fail('Unexpected cursor')
             elif method == "tools/call":
                 self.assertEqual(message["params"]["name"], "cutwork-lime.mcp.context")
                 value = {"content": [{"type": "text", "text": json.dumps({"productId": "flamoris.cutwork",
@@ -320,7 +331,7 @@ class SetupTests(unittest.TestCase):
                 exec(compile(SETUP.VERIFY, "hub-readonly-verifier", "exec"), {})
         self.assertNotIn(TOKEN, output.getvalue())
         self.assertTrue(json.loads(output.getvalue())["connected"])
-        self.assertEqual(calls, ["initialize", "notifications/initialized", "tools/list", "tools/call"])
+        self.assertEqual(calls, ["initialize", "notifications/initialized", "tools/list", "tools/list", "tools/list", "tools/call"])
         include_legacy = False
         calls.clear()
         with patch.dict(sys.modules, {"flamoris_mcp_hub": types.ModuleType("flamoris_mcp_hub"),
@@ -329,8 +340,9 @@ class SetupTests(unittest.TestCase):
              patch.object(httpx, "AsyncClient", client), patch.object(sys, "stdin", io.StringIO(json.dumps(registration))), \
              self.assertRaises(Exception):
             exec(compile(SETUP.VERIFY, 'reject-lost-existing-catalog', 'exec'), {})
-        self.assertEqual(calls, ['initialize', 'notifications/initialized', 'tools/list'])
+        self.assertEqual(calls, ['initialize', 'notifications/initialized', 'tools/list', 'tools/list', 'tools/list'])
 
 
 if __name__ == "__main__":
     unittest.main()
+
