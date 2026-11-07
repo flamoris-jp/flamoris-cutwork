@@ -1,6 +1,6 @@
 using System.IO;
 using System.Text.Json;
-using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging;
 using Flamoris.Cutwork.Imaging.Persistence;
@@ -12,9 +12,9 @@ namespace Flamoris.Cutwork.Cli;
 
 internal static class CliMcp
 {
-    internal const string HubTokenEnvironment = "CUTWORK_CLI_CONNECTOR_TOKEN";
+    internal const string HubTokenEnvironment = "CUTWORK_LIME_CONNECTOR_TOKEN";
 
-    public static void Run(string input, IReadOnlyDictionary<string, string> options)
+    public static void Run(string? input, IReadOnlyDictionary<string, string> options)
     {
         var permission = options.GetValueOrDefault("--permission", "readOnly") switch
         {
@@ -34,87 +34,93 @@ internal static class CliMcp
         if (permission != McpPermission.Edit && options.ContainsKey("--save-to"))
             throw new ArgumentException("--save-to requires --permission edit.");
 
-        var dispatcher = Dispatcher.CurrentDispatcher;
-        var previous = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+        var originalOutput = Console.Out;
+        Console.SetOut(Console.Error); // Core logging uses Console.Out; MCP writes the raw stdout stream.
+        using var lane = new HostLane();
         using var stop = new CancellationTokenSource();
         ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; stop.Cancel(); };
         Console.CancelKeyPress += cancel;
+        using var terminate = OperatingSystem.IsLinux()
+            ? PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => { context.Cancel = true; stop.Cancel(); })
+            : null;
         try
         {
-            var work = ServeAsync(input, options.GetValueOrDefault("--save-to"), permission,
-                hub, dispatcher, stop.Token);
-            _ = work.ContinueWith(_ => dispatcher.BeginInvokeShutdown(DispatcherPriority.Background),
-                CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
-            Dispatcher.Run();
-            work.GetAwaiter().GetResult();
+            lane.Run(() => ServeAsync(input, options.GetValueOrDefault("--save-to"),
+                options.GetValueOrDefault("--workspace"), permission, hub, lane, stop.Token));
         }
-        finally
-        {
-            Console.CancelKeyPress -= cancel;
-            SynchronizationContext.SetSynchronizationContext(previous);
-        }
+        finally { Console.CancelKeyPress -= cancel; Console.SetOut(originalOutput); }
     }
 
     public static void WriteCatalog()
+    {
+        var output = Console.Out;
+        Console.SetOut(Console.Error);
+        try { WriteCatalogCore(output); }
+        finally { Console.SetOut(output); }
+    }
+    private static FlamorisLogger Logger() => FlamorisLogger.Create(new LoggingOptions
+    {
+        Level = "info", Outputs = [new() { Type = "console" }],
+    });
+    private static void WriteCatalogCore(TextWriter output)
     {
         var session = new EditorSession();
         using var host = new CutworkMcpHost(session, () => false,
             (action, token) => { token.ThrowIfCancellationRequested(); action(); return Task.CompletedTask; });
         var editor = new LiveEditor(session, McpPermission.Edit, () => false, _ => { });
-        using var boundary = new McpBoundary(host, CutworkMcpTools.Create(editor), new(),
-            new McpDiagnostics(FlamorisLogger.Create()));
-        Console.WriteLine(JsonSerializer.Serialize(new
+        using var boundary = new McpBoundary(host, CutworkMcpTools.Create(editor).Concat(ServiceWorkspace.CatalogTools()), new(),
+            new McpDiagnostics(Logger()));
+        output.WriteLine(JsonSerializer.Serialize(new
         {
-            id = "cutwork-cli", @namespace = "cutwork-cli", transport = "reverse-websocket",
+            id = "cutwork-lime", @namespace = "cutwork-lime", transport = "reverse-websocket",
             product_id = "flamoris.cutwork", connector_token_env = HubTokenEnvironment,
             tools = boundary.DescribeCatalog(),
         }, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static async Task ServeAsync(string input, string? saveTo, McpPermission permission,
-        HubConnectionSettings? hub, Dispatcher dispatcher, CancellationToken token)
+    private static async Task ServeAsync(string? input, string? saveTo, string? root,
+        McpPermission permission, HubConnectionSettings? hub, HostLane lane, CancellationToken token)
     {
-        Task Dispatch(Action action, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (dispatcher.CheckAccess()) { action(); return Task.CompletedTask; }
-            return dispatcher.InvokeAsync(() => { ct.ThrowIfCancellationRequested(); action(); },
-                DispatcherPriority.Background, ct).Task;
-        }
+        Task Dispatch(Action action, CancellationToken ct) => lane.Dispatch(action, ct);
 
         var session = new EditorSession();
         var workspace = new ProjectWorkspace(session);
-        CutworkDocument document;
-        if (Path.GetExtension(input).Equals(".flimg", StringComparison.OrdinalIgnoreCase))
-            document = new FlimgProjectStore().Load(input);
-        else
+        using var service = root is null ? null : new ServiceWorkspace(root, workspace, permission);
+        if (input is not null)
         {
-            var imported = new ImageImportService().Import(input);
-            if (!imported.IsSuccess) throw new InvalidOperationException("Image import failed: " + imported.Error);
-            document = new CutworkDocument(imported.Original!);
-        }
-        token.ThrowIfCancellationRequested();
-        if (saveTo is null) workspace.OpenArtwork(document);
-        else
-        {
-            var target = CreateWorkingCopy(input, saveTo, document);
-            workspace.OpenProject(target);
-            workspace.AuthorizeAiSave();
+            CutworkDocument document;
+            if (Path.GetExtension(input).Equals(".flimg", StringComparison.OrdinalIgnoreCase))
+                document = new FlimgProjectStore().Load(input);
+            else
+            {
+                var imported = new ImageImportService().Import(input);
+                if (!imported.IsSuccess) throw new InvalidOperationException("Image import failed: " + imported.Error);
+                document = new CutworkDocument(imported.Original!);
+            }
+            token.ThrowIfCancellationRequested();
+            if (saveTo is null) workspace.OpenArtwork(document);
+            else
+            {
+                var target = CreateWorkingCopy(input, saveTo, document);
+                workspace.OpenProject(target);
+                workspace.AuthorizeAiSave();
+            }
         }
 
-        using var host = new CutworkMcpHost(session, () => false, Dispatch);
+        using var host = new CutworkMcpHost(session, () => false, Dispatch,
+            applicationLifetime: true, runtimeTokenWhenEmpty: true);
         CapabilityGrant? currentGrant = null;
-        var editor = new LiveEditor(session, permission, () => false, _ => { },
+        var logger = Logger();
+        var editor = new LiveEditor(session, permission, () => false, _ => { }, logger,
             currentGrant: () => currentGrant, workspace: workspace,
             dispatchCompletion: action => Dispatch(action, CancellationToken.None));
         var configuration = new McpOptions
         {
-            Permission = permission, PipeName = "flamoris-cutwork-cli-" + Guid.NewGuid().ToString("N"),
+            ApplicationLifetime = true, Permission = permission, PipeName = "flamoris-cutwork-cli-" + Guid.NewGuid().ToString("N"),
             MaxConcurrentRequests = 1,
         };
-        using var boundary = new McpBoundary(host, CutworkMcpTools.Create(editor), configuration,
-            new McpDiagnostics(FlamorisLogger.Create()));
+        using var boundary = new McpBoundary(host, CutworkMcpTools.Create(editor).Concat(service?.Tools() ?? []), configuration,
+            new McpDiagnostics(logger));
         using var grant = await boundary.EnableAsync(permission, token);
         currentGrant = grant;
         try
@@ -127,7 +133,12 @@ internal static class CliMcp
                 {
                     await provider.StartAsync(token);
                     Console.Error.WriteLine("cutwork-cli: Hub provider started; waiting for registration. Ctrl+C stops.");
-                    await Task.Delay(Timeout.Infinite, token);
+                    while (!token.IsCancellationRequested)
+                    {
+                        await Task.Delay(TimeSpan.FromMinutes(3), token);
+                        // Core bounds each retry cycle; a service must also recover after a long Hub outage.
+                        if (!boundary.Status.Current.Connected) await provider.RefreshAsync(token);
+                    }
                 }
                 finally { boundary.Disable(); await provider.StopAsync(CancellationToken.None); }
             }
@@ -148,7 +159,7 @@ internal static class CliMcp
         finally
         {
             boundary.Disable();
-            // Core's save job posts completion back to the dispatcher; keep pumping it after revocation.
+            // Keep the host lane alive until the pending checkpoint posts completion after revocation.
             while (workspace.IsSaving) await Task.Delay(25);
             workspace.RevokeAiSave();
         }

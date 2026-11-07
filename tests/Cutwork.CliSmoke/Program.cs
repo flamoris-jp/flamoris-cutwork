@@ -2,8 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Flamoris.Cutwork.Imaging;
 using Flamoris.Cutwork.Imaging.Persistence;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -26,9 +25,7 @@ internal static class Program
             var input = Path.Combine(root, "art.png");
             var output = Path.Combine(root, "edited.flimg");
             var pixels = Enumerable.Repeat(new byte[] { 20, 80, 200, 255 }, 32 * 32).SelectMany(x => x).ToArray();
-            var png = new PngBitmapEncoder();
-            png.Frames.Add(BitmapFrame.Create(BitmapSource.Create(32, 32, 96, 96, PixelFormats.Bgra32, null, pixels, 128)));
-            using (var stream = File.Create(input)) png.Save(stream);
+            File.WriteAllBytes(input, RasterPng.Encode(new(32, 32), pixels));
             var sourceHash = SHA256.HashData(File.ReadAllBytes(input));
 
             await using (var read = await Connect(cli, input))
@@ -90,6 +87,7 @@ internal static class Program
             Check(!File.Exists(Path.Combine(root, "forbidden.flimg")), "Read-only startup wrote a project.");
             await Eof(cli, input);
             await Catalog(cli);
+            await ServiceRoundTrip(cli, Path.Combine(root, "service"), File.ReadAllBytes(input));
             Console.WriteLine("CLI source preservation, overwrite denial, EOF teardown and catalog: PASS");
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -135,9 +133,88 @@ internal static class Program
         var json = await process.StandardOutput.ReadToEndAsync();
         await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
         var catalog = JsonSerializer.Deserialize<JsonElement>(json);
-        Check(process.ExitCode == 0 && catalog.GetProperty("id").GetString() == "cutwork-cli", "Catalog generation failed.");
+        Check(process.ExitCode == 0 && catalog.GetProperty("id").GetString() == "cutwork-lime", "Catalog generation failed.");
         var names = catalog.GetProperty("tools").EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToArray();
         Check(names.Contains("part_polygon_create") && names.Contains("project_save") && !names.Any(n => n!.StartsWith("capture.")), "CLI catalog does not match host.");
     }
     private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
+
+    private static async Task<McpClient> Service(string cli, string root, string permission) =>
+        await McpClient.CreateAsync(new StdioClientTransport(new()
+        {
+            Command = "dotnet", Arguments = [cli, "serve", "--workspace", root, "--permission", permission], Name = "Cutwork Linux service",
+        }), cancellationToken: Deadline());
+    private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    private static async Task ServiceRoundTrip(string cli, string root, byte[] png)
+    {
+        await using (var read = await Service(cli, root, "readOnly"))
+        {
+            Check(!(await Common(read)).GetProperty("hasDocument").GetBoolean(), "Cold service invented a document.");
+            Check(!(await read.ListToolsAsync(cancellationToken: Deadline())).Any(t => t.Name == "upload_begin"), "Read-only service advertised upload.");
+            Check((await Call(read, "upload_cancel", new { uploadId = Guid.NewGuid().ToString() }, await Common(read))).IsError == true, "Read-only service accepted upload mutation.");
+        }
+        await using (var client = await Service(cli, root, "edit"))
+        {
+            var empty = await Common(client); var id = Guid.NewGuid().ToString();
+            var begin = await Call(client, "upload_begin", new { uploadId = id, fileName = "Akino.png", sizeBytes = png.Length.ToString(), sha256 = Hash(png) }, empty);
+            Check(begin.IsError != true, "Service upload reservation failed: " + Text(begin));
+            var chunk = new { uploadId = id, offset = "0", dataBase64 = Convert.ToBase64String(png), sha256 = Hash(png) };
+            Check((await Call(client, "upload_write", chunk, empty)).IsError != true, "Service chunk failed.");
+            Check((await Call(client, "upload_write", chunk, empty)).IsError != true, "Identical chunk retry rejected.");
+            var opened = await Call(client, "document_import", new { uploadId = id, discardUnsaved = false }, empty);
+            Check(opened.IsError != true, "Service document import failed: " + Text(opened));
+            var common = await Common(client);
+            Check(common.GetProperty("documentToken").GetString() != empty.GetProperty("documentToken").GetString(), "Import did not rotate document token.");
+            Check((await Call(client, "undo", new { }, empty)).IsError == true, "Empty document guard survived import.");
+            var part = await Call(client, "part_polygon_create", new { name = "Akino", fence = new[] { new { x = 2, y = 2 }, new { x = 30, y = 2 }, new { x = 30, y = 30 }, new { x = 2, y = 30 } } }, common);
+            Check(part.IsError != true && await LayerCount(client) == 2, "Service Part creation failed.");
+            var exportId = Guid.NewGuid().ToString();
+            var request = new { requestId = exportId, kind = "handoff" };
+            var receipt = Text(await Call(client, "artifact_export", request, await Common(client)));
+            Check(receipt.TryGetProperty("sha256", out _), "Export failed: " + receipt);
+            Check(Text(await Call(client, "artifact_export", request, await Common(client))).GetRawText() == receipt.GetRawText(), "Export retry was not idempotent.");
+            using var downloaded = new MemoryStream();
+            while (true)
+            {
+                var read = Text(await Call(client, "artifact_read", new { requestId = exportId, offset = downloaded.Length.ToString() }));
+                var data = Convert.FromBase64String(read.GetProperty("dataBase64").GetString()!);
+                Check(Hash(data) == read.GetProperty("chunkSha256").GetString(), "Download chunk digest differs.");
+                downloaded.Write(data);
+                if (read.GetProperty("eof").GetBoolean()) break;
+            }
+            Check(Hash(downloaded.ToArray()) == receipt.GetProperty("sha256").GetString(), "Download digest differs.");
+            using (var archive = new System.IO.Compression.ZipArchive(new MemoryStream(downloaded.ToArray())))
+                Check(archive.GetEntry("handoff.json") is not null && archive.Entries.Any(e => e.FullName.StartsWith("layers/")), "Handoff did not contain Part.");
+            await SaveCurrent(client);
+        }
+        await using (var restarted = await Service(cli, root, "readOnly"))
+            Check(await LayerCount(restarted) == 2, "Service restart lost saved Part.");
+        Console.WriteLine("Linux service cold start, upload, guarded import, Part, export/download and saved restart: PASS");
+    }
+
+    private static async Task SaveCurrent(McpClient client)
+    {
+        var target = Text(await Call(client, "project_context", new { })).GetProperty("target");
+        var requestId = Guid.NewGuid().ToString();
+        var start = await Call(client, "project_save", new
+        {
+            requestId, saveTargetId = target.GetProperty("saveTargetId").GetString(),
+            expectedCheckpointId = target.GetProperty("checkpointId").ValueKind == JsonValueKind.Null ? null : target.GetProperty("checkpointId").GetString(),
+            expectedWorkingFileHash = target.GetProperty("expectedWorkingFileHash").GetString(), label = "Service acceptance",
+        }, await Common(client));
+        Check(start.IsError != true, "Service save could not start.");
+        var watch = Stopwatch.StartNew();
+        while (watch.Elapsed < TimeSpan.FromSeconds(30))
+        {
+            var status = Text(await Call(client, "project_save_status", new { requestId }));
+            if (status.GetProperty("state").GetString() == "completed")
+            {
+                Check(status.GetProperty("receipt").GetProperty("workingCopySaved").GetBoolean(), "Service working copy was not saved.");
+                return;
+            }
+            Check(status.GetProperty("state").GetString() == "running", "Service save failed: " + status);
+            await Task.Delay(50);
+        }
+        throw new TimeoutException("Service save timed out.");
+    }
 }

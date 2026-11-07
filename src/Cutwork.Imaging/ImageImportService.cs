@@ -1,7 +1,9 @@
 using System.IO;
 using System.Security;
+#if WINDOWS
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+#endif
 using Flamoris.Cutwork.Core;
 
 namespace Flamoris.Cutwork.Imaging;
@@ -25,6 +27,7 @@ public sealed class ImageImportService
 
         try
         {
+#if WINDOWS
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             var decoder = BitmapDecoder.Create(
                 stream,
@@ -61,11 +64,16 @@ public sealed class ImageImportService
 
             return ImageImportResult.Success(
                 new OriginalAsset(Path.GetFileName(path), dimensions, stride, pixels));
+#else
+            return ImageImportResult.Success(PortableRaster.Import(path));
+#endif
         }
+#if WINDOWS
         catch (FileFormatException)
         {
             return ImageImportResult.Failure(ImageImportError.InvalidImage);
         }
+#endif
         catch (NotSupportedException)
         {
             return ImageImportResult.Failure(ImageImportError.InvalidImage);
@@ -80,3 +88,4 @@ public sealed class ImageImportService
         }
     }
 }
+

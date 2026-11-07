@@ -1,7 +1,9 @@
 using System.Buffers.Binary;
 using System.IO;
+#if WINDOWS
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+#endif
 using Flamoris.Cutwork.Core;
 
 namespace Flamoris.Cutwork.Imaging.Persistence;
@@ -12,18 +14,27 @@ internal static class PngAssetCodec
 
     internal static byte[] EncodeBgra32(PixelSize size, ReadOnlySpan<byte> pixels, bool premultiplied = false)
     {
+#if WINDOWS
         var stride = checked(size.Width * 4);
         if (pixels.Length != checked(stride * size.Height)) throw new ArgumentException(nameof(pixels));
         return Encode(size, pixels.ToArray(), stride,
             premultiplied ? PixelFormats.Pbgra32 : PixelFormats.Bgra32);
+#else
+        return PortableRaster.Encode(size, pixels, gray: false, premultiplied);
+#endif
     }
 
     internal static byte[] EncodeGray8(PixelSize size, ReadOnlySpan<byte> pixels)
     {
+#if WINDOWS
         if (pixels.Length != checked(size.Width * size.Height)) throw new ArgumentException(nameof(pixels));
         return Encode(size, pixels.ToArray(), size.Width, PixelFormats.Gray8);
+#else
+        return PortableRaster.Encode(size, pixels, gray: true);
+#endif
     }
 
+#if WINDOWS
     internal static byte[] DecodeBgra32(ReadOnlySpan<byte> png, PixelSize expected) =>
         Decode(png, expected, PixelFormats.Bgra32, checked(expected.Width * 4), colorType: 6);
 
@@ -67,6 +78,18 @@ internal static class PngAssetCodec
         }
     }
 
+#else
+    internal static byte[] DecodeBgra32(ReadOnlySpan<byte> png, PixelSize expected) => DecodePortable(png, expected, false);
+    internal static byte[] DecodeGray8(ReadOnlySpan<byte> png, PixelSize expected) => DecodePortable(png, expected, true);
+    private static byte[] DecodePortable(ReadOnlySpan<byte> png, PixelSize expected, bool gray)
+    {
+        ValidateHeader(png, expected, gray ? (byte)0 : (byte)6);
+        try { return PortableRaster.Decode(png, expected, gray); }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException)
+        { throw new FlimgException(FlimgError.MalformedPng, e); }
+    }
+#endif
+
     private static void ValidateHeader(ReadOnlySpan<byte> png, PixelSize expected, byte colorType)
     {
         if (png.Length < 33 || !png[..8].SequenceEqual(Signature)
@@ -83,3 +106,4 @@ internal static class PngAssetCodec
             throw new FlimgException(FlimgError.MalformedPng);
     }
 }
+

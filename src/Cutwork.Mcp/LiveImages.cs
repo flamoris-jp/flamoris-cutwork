@@ -1,6 +1,8 @@
 using System.IO;
+#if WINDOWS
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+#endif
 using Flamoris.Cutwork.Core;
 using Flamoris.Cutwork.Imaging;
 
@@ -98,11 +100,17 @@ public static class LiveImages
     }
     private static LiveImage Encode(byte[] pixels, bool premultiplied, DocumentRect bounds, DocumentRect crop, int width, int height)
     {
+#if WINDOWS
         var bitmap = BitmapSource.Create(width, height, 96, 96,
             premultiplied ? PixelFormats.Pbgra32 : PixelFormats.Bgra32, null, pixels, width * 4);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var output = new LimitedOutput(); encoder.Save(output);
         return new(output.ToArray(), bounds, crop, width, height, (double)crop.Width / width, (double)crop.Height / height);
+#else
+        var png = RasterPng.Encode(new(width, height), pixels, premultiplied);
+        if (png.Length > LiveLimits.PngBytes) throw new LiveException("png_limit");
+        return new(png, bounds, crop, width, height, (double)crop.Width / width, (double)crop.Height / height);
+#endif
     }
     private sealed class LimitedOutput : MemoryStream
     {
@@ -118,3 +126,4 @@ public static class LiveImages
         }
     }
 }
+

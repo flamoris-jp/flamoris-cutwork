@@ -9,7 +9,7 @@ using Flamoris.Cutwork.Imaging.Persistence;
 namespace Flamoris.Cutwork.Cli;
 
 /// <summary>
-/// Headless Windows entry point. Reuses the same production document, tool and export
+/// Headless Linux/LIME entry point. Reuses the same production document, tool and export
 /// owners as the editor; no second layer format or image-masking implementation.
 /// </summary>
 internal static class Program
@@ -20,7 +20,7 @@ internal static class Program
         WriteIndented = true,
     };
 
-    // WPF imaging codecs require an STA, even though this process has no windows.
+    // The production CLI is portable and does not create a desktop window.
     [STAThread]
     private static int Main(string[] args)
     {
@@ -35,6 +35,14 @@ internal static class Program
             if (args.Length == 1 && args[0] == "mcp-catalog")
             {
                 CliMcp.WriteCatalog();
+                return 0;
+            }
+            if (args[0] == "serve")
+            {
+                var serviceOptions = ParseOptions(args, 1);
+                Allow(serviceOptions, "--workspace", "--permission", "--hub");
+                _ = Required(serviceOptions, "--workspace");
+                CliMcp.Run(null, serviceOptions);
                 return 0;
             }
 
@@ -246,7 +254,7 @@ internal static class Program
     private static void Help()
     {
         Console.WriteLine("""
-        FLAMORIS Cutwork CLI (Windows, .NET 10)
+        FLAMORIS Cutwork CLI (Linux/LIME, .NET 10)
           cutwork-cli import IMAGE.png --out draft.flimg
           cutwork-cli inspect draft.flimg
           cutwork-cli part-add draft.flimg --polygon "20,20;300,20;300,400;20,400" --name character --out parts.flimg [--semantic body] [--step 2]
@@ -254,6 +262,8 @@ internal static class Program
           cutwork-cli handoff parts.flimg --out handoff.zip
           cutwork-cli mcp IMAGE.png-or-PROJECT.flimg [--permission readOnly|edit] [--save-to NEW.flimg] [--hub wss://HOST/PATH]
           cutwork-cli mcp-catalog
+
+        cutwork-cli serve --workspace /data/workspace [--permission edit] [--hub wss://HOST/PATH]
 
         Coordinates are image pixels, not viewport positions.
         Outputs must not already exist. No automatic segmentation or hole repair.
