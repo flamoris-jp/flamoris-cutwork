@@ -377,8 +377,12 @@ class HubSwap:
         self.candidate = self.api('POST', '/containers/create?name=' + quote(self.candidate_name), self.spec)['Id']
         found = self.api('GET', '/containers/' + self.candidate + '/json')
         # Refuse a partial/normalized clone before stopping the current Hub.
-        if found['Image'] != self.observed['Image'] or found['HostConfig'] != self.spec['HostConfig']:
-            raise RuntimeError('Replacement container settings differ; original Hub remains running')
+        if found['Image'] != self.observed['Image']:
+            raise RuntimeError('Replacement image differs; original Hub remains running')
+        different = sorted(key for key in self.spec['HostConfig'].keys() | found['HostConfig'].keys()
+                           if found['HostConfig'].get(key) != self.spec['HostConfig'].get(key))
+        if different:
+            raise RuntimeError('Replacement HostConfig differs in ' + ','.join(different) + '; original Hub remains running')
         for key, value in self.spec.items():
             if key not in ('HostConfig', 'Image') and found['Config'].get(key) != value:
                 raise RuntimeError('Replacement Config.' + key + ' differs; original Hub remains running')

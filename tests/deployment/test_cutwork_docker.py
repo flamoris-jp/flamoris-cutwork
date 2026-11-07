@@ -16,6 +16,19 @@ TOKEN = 'integrationOnly' + 'x' * 48
 
 @unittest.skipUnless(os.environ.get('CUTWORK_SETUP_DOCKER_TESTS') == '1', 'requires isolated Docker test runner')
 class DockerIntegrationTests(unittest.TestCase):
+    def prepare(self, swap):
+        try:
+            swap.prepare()
+        except RuntimeError:
+            if swap.candidate:
+                found = SETUP.docker_api('GET', '/containers/' + swap.candidate + '/json')
+                before, after = self.original['HostConfig'], found['HostConfig']
+                differences = {key: [before.get(key), after.get(key)] for key in before.keys() | after.keys()
+                               if before.get(key) != after.get(key)}
+                if differences:
+                    self.fail('Isolated fixture HostConfig differences: ' + json.dumps(differences))
+            raise
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         root = pathlib.Path(self.directory.name)
@@ -52,7 +65,7 @@ class DockerIntegrationTests(unittest.TestCase):
         self.assertIn(b'Read-only file system', failed_write.stderr)
         swap = SETUP.HubSwap(self.original, TOKEN)
         try:
-            swap.prepare()
+            self.prepare(swap)
         finally:
             if swap.candidate:
                 self.created.append(swap.candidate)
@@ -83,7 +96,7 @@ class DockerIntegrationTests(unittest.TestCase):
             return SETUP.docker_api(method, path, body)
         swap = SETUP.HubSwap(self.original, TOKEN, fail_start)
         try:
-            swap.prepare()
+            self.prepare(swap)
         finally:
             if swap.candidate:
                 self.created.append(swap.candidate)
