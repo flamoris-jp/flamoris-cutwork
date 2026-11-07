@@ -218,6 +218,15 @@ class SetupTests(unittest.TestCase):
         swap.rollback()
         self.assertEqual(fake.containers, {'original': running_hub()})
 
+    def test_default_oom_representation_is_equivalent_but_disabling_oom_killing_is_rejected(self):
+        before = running_hub()['HostConfig']
+        null = dict(before, OomKillDisable=None)
+        false = dict(before, OomKillDisable=False)
+        true = dict(before, OomKillDisable=True)
+        self.assertEqual(SETUP.comparable_host_config(null), SETUP.comparable_host_config(false))
+        self.assertNotEqual(SETUP.comparable_host_config(null), SETUP.comparable_host_config(true))
+        self.assertIsNone(null['OomKillDisable'])
+
     def test_failed_hub_verification_restores_container_descriptor_and_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
@@ -270,6 +279,9 @@ class SetupTests(unittest.TestCase):
             import httpx
         import mcp.types
         registration = SETUP.descriptor(catalog())
+        legacy = {'name': 'kachinco-lime.mcp.context', 'inputSchema': {'type': 'object', 'additionalProperties': False}}
+        registration['existingTools'] = [legacy]
+        include_legacy = True
         calls = []
 
         async def handle(request):
@@ -283,8 +295,9 @@ class SetupTests(unittest.TestCase):
                 value = {"protocolVersion": message["params"]["protocolVersion"], "capabilities": {"tools": {}},
                          "serverInfo": {"name": "test-hub", "version": "1"}}
             elif method == "tools/list":
-                value = {"tools": [{"name": "cutwork-lime." + item["name"], "inputSchema": item["input_schema"]}
-                                   for item in registration["tools"]]}
+                value = {"tools": ([legacy] if include_legacy else []) +
+                         [{"name": "cutwork-lime." + item["name"], "inputSchema": item["input_schema"]}
+                          for item in registration["tools"]]}
             elif method == "tools/call":
                 self.assertEqual(message["params"]["name"], "cutwork-lime.mcp.context")
                 value = {"content": [{"type": "text", "text": json.dumps({"productId": "flamoris.cutwork",
@@ -308,6 +321,15 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn(TOKEN, output.getvalue())
         self.assertTrue(json.loads(output.getvalue())["connected"])
         self.assertEqual(calls, ["initialize", "notifications/initialized", "tools/list", "tools/call"])
+        include_legacy = False
+        calls.clear()
+        with patch.dict(sys.modules, {"flamoris_mcp_hub": types.ModuleType("flamoris_mcp_hub"),
+                                      "flamoris_mcp_hub.config": configuration}), \
+             patch.dict(os.environ, {"FLAMORIS_MCP_HUB_CLIENT_TOKEN": TOKEN}), \
+             patch.object(httpx, "AsyncClient", client), patch.object(sys, "stdin", io.StringIO(json.dumps(registration))), \
+             self.assertRaises(Exception):
+            exec(compile(SETUP.VERIFY, 'reject-lost-existing-catalog', 'exec'), {})
+        self.assertEqual(calls, ['initialize', 'notifications/initialized', 'tools/list'])
 
 
 if __name__ == "__main__":

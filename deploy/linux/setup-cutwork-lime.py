@@ -340,10 +340,6 @@ def replacement_spec(observed, token):
     """Retain the exact image, hardening, mounts, network and existing settings."""
     config = copy.deepcopy(observed['Config'])
     host = copy.deepcopy(observed['HostConfig'])
-    # Docker normalizes an explicitly sent null OomKillDisable to false. Omit
-    # the unspecified input so the inspected result retains the original null.
-    if host.get('OomKillDisable') is None:
-        host.pop('OomKillDisable', None)
     if (not observed['State']['Running'] or not host.get('ReadonlyRootfs')
             or host.get('NetworkMode') != 'host' or host.get('AutoRemove')
             or host.get('ContainerIDFile') or host.get('Links') or host.get('VolumesFrom')
@@ -365,6 +361,15 @@ def replacement_spec(observed, token):
     return config
 
 
+def comparable_host_config(host):
+    result = copy.deepcopy(host)
+    # The daemon reports the default OOM-killer setting as null or false across
+    # created/running states. Both retain OOM killing; true is never equivalent.
+    if result.get('OomKillDisable') is None:
+        result['OomKillDisable'] = False
+    return result
+
+
 class HubSwap:
     """Keep the stopped original available until the new route is verified."""
     def __init__(self, observed, token, api=None):
@@ -383,8 +388,10 @@ class HubSwap:
         # Refuse a partial/normalized clone before stopping the current Hub.
         if found['Image'] != self.observed['Image']:
             raise RuntimeError('Replacement image differs; original Hub remains running')
-        different = sorted(key for key in self.spec['HostConfig'].keys() | found['HostConfig'].keys()
-                           if found['HostConfig'].get(key) != self.spec['HostConfig'].get(key))
+        wanted_host = comparable_host_config(self.spec['HostConfig'])
+        found_host = comparable_host_config(found['HostConfig'])
+        different = sorted(key for key in wanted_host.keys() | found_host.keys()
+                           if found_host.get(key) != wanted_host.get(key))
         if different:
             raise RuntimeError('Replacement HostConfig differs in ' + ','.join(different) + '; original Hub remains running')
         for key, value in self.spec.items():
@@ -408,6 +415,10 @@ class HubSwap:
         self.api('POST', original + '/rename?name=' + quote(self.previous_name))
         self.api('POST', '/containers/' + self.candidate + '/rename?name=' + quote(self.name))
         self.api('POST', '/containers/' + self.candidate + '/start')
+        started = self.api('GET', '/containers/' + self.candidate + '/json')
+        if (not started['State']['Running'] or comparable_host_config(started['HostConfig'])
+                != comparable_host_config(self.spec['HostConfig'])):
+            raise RuntimeError('Started replacement settings differ')
 
     def rollback(self):
         # Resolve a create whose response might have been lost before receiving Id.
