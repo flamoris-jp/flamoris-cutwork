@@ -26,6 +26,8 @@ Updater candidate artifact. Live external WSS acceptance is a separate step.
 2. Run migrate-resident.py prepare in plan mode on LIME first. For the reviewed
    --apply operation, keep this helper, setup-cutwork-lime.py and the legacy
    flamoris-cutwork-cli.service template together.
+   Save/checkpoint any active editing session first and finish in-flight edits.
+   The backup preserves durable files, not uncommitted in-memory changes.
 3. Preparation stops the old native service, saves a root-only copy of the
    workspace/configuration/unit and original ownership/modes, retains the same
    dedicated endpoint/credential in private state/connection.json, changes the

@@ -46,7 +46,7 @@ internal static class CliMcp
         try
         {
             lane.Run(() => ServeAsync(input, options.GetValueOrDefault("--save-to"),
-                options.GetValueOrDefault("--workspace"), permission, hub, lane, stop.Token));
+                options.GetValueOrDefault("--workspace"), permission, hub, lane, stop.Token, originalOutput));
         }
         finally { Console.CancelKeyPress -= cancel; Console.SetOut(originalOutput); }
     }
@@ -79,7 +79,7 @@ internal static class CliMcp
     }
 
     private static async Task ServeAsync(string? input, string? saveTo, string? root,
-        McpPermission permission, HubConnectionSettings? hub, HostLane lane, CancellationToken token)
+        McpPermission permission, HubConnectionSettings? hub, HostLane lane, CancellationToken token, TextWriter statusOutput)
     {
         Task Dispatch(Action action, CancellationToken ct) => lane.Dispatch(action, ct);
 
@@ -132,8 +132,9 @@ internal static class CliMcp
                 try
                 {
                     await provider.StartAsync(token);
-                    Console.WriteLine(JsonSerializer.Serialize(new { status = "started",
+                    statusOutput.WriteLine(JsonSerializer.Serialize(new { status = "started",
                         note = "Hub connection is asynchronous; verify readiness through Hub." }));
+                    statusOutput.Flush();
                     while (!token.IsCancellationRequested)
                     {
                         await Task.Delay(TimeSpan.FromSeconds(60), token);

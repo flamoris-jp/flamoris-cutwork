@@ -18,12 +18,16 @@ def settings(environment, state):
             (not retained.is_file() or retained.stat().st_mode & 0o077 or retained.stat().st_size > 16384)):
         raise ValueError('Retained connection must be a private regular file')
     old = json.loads(retained.read_text()) if retained.exists() else {}
+    if not isinstance(old, dict):
+        raise ValueError('Invalid retained connection')
     endpoint = environment.get('CUTWORK_HUB_ENDPOINT') or old.get('endpoint', '')
     credential = environment.get('CUTWORK_HUB_TOKEN') or old.get('credential', '')
+    if not isinstance(endpoint, str) or not isinstance(credential, str):
+        raise ValueError('Invalid retained connection')
     parsed = urlsplit(endpoint)
     if (parsed.scheme != 'wss' or not parsed.hostname or parsed.username or parsed.password
             or parsed.query or parsed.fragment or not parsed.path.endswith('/desktop/cutwork-lime')
-            or not credential or len(credential) > 4096 or any(ord(c) < 32 for c in credential)):
+            or not credential.strip() or len(credential) > 4096 or any(ord(c) < 32 for c in credential)):
         raise ValueError('Configure the dedicated Cutwork WSS endpoint and private credential')
     return endpoint, credential
 

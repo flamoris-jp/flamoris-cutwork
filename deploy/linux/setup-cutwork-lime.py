@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the reviewed LIME bundle, then register its separate DECO PON route.
+"""Register the separate DECO PON route after reviewed Updater migration.
 
 No changes without --apply. Run from the normal operator account via sudo.
 Credentials remain in private files or subprocess stdin, never terminal output.
