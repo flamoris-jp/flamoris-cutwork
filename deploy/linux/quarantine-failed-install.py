@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Retire only the verified failed 0.1.0 stage; preserve all audit records."""
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -107,10 +108,10 @@ def inspect_failure(manager, identity, root, expected_recipe, expected_image):
     return job, journal, initial, source, quarantine
 
 
-def retire(manager, identity, *, root=ROOT, expected_recipe=RECIPE, expected_image=IMAGE, apply=False):
+def retire(manager, identity, *, root=ROOT, expected_recipe=RECIPE, expected_image=IMAGE, apply=False, locked=False):
     from flamoris_updater_adapters.journal import exclusive
     from flamoris_updater_adapters.diagnostics import recording, event
-    with exclusive(manager.state / 'manager.lock'):
+    with (contextlib.nullcontext() if locked else exclusive(manager.state / 'manager.lock')):
         job, journal, initial, source, quarantine = inspect_failure(manager, identity, root, expected_recipe, expected_image)
         result = {'application': APP, 'job': identity, 'quarantined': False, 'retainedPartialRoot': str(quarantine)}
         if not apply: return result
@@ -147,11 +148,18 @@ def main():
     stopped = False
     try:
         if args.apply:
-            command('systemctl', 'stop', *UNITS); stopped = True
-            for unit in UNITS:
-                require(command('systemctl', 'show', unit, '--property=ActiveState', '--value').strip() == b'inactive',
-                        'Updater services must be inactive during retirement')
-        print(json.dumps(retire(manager, args.job, apply=args.apply)))
+            from flamoris_updater_adapters.journal import exclusive
+            with exclusive(manager.state / 'manager.lock'):
+                inspect_failure(manager, args.job, ROOT, RECIPE, IMAGE)
+                stopped = True
+                command('systemctl', 'stop', *UNITS)
+                for unit in UNITS:
+                    require(command('systemctl', 'show', unit, '--property=ActiveState', '--value').strip() == b'inactive',
+                            'Updater services must be inactive during retirement')
+                result = retire(manager, args.job, apply=True, locked=True)
+        else:
+            result = retire(manager, args.job)
+        print(json.dumps(result))
     finally:
         if stopped: command('systemctl', 'start', *reversed(UNITS))
 
