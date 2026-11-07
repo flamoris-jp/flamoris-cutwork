@@ -157,97 +157,7 @@ def as_operator(user, arguments, **kwargs):
 
 
 def lime(args, user):
-    if socket.gethostname().split(".")[0].lower() != "lime":
-        raise ValueError("The lime phase must run on LIME")
-    no_links(ROOT)
-    ROOT.mkdir(parents=True, exist_ok=True)
-    ROOT.chmod(0o755)
-    docker = run(["docker", "inspect", "flamoris-cutwork-cli"], check=False)
-    if docker.returncode == 0:
-        raise ValueError("A Docker Cutwork installation exists; do not install a second host")
-    setting = pathlib.Path("/etc/flamoris/cutwork-lime.env")
-    old = values(setting.read_text()) if setting.exists() else {}
-    if args.hub_endpoint:
-        endpoint = endpoint_from_existing(args.hub_endpoint)
-    elif "HUB_ENDPOINT" in old:
-        endpoint = endpoint_from_existing(old["HUB_ENDPOINT"])
-    else:
-        previous = pathlib.Path("/srv/flamoris/apps/flamoris-kachinco-cli/config/runtime.env")
-        endpoint = endpoint_from_existing(values(previous.read_text()).get("KACHINCO_HUB_ENDPOINT", ""))
-    token = old.get(KEY) or secrets.token_urlsafe(48)
-    append_credential("", token)
-    cache = ROOT / "packages"
-    cache.mkdir(parents=True, exist_ok=True)
-    archive = pathlib.Path(args.archive).resolve() if args.archive else cache / (SOURCE + ".tar.gz")
-    if not archive.exists():
-        as_operator(user, ["gh", "auth", "status"])
-        temporary = pathlib.Path(tempfile.mkdtemp(prefix="cutwork-download-"))
-        os.chown(temporary, user.pw_uid, user.pw_gid)
-        try:
-            as_operator(user, ["gh", "run", "download", RUN_ID, "--repo", REPOSITORY,
-                               "--name", "Cutwork-LIME-linux-x64", "--dir", str(temporary)], timeout=180)
-            shutil.copyfile(temporary / "cutwork-lime-linux-x64.tar.gz", archive)
-            archive.chmod(0o600)
-        finally:
-            shutil.rmtree(temporary)
-    release = ROOT / "releases" / SOURCE
-    if not release.exists():
-        staged = pathlib.Path(tempfile.mkdtemp(prefix=".cutwork-", dir=cache))
-        try:
-            extract_verified(archive, staged)
-            release.parent.mkdir(parents=True, exist_ok=True)
-            release.parent.chmod(0o755)
-            staged.rename(release)
-        finally:
-            if staged.exists():
-                shutil.rmtree(staged)
-    else:
-        with archive.open("rb") as source:
-            if hashlib.file_digest(source, "sha256").hexdigest() != ARCHIVE_SHA256:
-                raise ValueError("Cached bundle digest mismatch")
-    registration = descriptor(json.loads((release / "cutwork-lime.json").read_text()))
-    observed = json.loads(run([str(release / "cutwork-cli"), "mcp-catalog"]).stdout)
-    if descriptor(observed) != registration:
-        raise ValueError("Installed executable does not match reviewed catalog")
-    unit = pathlib.Path("/etc/systemd/system") / UNIT
-    unit_bytes = (release / UNIT).read_bytes()
-    if unit.exists() and unit.read_bytes() != unit_bytes:
-        raise ValueError("Existing service unit differs; no automatic replacement")
-    binary = ROOT / "bin"
-    if binary.exists() and not binary.is_symlink():
-        raise ValueError("Existing non-managed bin directory; no automatic replacement")
-    try:
-        account = pwd.getpwnam("flamoris-cutwork")
-    except KeyError:
-        run(["useradd", "--system", "--user-group", "--home-dir", str(ROOT / "state"),
-             "--shell", "/usr/sbin/nologin", "flamoris-cutwork"])
-        account = pwd.getpwnam("flamoris-cutwork")
-    state = ROOT / "state"
-    no_links(state)
-    state.mkdir(exist_ok=True)
-    os.chown(state, account.pw_uid, account.pw_gid)
-    state.chmod(0o700)
-    run(["runuser", "-u", account.pw_name, "--", str(release / "cutwork-cli"), "--help"])
-    link = ROOT / (".bin-" + secrets.token_hex(8))
-    link.symlink_to(release)
-    os.replace(link, binary)
-    atomic(setting, ("HUB_ENDPOINT=" + endpoint + "\n" + KEY + "=" + token + "\n").encode())
-    atomic(unit, unit_bytes, 0o644)
-    connection = pathlib.Path(user.pw_dir) / "cutwork-lime-connect.json"
-    atomic(connection, json.dumps({"version": 1, "source": SOURCE, "archiveSha256": ARCHIVE_SHA256,
-           "endpoint": endpoint, "credential": token, "descriptor": registration}, indent=2).encode(),
-           uid=user.pw_uid, gid=user.pw_gid)
-    run(["systemctl", "daemon-reload"])
-    run(["systemctl", "enable", "--now", UNIT])
-    run(["systemctl", "is-active", "--quiet", UNIT])
-    copied = as_operator(user, ["scp", "-q", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-                                  str(connection), user.pw_name + "@decopon:cutwork-lime-connect.json"],
-                         check=False, timeout=25).returncode == 0
-    print(json.dumps({"installed": True, "active": True, "source": SOURCE,
-                      "hubSetupPending": True, "privateBundleCopiedToDecopon": copied}))
-    if not copied:
-        print("Copy the private file using: scp ~/cutwork-lime-connect.json " + user.pw_name + "@decopon:cutwork-lime-connect.json")
-
+    raise ValueError('The native installer is retired. Use the reviewed Updater catalog after migrate-resident.py preparation.')
 
 CONTAINER_ENV = r'''
 import json,os,sys
@@ -263,14 +173,19 @@ print(json.dumps({'validated':True}))
 '''
 
 VALIDATE = r'''
-import json,sys
+import json,sys,yaml
 from flamoris_mcp_hub.config import UpstreamConfig,load_upstreams,config_dir
-d=UpstreamConfig.model_validate(json.load(sys.stdin))
+raw=json.load(sys.stdin)
+serialized=yaml.safe_dump(raw,sort_keys=False,allow_unicode=True)
+decoded=yaml.safe_load(serialized)
+if json.dumps(raw,sort_keys=True)!=json.dumps(decoded,sort_keys=True):
+ raise SystemExit('Catalog YAML round trip changed the schema')
+d=UpstreamConfig.model_validate(decoded)
 previous=load_upstreams(config_dir())
 for old in previous:
  if (old.id==d.id or old.namespace==d.namespace) and old.model_dump()!=d.model_dump():
   raise SystemExit('Existing upstream conflicts; no overwrite')
-print(json.dumps({'validated':True,'tools':len(d.tools),'existingTools':[
+print(json.dumps({'validated':True,'tools':len(d.tools),'yaml':serialized,'existingTools':[
  {'name':old.namespace+'.'+tool.name,'inputSchema':tool.input_schema}
  for old in previous for tool in old.tools]}))
 '''
@@ -284,6 +199,7 @@ except ImportError:
 from dotenv import load_dotenv
 from flamoris_mcp_hub.config import env_file
 from mcp import ClientSession
+from mcp.types import PaginatedRequestParams
 from mcp.client.streamable_http import streamable_http_client
 load_dotenv(env_file(),override=False)
 expected=json.load(sys.stdin)
@@ -296,8 +212,17 @@ async def main():
   async with transport as (read,write,*_):
    async with ClientSession(read,write) as session:
     await session.initialize()
-    tools=(await session.list_tools()).model_dump(by_alias=True)['tools']
-    actual={t['name']:t for t in tools}
+    actual={};cursor=None;seen=set()
+    while True:
+     pagination={'cursor':cursor} if 'cursor' in inspect.signature(session.list_tools).parameters else {'params':PaginatedRequestParams(cursor=cursor)}
+     page=(await session.list_tools(**pagination)).model_dump(by_alias=True)
+     for tool in page['tools']:
+      if tool['name'] in actual:raise RuntimeError('Duplicate public tool')
+      actual[tool['name']]=tool
+     cursor=page.get('nextCursor')
+     if not cursor:break
+     if cursor in seen or len(seen)>=64:raise RuntimeError('Invalid tool pagination')
+     seen.add(cursor)
     for tool in expected.get('existingTools',[]):
      if tool['name'] not in actual or actual[tool['name']]['inputSchema']!=tool['inputSchema']:raise RuntimeError('Existing catalog mismatch')
     for tool in expected['tools']:
@@ -477,13 +402,12 @@ def hub_locked(args, user):
     updated = append_credential(old_env, token)
     target = HUB_ROOT / "mcps/cutwork-lime.yaml"
     no_links(target)
-    registration_bytes = (json.dumps(registration, indent=2) + "\n").encode()
-    if target.exists() and json.loads(target.read_text()) != registration:
-        raise ValueError("Existing Cutwork descriptor differs; no automatic overwrite")
+    # The installed Hub validates existing YAML/model equivalence below.
     previous_target = target.read_bytes() if target.exists() else None
     previous_stat = target.stat() if target.exists() else None
     checked = json.loads(run(["docker", "exec", "-i", container, "python", "-c", VALIDATE],
                              data=json.dumps(registration).encode()).stdout)
+    registration_bytes = checked['yaml'].encode()
     verification = dict(registration, existingTools=checked['existingTools'])
     request = {"key": KEY, "credential": token}
     run(["docker", "exec", "--user", "0", "-i", container, "python", "-c", CONTAINER_ENV],
@@ -572,3 +496,4 @@ if __name__ == "__main__":
         detail = str(error) if type(error) in (RuntimeError, ValueError) else type(error).__name__
         print("Setup stopped: " + detail)
         raise SystemExit(1)
+

@@ -132,12 +132,13 @@ internal static class CliMcp
                 try
                 {
                     await provider.StartAsync(token);
-                    Console.Error.WriteLine("cutwork-cli: Hub provider started; waiting for registration. Ctrl+C stops.");
+                    Console.WriteLine(JsonSerializer.Serialize(new { status = "started",
+                        note = "Hub connection is asynchronous; verify readiness through Hub." }));
                     while (!token.IsCancellationRequested)
                     {
-                        await Task.Delay(TimeSpan.FromMinutes(3), token);
+                        await Task.Delay(TimeSpan.FromSeconds(60), token);
                         // Core bounds each retry cycle; a service must also recover after a long Hub outage.
-                        if (!boundary.Status.Current.Connected) await provider.RefreshAsync(token);
+                        if (boundary.Status.Current.LastError is not null) await provider.RefreshAsync(token);
                     }
                 }
                 finally { boundary.Disable(); await provider.StopAsync(CancellationToken.None); }
@@ -182,3 +183,4 @@ internal static class CliMcp
         return target;
     }
 }
+

@@ -5,6 +5,8 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'deploy/linux/**'
+      - 'product/packaging/**'
+      - 'release/**'
       - 'global.json'
       - 'NuGet.config'
       - 'Directory.Build.props'
@@ -45,3 +47,20 @@ jobs:
           path: artifacts/cutwork-lime-linux-x64.tar.gz
           if-no-files-found: error
           retention-days: 3
+      - name: Build and verify Kachinco-style resident container
+        run: |
+          mv artifacts/cutwork-lime artifacts/runtime
+          docker build --platform linux/amd64 -f product/packaging/Dockerfile.linux -t cutwork-cli-candidate .
+          sudo python3 tests/deployment/verify_resident_container.py cutwork-cli-candidate
+          docker image save --output artifacts/image.tar cutwork-cli-candidate
+          image_id=$(docker image inspect --format '{{.Id}}' cutwork-cli-candidate)
+          python3 product/packaging/package-updater.py --image artifacts/image.tar --image-id "$image_id" --revision "$GITHUB_SHA" --output artifacts/updater
+          cp deploy/linux/migrate-resident.py deploy/linux/setup-cutwork-lime.py deploy/linux/flamoris-cutwork-cli.service deploy/linux/README.md artifacts/updater/
+          (cd artifacts/updater && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cutwork-Updater-candidate
+          path: artifacts/updater/
+          if-no-files-found: error
+          retention-days: 3
+
