@@ -283,6 +283,11 @@ def replacement_spec(observed, token):
     current[KEY] = token
     config['Env'] = [key + '=' + value for key, value in current.items()]
     config['Image'] = observed['Image']  # Immutable local image ID, no pull/tag change.
+    # Host-network containers derive this from the host; older daemons reject
+    # explicitly replaying the inspected Hostname during creation.
+    config.pop('Hostname', None)
+    if config.get('Domainname'):
+        raise ValueError('Custom Hub domain name requires inspection before replacement')
     config['HostConfig'] = host
     return config
 

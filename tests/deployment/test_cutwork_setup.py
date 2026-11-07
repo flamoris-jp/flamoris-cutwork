@@ -180,7 +180,9 @@ class SetupTests(unittest.TestCase):
 
     def test_replacement_preserves_every_setting_and_uses_immutable_image(self):
         original = running_hub()
+        original['Config']['Hostname'] = 'decopon'
         spec = SETUP.replacement_spec(original, TOKEN)
+        self.assertNotIn('Hostname', spec)
         self.assertEqual(spec['HostConfig'], original['HostConfig'])
         self.assertEqual(spec['Image'], original['Image'])
         self.assertEqual(spec['Env'][:-1], original['Config']['Env'])
