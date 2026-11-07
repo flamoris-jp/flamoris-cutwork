@@ -40,6 +40,9 @@ jobs:
       - run: dotnet restore Cutwork.sln
       - run: dotnet build Cutwork.sln --configuration Release --no-restore
       - run: dotnet test Cutwork.sln --configuration Release --no-build --framework net10.0-windows10.0.19041.0
+      - name: Headless Cutwork CLI smoke
+        shell: pwsh
+        run: ./tests/cli/cli-smoke.ps1
       - name: Portable archive integrity contracts
         shell: pwsh
         run: ./tests/packaging/portable-package.Tests.ps1
