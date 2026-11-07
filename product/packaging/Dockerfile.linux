@@ -1,6 +1,7 @@
 FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libicu74 libstdc++6 libssl3t64 zlib1g python3 && rm -rf /var/lib/apt/lists/* && useradd --uid 10001 --create-home --home-dir /home/cutwork cutwork
 WORKDIR /app
+LABEL org.opencontainers.image.title="flamoris-cutwork-cli" org.opencontainers.image.version="0.1.1"
 COPY artifacts/runtime/ /app/
 COPY product/packaging/updater-entrypoint.py /app/updater-entrypoint.py
 USER 10001:10001
