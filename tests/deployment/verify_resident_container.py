@@ -6,12 +6,14 @@ import os
 import pathlib
 import secrets
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
 import urllib.request
+import zlib
 
 
 def run(*arguments):
@@ -35,6 +37,25 @@ def main():
         for path in [state, retained, connection]:
             os.chown(path, 10001, 10001)
         digest = hashlib.sha256(retained.read_bytes()).hexdigest()
+        projects = state / 'projects'; projects.mkdir(mode=0o700); os.chown(projects, 10001, 10001)
+        artwork = state / 'artwork.png'
+        def chunk(kind, data):
+            return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+        artwork.write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 4, 4, 8, 6, 0, 0, 0))
+                            + chunk(b'IDAT', zlib.compress((b'\x00' + b'\x40\x80\xc0\xff' * 4) * 4)) + chunk(b'IEND', b''))
+        artwork.chmod(0o644)
+        project_id = secrets.token_hex(16)
+        project = projects / (project_id + '.flimg')
+        def cli(*arguments):
+            return run('docker', 'run', '--rm', '--user', '10001:10001', '--read-only', '--network', 'none',
+                       '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=268435456,mode=1777',
+                       '--mount', f'type=bind,src={state},dst=/data/state', '--entrypoint', '/app/cutwork-cli',
+                       image, *arguments)
+        cli('import', '/data/state/artwork.png', '--out', '/data/state/projects/' + project.name)
+        cli('composite', '/data/state/projects/' + project.name, '--out', '/data/state/composite.png')
+        assert (state / 'composite.png').read_bytes().startswith(b'\x89PNG')
+        active = state / 'active.json'; active.write_text(json.dumps(project_id)); active.chmod(0o600); os.chown(active, 10001, 10001)
+        project_digest = hashlib.sha256(project.read_bytes()).hexdigest()
         def health():
             with opener.open(f'http://127.0.0.1:{port}/healthz', timeout=3) as response:
                 result = json.load(response)
@@ -61,14 +82,18 @@ def main():
             inspected = json.loads(run('docker', 'inspect', name))[0]
             assert inspected['Config']['User'] == '10001:10001'
             assert inspected['HostConfig']['ReadonlyRootfs'] is True
-            assert credential not in run('docker', 'logs', name)
+            logs = subprocess.run(['docker', 'logs', name], check=True, capture_output=True, text=True)
+            assert credential not in logs.stdout + logs.stderr
             run('docker', 'stop', '--time', '30', name)
             assert json.loads(run('docker', 'inspect', name))[0]['State']['ExitCode'] == 0
             assert hashlib.sha256(retained.read_bytes()).hexdigest() == digest
+            assert hashlib.sha256(project.read_bytes()).hexdigest() == project_digest
             run('docker', 'start', name)
             wait_ready()
             assert json.loads(connection.read_text())['credential'] == credential
             assert hashlib.sha256(retained.read_bytes()).hexdigest() == digest
+            assert hashlib.sha256(project.read_bytes()).hexdigest() == project_digest
+            assert json.loads(active.read_text()) == project_id
             print('Resident image ready, retained state preserved, outage survived, SIGTERM/restart passed. Hub connection requires live verification.')
         except BaseException:
             logs = subprocess.run(['docker', 'logs', name], capture_output=True, text=True)
