@@ -46,6 +46,9 @@ try {
     # Accidental overwrites must fail without changing the existing project.
     & dotnet run --project $project -c Release --no-build -- import $image --out $projectOne 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) { throw "overwrite was not rejected" }
+    # Expected native-command failure was asserted above. Clear the inherited exit
+    # code so the PowerShell test step reports its own successful assertion result.
+    $global:LASTEXITCODE = 0
 
     Write-Host "Cutwork CLI smoke: PASS"
 }
