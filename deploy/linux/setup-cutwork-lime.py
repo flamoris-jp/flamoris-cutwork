@@ -340,6 +340,10 @@ def replacement_spec(observed, token):
     """Retain the exact image, hardening, mounts, network and existing settings."""
     config = copy.deepcopy(observed['Config'])
     host = copy.deepcopy(observed['HostConfig'])
+    # Docker normalizes an explicitly sent null OomKillDisable to false. Omit
+    # the unspecified input so the inspected result retains the original null.
+    if host.get('OomKillDisable') is None:
+        host.pop('OomKillDisable', None)
     if (not observed['State']['Running'] or not host.get('ReadonlyRootfs')
             or host.get('NetworkMode') != 'host' or host.get('AutoRemove')
             or host.get('ContainerIDFile') or host.get('Links') or host.get('VolumesFrom')
