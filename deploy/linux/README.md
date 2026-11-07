@@ -31,18 +31,29 @@ Updater candidate artifact. Live external WSS acceptance is a separate step.
 3. Preparation stops the old native service, saves a root-only copy of the
    workspace/configuration/unit and original ownership/modes, retains the same
    dedicated endpoint/credential in private state/connection.json, changes the
-   existing state directory to UID 10001 and disables the native unit.
+   existing state directory to UID 10001 and disables the native unit. It then
+   renames the whole native application directory to a retained sibling and
+   writes a protected sibling migration pointer. The installation root is absent
+   for Updater's fresh-install preflight.
    Failures restore original ownership and prior service activity/enabled state.
-4. Install/start flamoris-cutwork-cli through Updater's accepted catalog. The
+4. Install flamoris-cutwork-cli through Updater's accepted catalog, leaving it
+   awaiting initial setup. Run migrate-resident.py restore --apply on LIME:
+   it requires the provisioned container to be stopped and its state to be empty,
+   restores saved state/connection with matching SHA-256 fingerprints, and never
+   overwrites populated state. Then use Updater start/complete. The
    retained connection file lets installation proceed without sending a secret
    through chat. Its normal writable state mount is the original host state
-   directory; no project codec conversion or copied second workspace is used.
+   directory. The retired source is preserved for rollback; normal operation
+   uses the managed state copy. No project codec conversion is used.
 5. Verify local process health at 127.0.0.1:8775/healthz. That response explicitly
    defers Hub readiness to a separate MCP verification.
 6. On DECO PON, run the reviewed setup-cutwork-lime.py hub --apply with the private
    cutwork-lime-connect.json transferred during native setup. Keep that file
    private (0600); it is deleted only after successful verification. The helper
    preserves current Hub settings/upstreams and restores them on failure.
+   It first extends the active Windows Cutwork Nginx snippet with the working
+   Kachinco WSS forwarding headers. It tests Nginx configuration before reload,
+   restores the snippet on test/reload failure, and preserves existing routes.
 7. Require all 29 Cutwork schemas plus every existing public schema across every
    tools/list page, then call only cutwork-lime.mcp.context. An empty cold
    document is valid; permission must be edit and productId flamoris.cutwork.

@@ -1,0 +1,22 @@
+name: Publish accepted Linux Updater image
+on:
+  push:
+    branches: [main]
+    paths: ['release/updater.json', '.github/workflows/publish-linux-updater.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: cutwork-cli-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the already tested PR artifact without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 product/packaging/publish-accepted.py
+

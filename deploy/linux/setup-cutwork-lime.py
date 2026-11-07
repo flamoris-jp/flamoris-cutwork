@@ -32,6 +32,7 @@ ROOT = pathlib.Path("/srv/flamoris/apps/flamoris-cutwork-cli")
 HUB_ROOT = pathlib.Path("/srv/flamoris/apps/flamoris-mcp-hub")
 KEY = "CUTWORK_LIME_CONNECTOR_TOKEN"
 UNIT = "flamoris-cutwork-cli.service"
+NGINX_SNIPPETS = pathlib.Path('/etc/nginx/snippets')
 READS = {
     "mcp.context", "context", "layers", "image", "part_preview", "part_candidates",
     "part_polygon_preview", "work_log_read", "project_context", "project_save_status",
@@ -366,6 +367,60 @@ class HubSwap:
             raise RuntimeError('Original Hub restart could not be confirmed')
 
 
+def ensure_nginx_route(backups):
+    """Extend the active Windows Cutwork snippet with the proven Kachinco route."""
+    configured = run(['nginx', '-T']).stdout.decode()
+    sections = re.split(r'(?m)^# configuration file (.+):\n', configured)
+    def locate(route):
+        found = []
+        pattern = r'(?m)^\s*location\s*=\s*' + re.escape(route) + r'\s*\{[^{}]*\}'
+        for index in range(1, len(sections), 2):
+            for block in re.findall(pattern, sections[index + 1]):
+                found.append((pathlib.Path(sections[index]), block.strip()))
+        if len(found) != 1:
+            raise ValueError('Expected one active Nginx route for ' + route)
+        path, block = found[0]
+        no_links(path)
+        info = path.stat()
+        if path.parent != NGINX_SNIPPETS or not path.is_file() or info.st_uid != os.geteuid() or info.st_mode & 0o022:
+            raise ValueError('Nginx route must come from a protected included snippet')
+        if block not in path.read_text():
+            raise ValueError('Nginx snippet changed during inspection')
+        return path, block
+    target, _ = locate('/desktop/cutwork')
+    _, block = locate('/desktop/kachinco-lime')
+    required = ('proxy_pass http://127.0.0.1:8769;', 'proxy_http_version 1.1;',
+                'proxy_set_header Host $host;', 'proxy_set_header Authorization $http_authorization;',
+                'proxy_set_header Upgrade $http_upgrade;', 'proxy_set_header Connection "upgrade";')
+    if not all(value in block for value in required):
+        raise ValueError('Kachinco proxy settings differ; inspect before changing Nginx')
+    candidate = block.replace('/desktop/kachinco-lime', '/desktop/cutwork-lime', 1)
+    previous = target.read_bytes()
+    matches = re.findall(r'location\s*=\s*/desktop/cutwork-lime\s*\{', configured)
+    if matches:
+        if len(matches) == 1 and candidate in previous.decode() and candidate in configured:
+            return
+        raise ValueError('Existing Cutwork LIME proxy route differs; no overwrite')
+    if b'/desktop/cutwork-lime' in previous:
+        raise ValueError('Unrecognized Cutwork LIME proxy configuration')
+    info = target.stat()
+    atomic(backups / 'nginx-cutwork.conf', previous)
+    reload_attempted = False
+    try:
+        atomic(target, previous.rstrip() + b'\n\n' + candidate.encode() + b'\n',
+               mode=info.st_mode & 0o777, uid=info.st_uid, gid=info.st_gid)
+        run(['nginx', '-t'])
+        reload_attempted = True
+        run(['systemctl', 'reload', 'nginx'])
+    except Exception:
+        atomic(target, previous, mode=info.st_mode & 0o777, uid=info.st_uid, gid=info.st_gid)
+        if reload_attempted:
+            run(['nginx', '-t'], check=False)
+            run(['systemctl', 'reload', 'nginx'], check=False)
+        raise RuntimeError('Nginx route setup failed; previous Cutwork snippet restored') from None
+    print('Nginx route installed: /desktop/cutwork-lime', flush=True)
+
+
 def hub(args, user):
     if socket.gethostname().split(".")[0].lower() != "decopon":
         raise ValueError("The hub phase must run on DECO PON")
@@ -426,6 +481,8 @@ def hub_locked(args, user):
     atomic(backups / 'container.json', json.dumps(observed).encode())
     if previous_target is not None:
         atomic(backups / 'cutwork-lime.previous', previous_target)
+    # Keep this valid authenticated proxy route if later Hub verification fails.
+    ensure_nginx_route(backups)
     phase = 'preparing replacement container' if swap else 'updating runtime configuration'
     try:
         if swap:

@@ -2,6 +2,7 @@
 """Prepare the native workspace for Updater; retain all rollback files."""
 import argparse
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -46,6 +47,20 @@ def restore_metadata(state, entries):
 
 def prepare(native):
     native.no_links(ROOT); native.no_links(SETTING); native.no_links(UNIT_PATH)
+    pointer = ROOT.with_name(ROOT.name + '-migration.json')
+    native.no_links(pointer)
+    if pointer.exists():
+        saved = json.loads(pointer.read_text())
+        if saved.get('phase') == 'prepared' and saved.get('source') == native.SOURCE and not ROOT.exists():
+            legacy = pathlib.Path(saved['legacyRoot'])
+            native.no_links(legacy)
+            if (legacy.parent != ROOT.parent or not legacy.name.startswith(ROOT.name + '-native-retired-')
+                    or not (legacy / 'state/connection.json').is_file()
+                    or run(['systemctl', 'is-active', '--quiet', UNIT], check=False).returncode == 0):
+                raise ValueError('Prepared native retirement changed; inspect before installation')
+            print(json.dumps({'prepared': True, 'retained': True, 'legacyRoot': saved['legacyRoot']}))
+            return
+        raise ValueError('Preparation already recorded; inspect or run the restore stage after Updater installation')
     state, record = ROOT / 'state', ROOT / 'config/native-migration.json'
     native.no_links(state); native.no_links(record)
     if not state.is_dir() or not UNIT_PATH.is_file():
@@ -75,6 +90,8 @@ def prepare(native):
     backup.mkdir(mode=0o700)
     run(['systemctl', 'stop', UNIT])
     changed = False
+    retired = ROOT.with_name(ROOT.name + '-native-retired-' + time.strftime('%Y%m%d-%H%M%S') + '-' + secrets.token_hex(3))
+    moved = False
     entries = []
     try:
         entries = inventory(state)
@@ -90,8 +107,16 @@ def prepare(native):
         run(['systemctl', 'disable', UNIT])
         native.atomic(record, json.dumps({'phase': 'prepared', 'source': native.SOURCE,
                       'backup': str(backup), 'wasActive': was_active, 'wasEnabled': was_enabled}).encode())
+        ROOT.rename(retired)
+        moved = True
+        prepared = {'phase': 'prepared', 'source': native.SOURCE, 'legacyRoot': str(retired),
+                    'backup': str(retired / backup.name), 'wasActive': was_active, 'wasEnabled': was_enabled}
+        native.atomic(pointer, json.dumps(prepared).encode())
     except BaseException:
         try:
+            if moved:
+                retired.rename(ROOT)
+            pointer.unlink(missing_ok=True)
             if changed:
                 connection.unlink(missing_ok=True)
                 restore_metadata(state, entries)
@@ -102,13 +127,59 @@ def prepare(native):
         except BaseException:
             raise RuntimeError('Preparation failed; native restoration needs inspection. Backup: ' + str(backup)) from None
         raise RuntimeError('Preparation failed; original native ownership/service restored. Backup retained: ' + str(backup)) from None
-    print(json.dumps({'prepared': True, 'endpoint': endpoint, 'backup': str(backup),
+    print(json.dumps({'prepared': True, 'endpoint': endpoint, 'backup': prepared['backup'], 'legacyRoot': str(retired),
                       'updaterApplication': 'flamoris-cutwork-cli'}))
+
+
+def fingerprints(state):
+    inventory(state)
+    return {str(path.relative_to(state)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in state.rglob('*') if path.is_file()}
+
+
+def restore(native):
+    pointer = ROOT.with_name(ROOT.name + '-migration.json')
+    native.no_links(pointer); native.no_links(ROOT)
+    saved = json.loads(pointer.read_text())
+    legacy = pathlib.Path(saved['legacyRoot'])
+    if (saved.get('source') != native.SOURCE or saved.get('phase') not in ('prepared', 'restored')
+            or legacy.parent != ROOT.parent or not legacy.name.startswith(ROOT.name + '-native-retired-')):
+        raise ValueError('Unexpected prepared migration record')
+    native.no_links(legacy)
+    if run(['systemctl', 'is-active', '--quiet', UNIT], check=False).returncode == 0:
+        raise ValueError('Native service must remain stopped during restoration')
+    observed = json.loads(run(['docker', 'inspect', 'flamoris-cutwork-cli']).stdout)[0]
+    if (observed['State']['Running'] or observed['Config']['User'] != '10001:10001'
+            or not observed['HostConfig']['ReadonlyRootfs']
+            or not any(m.get('Source') == str(ROOT / 'state') and m.get('Destination') == '/data/state'
+                       and m.get('RW') is True for m in observed['Mounts'])):
+        raise ValueError('Updater must have provisioned a stopped non-root container with the retained state mount')
+    source, target = legacy / 'state', ROOT / 'state'
+    native.no_links(target)
+    if not target.is_dir() or target.is_symlink():
+        raise ValueError('Updater state directory is missing')
+    expected = fingerprints(source)
+    if saved['phase'] == 'restored':
+        if fingerprints(target) != expected:
+            raise ValueError('Restored state changed; no overwrite')
+        print(json.dumps({'restored': True, 'retained': True})); return
+    if any(target.iterdir()):
+        raise ValueError('Updater state must be empty before restoration; no overwrite')
+    shutil.copytree(source, target, dirs_exist_ok=True)
+    if fingerprints(target) != expected:
+        raise ValueError('Restored state digest mismatch; retained original is unchanged')
+    for path in [target, *target.rglob('*')]:
+        os.chown(path, 10001, 10001)
+        path.chmod(0o700 if path.is_dir() else 0o600)
+    saved['phase'] = 'restored'
+    native.atomic(ROOT / 'config/native-migration.json', json.dumps(saved).encode())
+    native.atomic(pointer, json.dumps(saved).encode())
+    print(json.dumps({'restored': True, 'files': len(expected), 'legacyRoot': str(legacy), 'hubVerification': 'pending'}))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare'])
+    parser.add_argument('action', choices=['prepare', 'restore'])
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
     if not args.apply:
@@ -118,12 +189,12 @@ def main():
         raise ValueError('Run migration with sudo on LIME')
     spec = importlib.util.spec_from_file_location('cutwork_setup', pathlib.Path(__file__).with_name('setup-cutwork-lime.py'))
     native = importlib.util.module_from_spec(spec); spec.loader.exec_module(native)
-    lock = ROOT / 'config/.native-migration.lock'
+    lock = ROOT.with_name(ROOT.name + '-migration.lock')
     native.no_links(lock); lock.parent.mkdir(parents=True, exist_ok=True)
     with lock.open('a') as held:
         os.fchmod(held.fileno(), 0o600)
         fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        prepare(native)
+        (prepare if args.action == 'prepare' else restore)(native)
 
 
 if __name__ == '__main__':

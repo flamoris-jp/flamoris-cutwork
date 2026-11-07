@@ -93,7 +93,7 @@ class ResidentTests(unittest.TestCase):
     def test_migration_retains_content_backup_and_rolls_back_a_failed_disable(self):
         for fail in (False, True):
             with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
-                root = pathlib.Path(directory)
+                root = pathlib.Path(directory) / 'application'; root.mkdir()
                 state = root / 'state'; state.mkdir(mode=0o700)
                 (state / 'projects').mkdir(mode=0o700)
                 document = state / 'projects/saved.flimg'; document.write_bytes(b'existing authored work')
@@ -120,9 +120,17 @@ class ResidentTests(unittest.TestCase):
                     else:
                         MIGRATION.prepare(SETUP)
                 self.assertNotIn(TOKEN, output.getvalue())
+                if not fail:
+                    result = json.loads(output.getvalue())
+                    legacy = pathlib.Path(result['legacyRoot'])
+                    self.assertFalse(root.exists())
+                    document = legacy / 'state/projects/saved.flimg'
+                    state = legacy / 'state'
+                else:
+                    legacy = root
                 self.assertEqual(document.read_bytes(), b'existing authored work')
-                self.assertTrue(unit.exists()); self.assertTrue(env.exists())
-                backups = list(root.glob('native-backup-*'))
+                self.assertTrue((legacy / 'original.service').exists()); self.assertTrue((legacy / 'native.env').exists())
+                backups = list(legacy.glob('native-backup-*'))
                 self.assertEqual(len(backups), 1)
                 self.assertEqual((backups[0] / 'state/projects/saved.flimg').read_bytes(), document.read_bytes())
                 if fail:
@@ -131,8 +139,22 @@ class ResidentTests(unittest.TestCase):
                     self.assertEqual(document.stat().st_mode & 0o777, 0o640)
                     self.assertIn(['systemctl', 'start', MIGRATION.UNIT], calls)
                 else:
-                    self.assertTrue((root / 'config/native-migration.json').exists())
+                    self.assertTrue((legacy / 'config/native-migration.json').exists())
                     self.assertEqual(json.loads((state / 'connection.json').read_text())['credential'], TOKEN)
+                    # Updater receives an absent root; restore only after provisioning.
+                    (root / 'state').mkdir(parents=True)
+                    observed = [{'State': {'Running': False}, 'Config': {'User': '10001:10001'},
+                                 'HostConfig': {'ReadonlyRootfs': True}, 'Mounts': [
+                                 {'Source': str(root / 'state'), 'Destination': '/data/state', 'RW': True}]}]
+                    def restore_run(arguments, check=True):
+                        if arguments[0] == 'docker':
+                            return types.SimpleNamespace(returncode=0, stdout=json.dumps(observed).encode())
+                        return types.SimpleNamespace(returncode=1)
+                    with patch.object(MIGRATION, 'ROOT', root), patch.object(MIGRATION, 'run', restore_run), \
+                         patch.object(os, 'chown'), contextlib.redirect_stdout(io.StringIO()):
+                        MIGRATION.restore(SETUP)
+                    self.assertEqual((root / 'state/projects/saved.flimg').read_bytes(), document.read_bytes())
+                    self.assertEqual(json.loads((root / 'config/native-migration.json').read_text())['phase'], 'restored')
 
     def test_migration_defaults_to_plan(self):
         result = subprocess.run([sys.executable, str(ROOT / 'deploy/linux/migrate-resident.py'), 'prepare'],

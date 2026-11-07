@@ -258,6 +258,7 @@ class SetupTests(unittest.TestCase):
                 return types.SimpleNamespace(stdout=b"{}", returncode=0)
 
             with patch.object(SETUP, "HUB_ROOT", root), patch.object(SETUP, "run", fake_run), \
+                 patch.object(SETUP, 'ensure_nginx_route'), \
                  patch.object(SETUP, 'docker_api', fake), \
                  patch.object(SETUP.socket, "gethostname", return_value="decopon"), self.assertRaisesRegex(RuntimeError, 'verifying the Hub catalog'):
                 SETUP.hub(types.SimpleNamespace(connection=str(connection)), types.SimpleNamespace(pw_dir=str(root)))

@@ -6,8 +6,9 @@ Cutwork owns its existing ServiceWorkspace, document codec and Core outbound WSS
 provider. Keep the separate cutwork-lime route, credential and 29 tool schemas.
 
 The previous systemd installer is a legacy deployment. Prepare a full private
-backup after stopping it, retain its credential and workspace, then hand that
-same state directory to the managed container. Never run two hosts on the same
+backup after stopping it, retire the native root to leave Updater an absent fresh
+installation destination, then restore saved state and the private credential
+into its provisioned empty state mount with matching digests. Never run two hosts on the same
 workspace. Keep original unit/releases and the backup until actual Hub context
 verification succeeds. Preparation is not installation or connection evidence.
 

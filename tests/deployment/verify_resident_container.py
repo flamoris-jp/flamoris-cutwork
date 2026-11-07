@@ -70,9 +70,9 @@ def main():
                     time.sleep(.2)
             raise RuntimeError('Resident process did not become ready')
         try:
-            run('docker', 'run', '-d', '--name', name, '--user', '10001:10001', '--read-only',
+            run('docker', 'run', '-d', '--name', name, '--init', '--user', '10001:10001', '--read-only',
                 '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--pids-limit', '128',
-                '--memory', '2g', '--network', 'host', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=268435456,mode=1777',
+                '--memory', '2g', '--network', 'host', '--tmpfs', '/tmp:rw,nosuid,noexec,size=64m',
                 '--mount', f'type=bind,src={state},dst=/data/state', '--env', f'CUTWORK_PORT={port}', image)
             wait_ready()
             # Span a complete resident refresh interval with the Hub unavailable.
