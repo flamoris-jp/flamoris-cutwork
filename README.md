@@ -229,6 +229,16 @@ Use small purpose-driven branches and commits. For meaningful changes:
 
 Repository-wide AI/development rules are defined in [`AGENTS.md`](AGENTS.md).
 
+## Headless CLI (Windows v0)
+
+The experimental headless production CLI can import an illustration, add a named
+polygon-guided Part with the existing Guriguri algorithm, inspect a `.flimg`, and
+export the composite PNG or layer-handoff ZIP. It uses the same editing and
+persistence engine as the GUI. See [CLI usage and limits](docs/cutwork-cli.md).
+
+The first version still relies on the Windows imaging codec. Linux/LIME support
+is a separate portability task, not yet implemented.
+
 ## Relationship to FLAMORIS 2D
 
 Cutwork and FLAMORIS 2D are separate applications and repositories:
