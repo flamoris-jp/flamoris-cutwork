@@ -85,21 +85,35 @@ For an existing image/file at process startup, mcp INPUT [--permission edit]
 [--save-to NEW.flimg] remains available. This mode has the ordinary editing tools;
 use serve for transfer, document switching and permanent service operation.
 
-## Install on LIME
+## Supported deployment
 
-The Linux CI artifact is a self-contained linux-x64 tarball including executable,
-Hub descriptor, systemd template and Skia license/notices. Stage its contents at
-/srv/flamoris/apps/flamoris-cutwork-cli/bin after review. Create the service account
-flamoris-cutwork and an owned private state directory alongside bin. Install the
-unit from deploy/linux/flamoris-cutwork-cli.service under /etc/systemd/system.
-Create a root-owned mode-0600 /etc/flamoris/cutwork-lime.env with HUB_ENDPOINT and
-CUTWORK_LIME_CONNECTOR_TOKEN. Then enable/start flamoris-cutwork-cli.service.
-Use a local filesystem for state, not a symlink or NAS mount.
+Use the Updater-owned non-root Docker resident described in
+[deployment and migration](../deploy/linux/README.md). Updater owns the image,
+container lifecycle, private runtime settings and retained state binding.
+The legacy native/systemd installer is retired; its `lime --apply` entry point
+refuses new installations. The direct `serve` command above remains useful for
+development and local MCP clients.
 
-The descriptor/token on DECO PON must be provisioned separately. This repository
-change does not install the service or modify the live Hub. Server Manager remains
-the authority for live service status; stdout is reserved for MCP and diagnostics
-use stderr/journal. No additional network listener is opened on LIME.
+The container runs as UID/GID 10001 with a read-only root filesystem and mutable
+workspace at `/data/state`. Updater settings PORT/HUB_ENDPOINT/HUB_TOKEN map to
+CUTWORK_PORT/CUTWORK_HUB_ENDPOINT/CUTWORK_HUB_TOKEN. If endpoint/token are empty,
+the entrypoint reads private `/data/state/connection.json`; it passes the
+credential to the child as CUTWORK_LIME_CONNECTOR_TOKEN. Never print resolved
+environments or credential files.
+
+The loopback `/healthz` endpoint checks that the child process is alive; it
+explicitly requires separate Hub verification. The public reverse proxy must
+forward the dedicated `/desktop/cutwork-lime` path with WebSocket and Authorization
+headers. Successful Kachinco or Windows Cutwork attachment does not prove that
+this additional route exists.
+
+On 2026-11-07, Updater installation/start/complete of CLI 0.1.1 succeeded.
+The operator's Hub setup verified all 29 Linux schemas and a live
+`cutwork-lime.mcp.context` response: connected, edit permission, no open document.
+An independent Hub observation confirmed attachment without catalog mismatch,
+alongside 2D and Kachinco Linux connectors. An empty document is normal at startup.
+Live artwork import/edit/save/export, visual acceptance and production
+restart/reboot recovery remain separate checks.
 
 ## Acceptance
 

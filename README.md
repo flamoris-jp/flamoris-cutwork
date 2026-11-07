@@ -1,6 +1,6 @@
 # FLAMORIS Cutwork
 
-FLAMORIS Cutwork is a standalone Windows-oriented image decomposition and repair tool for preparing illustration parts used by short 2D moving-picture animation workflows.
+FLAMORIS Cutwork is a standalone image decomposition and repair tool with a Windows desktop editor and a headless Linux service for preparing illustration parts used by short 2D moving-picture animation workflows.
 
 Cutwork is intentionally separate from `flamoris-jp/flamoris-2D`.
 
@@ -238,7 +238,11 @@ saves projects and downloads exports without opening the Windows GUI.
 See [service setup, workflow and acceptance](docs/cutwork-cli.md).
 
 Windows users continue using the desktop editor. Linux has a portable codec and
-UI-free host; live LIME/Hub deployment is separate from implementation/CI.
+UI-free host. The 2026-11-07 LIME deployment accepted Updater-managed CLI 0.1.1
+and a separate 29-tool Hub attachment with edit permission and no open document.
+The Hub also observed the independent 2D and Kachinco Linux connectors attached.
+This verifies deployment and connection, not real-artwork editing or reboot recovery.
+See [Docker deployment and migration](deploy/linux/README.md).
 
 ## Relationship to FLAMORIS 2D
 
