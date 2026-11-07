@@ -13,5 +13,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install python-dotenv 'mcp>=1.29,<3'
+      - run: python -m pip install python-dotenv 'mcp==2.3.0'
       - run: python -m unittest discover -s tests/deployment -v

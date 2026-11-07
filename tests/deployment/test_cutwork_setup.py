@@ -178,7 +178,7 @@ class SetupTests(unittest.TestCase):
             if method == "notifications/initialized":
                 return httpx.Response(202)
             if method == "initialize":
-                value = {"protocolVersion": mcp.types.LATEST_PROTOCOL_VERSION, "capabilities": {"tools": {}},
+                value = {"protocolVersion": message["params"]["protocolVersion"], "capabilities": {"tools": {}},
                          "serverInfo": {"name": "test-hub", "version": "1"}}
             elif method == "tools/list":
                 value = {"tools": [{"name": "cutwork-lime." + item["name"], "inputSchema": item["input_schema"]}
