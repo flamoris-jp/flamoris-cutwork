@@ -94,8 +94,13 @@ internal sealed class ServiceWorkspace : IDisposable
             if (!fields.TryGetProperty(property.Name, out var spec)) throw new ArgumentException();
             var type = spec.GetProperty("type").GetString();
             if (type == "boolean") { if (property.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new ArgumentException(); }
-            else if (property.Value.ValueKind != JsonValueKind.String || property.Value.GetString() is not { Length: > 0 } text
-                || text.Length > spec.GetProperty("maxLength").GetInt32()) throw new ArgumentException();
+            else
+            {
+                if (property.Value.ValueKind != JsonValueKind.String || property.Value.GetString() is not { Length: > 0 } text)
+                    throw new ArgumentException();
+                if (spec.TryGetProperty("maxLength", out var maximum) && text.Length > maximum.GetInt32()) throw new ArgumentException();
+                if (spec.TryGetProperty("enum", out var values) && !values.EnumerateArray().Any(v => v.GetString() == text)) throw new ArgumentException();
+            }
         }
         foreach (var required in schema.GetProperty("required").EnumerateArray())
             if (!input.TryGetProperty(required.GetString()!, out _)) throw new ArgumentException();

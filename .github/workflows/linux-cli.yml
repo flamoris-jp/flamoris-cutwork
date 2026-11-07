@@ -33,6 +33,9 @@ jobs:
           cp deploy/linux/flamoris-cutwork-cli.service artifacts/cutwork-lime/
           mkdir -p artifacts/cutwork-lime/licenses
           cp LICENSE artifacts/cutwork-lime/licenses/Cutwork-LICENSE
+          cp packaging/MCP-SDK-LICENSE.txt artifacts/cutwork-lime/licenses/MCP-SDK-LICENSE.txt
+          cp "$DOTNET_ROOT/LICENSE.txt" artifacts/cutwork-lime/licenses/DOTNET-LICENSE.txt
+          cp "$DOTNET_ROOT/ThirdPartyNotices.txt" artifacts/cutwork-lime/licenses/DOTNET-NOTICES.txt
           cp ~/.nuget/packages/skiasharp/4.154.0/LICENSE.txt artifacts/cutwork-lime/licenses/SkiaSharp-LICENSE.txt
           cp ~/.nuget/packages/skiasharp.nativeassets.linux.nodependencies/4.154.0/THIRD-PARTY-NOTICES.txt artifacts/cutwork-lime/licenses/Skia-NOTICES.txt
           tar -czf artifacts/cutwork-lime-linux-x64.tar.gz -C artifacts/cutwork-lime .

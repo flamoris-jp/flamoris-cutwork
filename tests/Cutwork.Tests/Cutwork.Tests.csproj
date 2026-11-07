@@ -62,6 +62,8 @@
     <Compile Include="ViewportTransformTests.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <!-- Portable codec acceptance runs against Skia/net10.0, not the unchanged WIC implementation. -->
+    <Compile Remove="PortableImageTests.cs" />
     <None Include="../../config/cutwork.json" Link="cutwork-catalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
