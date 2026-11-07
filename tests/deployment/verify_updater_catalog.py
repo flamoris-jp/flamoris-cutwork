@@ -67,7 +67,8 @@ def verify(catalog_path, install=False):
             sources['bad-image.tar'] = bad_archive
             raw = copy.deepcopy(json.loads(catalog_path.read_bytes()))
             bad = raw['recipes'][0]; bad['release'] = '0.1.0'
-            bad['downloads']['image.tar'].update(url='https://fixture.example/bad-image.tar', digest=bad_digest)
+            bad_url = bad['downloads']['image.tar']['url'].rsplit('/', 1)[0] + '/bad-image.tar'
+            bad['downloads']['image.tar'].update(url=bad_url, digest=bad_digest)
             bad['application']['release'] = '0.1.0'
             bad['application']['image_id'] = bad_id
             bad['application']['image_archive']['digest'] = bad_digest
