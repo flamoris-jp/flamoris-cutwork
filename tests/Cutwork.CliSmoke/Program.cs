@@ -36,7 +36,8 @@ internal static class Program
                 var denied = await Call(read, "undo", new { }, common);
                 Check(denied.IsError == true, "Read-only direct mutation accepted.");
                 var image = Text(await Call(read, "image", new { source = "Original", target = (string?)null, roi = (object?)null, maxEdge = 32 }));
-                Check(Convert.FromBase64String(image.GetProperty("pngBase64").GetString()!).Length > 0, "Original preview missing.");
+                Check(image.TryGetProperty("pngBase64", out var encoded), "Original preview failed: " + image);
+                Check(Convert.FromBase64String(encoded.GetString()!).Length > 0, "Original preview missing.");
             }
             Console.WriteLine("CLI read-only discovery, direct denial and image: PASS");
 
@@ -103,8 +104,8 @@ internal static class Program
     private static async Task<JsonElement> Common(McpClient client) => Text(await client.CallToolAsync("mcp.context", new Dictionary<string, object?>(), cancellationToken: Deadline()));
     private static async Task<CallToolResult> Call(McpClient client, string name, object input, JsonElement? guard = null) =>
         await client.CallToolAsync(name, guard.HasValue
-            ? new Dictionary<string, object?> { ["input"] = input, ["guard"] = new { runtimeId = guard.Value.GetProperty("runtimeId").GetString(), documentToken = guard.Value.GetProperty("documentToken").GetString(), expectedRevision = guard.Value.GetProperty("revision").GetString() } }
-            : new Dictionary<string, object?> { ["input"] = input }, cancellationToken: Deadline());
+            ? new Dictionary<string, object?> { ["input"] = JsonSerializer.SerializeToElement(input), ["guard"] = new { runtimeId = guard.Value.GetProperty("runtimeId").GetString(), documentToken = guard.Value.GetProperty("documentToken").GetString(), expectedRevision = guard.Value.GetProperty("revision").GetString() } }
+            : new Dictionary<string, object?> { ["input"] = JsonSerializer.SerializeToElement(input) }, cancellationToken: Deadline());
     private static async Task<int> LayerCount(McpClient client) => Text(await Call(client, "layers", new { offset = 0, count = 64 })).GetProperty("total").GetInt32();
     private static Process Start(string cli, params string[] args)
     {
