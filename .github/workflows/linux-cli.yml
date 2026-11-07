@@ -25,6 +25,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: dotnet build src/Cutwork.Cli -c Release -p:TargetFrameworks=net10.0
       - name: Actual CLI and service through official MCP client
         run: dotnet run --project tests/Cutwork.CliSmoke -c Release -p:TargetFrameworks=net10.0 -- src/Cutwork.Cli/bin/Release/net10.0/cutwork-cli.dll
@@ -55,7 +58,10 @@ jobs:
           docker image save --output artifacts/image.tar cutwork-cli-candidate
           image_id=$(docker image inspect --format '{{.Id}}' cutwork-cli-candidate)
           python3 product/packaging/package-updater.py --image artifacts/image.tar --image-id "$image_id" --revision "$GITHUB_SHA" --output artifacts/updater
-          cp deploy/linux/migrate-resident.py deploy/linux/setup-cutwork-lime.py deploy/linux/flamoris-cutwork-cli.service deploy/linux/README.md artifacts/updater/
+          python3 -m venv artifacts/updater-verify-venv
+          artifacts/updater-verify-venv/bin/python -m pip install 'https://github.com/flamoris-jp/flamoris-updater/archive/d3390f5dfbd1b1fe453df714d8219a12cec2706e.zip'
+          sudo env GITHUB_ACTIONS=true artifacts/updater-verify-venv/bin/python tests/deployment/verify_updater_catalog.py artifacts/updater/catalog.json --install
+          cp deploy/linux/migrate-resident.py deploy/linux/setup-cutwork-lime.py deploy/linux/quarantine-failed-install.py deploy/linux/flamoris-cutwork-cli.service deploy/linux/README.md artifacts/updater/
           (cd artifacts/updater && sha256sum * > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
