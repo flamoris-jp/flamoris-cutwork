@@ -229,6 +229,17 @@ Use small purpose-driven branches and commits. For meaningful changes:
 
 Repository-wide AI/development rules are defined in [`AGENTS.md`](AGENTS.md).
 
+## Linux / LIME headless service
+
+The headless Linux CLI/service runs on LIME independently of Mango. It reuses the
+production document, Part/repair tools, history, flimg persistence and handoff
+exporter. A dedicated `cutwork-lime` MCP upstream receives artwork, edits Parts,
+saves projects and downloads exports without opening the Windows GUI.
+See [service setup, workflow and acceptance](docs/cutwork-cli.md).
+
+Windows users continue using the desktop editor. Linux has a portable codec and
+UI-free host; live LIME/Hub deployment is separate from implementation/CI.
+
 ## Relationship to FLAMORIS 2D
 
 Cutwork and FLAMORIS 2D are separate applications and repositories:
@@ -306,3 +317,4 @@ and [v3 persistence](docs/flimg-schema-v3.md). Projects without records retain v
 ## MCP startup and sharing
 
 See [startup/consent behavior and Windows acceptance](docs/mcp-startup.md). MCP can connect at application startup before opening a file; connection alone never enables screen sharing. Document changes preserve the connection and invalidate old target guards.
+

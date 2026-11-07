@@ -25,12 +25,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flamoris.Capture.Mcp", "dep
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Flamoris.Capture.Wpf", "dependencies\flamoris-capture\src\Flamoris.Capture.Wpf\Flamoris.Capture.Wpf.csproj", "{3747856B-829D-4295-BDB1-98AB1D5A64FE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cutwork.Cli", "src\Cutwork.Cli\Cutwork.Cli.csproj", "{F763ACF1-EF34-4D20-A55E-DF98660F378E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F763ACF1-EF34-4D20-A55E-DF98660F378E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F763ACF1-EF34-4D20-A55E-DF98660F378E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F763ACF1-EF34-4D20-A55E-DF98660F378E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F763ACF1-EF34-4D20-A55E-DF98660F378E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4C7F5E0E-0D8F-41C9-B3F8-8518725F5127}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{4C7F5E0E-0D8F-41C9-B3F8-8518725F5127}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4C7F5E0E-0D8F-41C9-B3F8-8518725F5127}.Release|Any CPU.ActiveCfg = Release|Any CPU

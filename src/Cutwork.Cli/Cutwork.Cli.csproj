@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>cutwork-cli</AssemblyName>
+    <RootNamespace>Flamoris.Cutwork.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
+    <ProjectReference Include="..\Cutwork.Imaging\Cutwork.Imaging.csproj" />
+    <ProjectReference Include="..\Cutwork.Mcp\Cutwork.Mcp.csproj" />
+  </ItemGroup>
+</Project>
+

@@ -4,12 +4,12 @@
     <UseWPF Condition="'$(TargetFramework)' == 'net10.0-windows'">true</UseWPF>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <Compile Remove="ImageImportService.cs" />
-    <Compile Remove="Persistence\**\*.cs" />
-    <Compile Remove="Export\**\*.cs" />
+    <PackageReference Include="SkiaSharp" Version="4.154.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.154.0" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Flamoris.Logging" Version="1.0.0" />
     <ProjectReference Include="..\Cutwork.Core\Cutwork.Core.csproj" />
   </ItemGroup>
 </Project>
+

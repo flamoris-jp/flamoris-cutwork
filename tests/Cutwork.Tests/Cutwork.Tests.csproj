@@ -10,11 +10,12 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.4.0" />
     <PackageReference Include="MSTest.TestFramework" Version="4.4.0" />
-    <PackageReference Include="Flamoris.Mcp.Core" Version="1.4.0" Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'" />
+    <PackageReference Include="Flamoris.Mcp.Core" Version="1.4.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cutwork.Core\Cutwork.Core.csproj" />
     <ProjectReference Include="..\..\src\Cutwork.Imaging\Cutwork.Imaging.csproj" />
+    <ProjectReference Include="..\..\src\Cutwork.Mcp\Cutwork.Mcp.csproj" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
     <ProjectReference Include="..\..\src\Cutwork.App\Cutwork.App.csproj" />
@@ -23,6 +24,19 @@
   <!-- Reuse reviewed portable tests; new WPF/MCP tests cannot leak into Linux by default. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <Compile Include="Usings.cs" />
+    <Compile Include="PortableImageTests.cs" />
+    <Compile Include="FlimgRoundTripTests.cs" />
+    <Compile Include="FlimgAtomicSaveTests.cs" />
+    <Compile Include="FlimgWorkLogTests.cs" />
+    <Compile Include="DocumentExportTests.cs" />
+    <Compile Include="ProjectCheckpointTests.cs" />
+    <Compile Include="McpCoreHarness.cs" />
+    <Compile Include="LiveMcpTests.cs" />
+    <Compile Include="LiveCandidateTests.cs" />
+    <Compile Include="LivePolygonWorkLogTests.cs" />
+    <Compile Include="LivePreparationTests.cs" />
+    <Compile Include="LiveProjectTests.cs" />
+    <Compile Include="LiveRepairTests.cs" />
     <Compile Include="GeneratedRepairTests.cs" />
     <Compile Include="StudioRepairClientTests.cs" />
     <Compile Include="../../src/Cutwork.App/Generation/StudioRepairClient.cs" Link="StudioRepairClient.cs" />
@@ -48,6 +62,9 @@
     <Compile Include="ViewportTransformTests.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <!-- Portable codec acceptance runs against Skia/net10.0, not the unchanged WIC implementation. -->
+    <Compile Remove="PortableImageTests.cs" />
     <None Include="../../config/cutwork.json" Link="cutwork-catalog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
+

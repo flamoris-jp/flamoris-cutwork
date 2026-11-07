@@ -1,0 +1,47 @@
+name: Linux Cutwork Service
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'deploy/linux/**'
+      - 'global.json'
+      - 'NuGet.config'
+      - 'Directory.Build.props'
+      - '.github/workflows/linux-cli.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: linux-cli-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux-service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build src/Cutwork.Cli -c Release -p:TargetFrameworks=net10.0
+      - name: Actual CLI and service through official MCP client
+        run: dotnet run --project tests/Cutwork.CliSmoke -c Release -p:TargetFrameworks=net10.0 -- src/Cutwork.Cli/bin/Release/net10.0/cutwork-cli.dll
+      - name: Publish self-contained LIME service
+        run: |
+          dotnet publish src/Cutwork.Cli -c Release -r linux-x64 --self-contained true -p:TargetFrameworks=net10.0 -o artifacts/cutwork-lime
+          artifacts/cutwork-lime/cutwork-cli mcp-catalog > artifacts/cutwork-lime/cutwork-lime.json
+          cp deploy/linux/flamoris-cutwork-cli.service artifacts/cutwork-lime/
+          mkdir -p artifacts/cutwork-lime/licenses
+          cp LICENSE artifacts/cutwork-lime/licenses/Cutwork-LICENSE
+          cp packaging/MCP-SDK-LICENSE.txt artifacts/cutwork-lime/licenses/MCP-SDK-LICENSE.txt
+          cp "$DOTNET_ROOT/LICENSE.txt" artifacts/cutwork-lime/licenses/DOTNET-LICENSE.txt
+          cp "$DOTNET_ROOT/ThirdPartyNotices.txt" artifacts/cutwork-lime/licenses/DOTNET-NOTICES.txt
+          cp ~/.nuget/packages/skiasharp/4.154.0/LICENSE.txt artifacts/cutwork-lime/licenses/SkiaSharp-LICENSE.txt
+          cp ~/.nuget/packages/skiasharp.nativeassets.linux.nodependencies/4.154.0/THIRD-PARTY-NOTICES.txt artifacts/cutwork-lime/licenses/Skia-NOTICES.txt
+          tar -czf artifacts/cutwork-lime-linux-x64.tar.gz -C artifacts/cutwork-lime .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cutwork-LIME-linux-x64
+          path: artifacts/cutwork-lime-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 3

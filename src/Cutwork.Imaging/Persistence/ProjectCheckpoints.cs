@@ -42,7 +42,7 @@ public sealed class ProjectCheckpoints
         this.store=store??new FlimgProjectStore();
         RejectLinks(path);
         if(!File.Exists(path)) throw new ProjectSaveException("save_target_required");
-        // Initial guarantee is local Windows volumes. Network volumes have different lock/rename semantics.
+        // Supported service storage is local disk. UNC/network save targets are not admitted.
         if(path.StartsWith(@"\\",StringComparison.Ordinal)) throw new ProjectSaveException("unsupported_save_volume");
         versions=path+".revisions";
         RejectLinks(versions);
@@ -230,7 +230,13 @@ public sealed class ProjectCheckpoints
     // Creation identity is preserved by File.Replace on supported local Windows volumes.
     private static string Identity(string file)
     {
-        if(!OperatingSystem.IsWindows())return File.GetCreationTimeUtc(file).Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if(OperatingSystem.IsLinux())
+        {
+            if(Statx(-100,file,0x100,0x101,out var linux)!=0 || (linux.Mask & 0x100)==0)
+                throw new ProjectSaveException("save_identity_unavailable");
+            return $"{linux.DeviceMajor:x8}:{linux.DeviceMinor:x8}:{linux.Inode:x16}";
+        }
+        if(!OperatingSystem.IsWindows())throw new ProjectSaveException("unsupported_save_volume");
         using var handle=CreateFile(file,0,7,IntPtr.Zero,3,0x02000000,IntPtr.Zero);
         if(handle.IsInvalid || !GetFileInformationByHandle(handle,out var info))
             throw new ProjectSaveException("save_identity_unavailable");
@@ -243,6 +249,16 @@ public sealed class ProjectCheckpoints
         public System.Runtime.InteropServices.ComTypes.FILETIME Creation,Access,Write;
         public uint VolumeSerialNumber,SizeHigh,SizeLow,Links,FileIndexHigh,FileIndexLow;
     }
+    [StructLayout(LayoutKind.Explicit,Size=256)]
+    private struct LinuxFileInformation
+    {
+        [FieldOffset(0)] public uint Mask;
+        [FieldOffset(32)] public ulong Inode;
+        [FieldOffset(136)] public uint DeviceMajor;
+        [FieldOffset(140)] public uint DeviceMinor;
+    }
+    [DllImport("libc",EntryPoint="statx",SetLastError=true)]
+    private static extern int Statx(int directory,string path,int flags,uint mask,out LinuxFileInformation information);
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true,EntryPoint="CreateFileW")]
     private static extern SafeFileHandle CreateFile(string name,uint access,uint share,IntPtr security,uint creation,uint flags,IntPtr template);
     [DllImport("kernel32.dll",SetLastError=true)]
@@ -262,3 +278,4 @@ public sealed class ProjectCheckpoints
         if(new FileInfo(full).LinkTarget is not null)throw new ProjectSaveException("save_target_link");
     }
 }
+

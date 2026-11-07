@@ -15,11 +15,14 @@ public sealed class CutworkMcpHost : IMcpHost, IDisposable
     private readonly string runtimeId = Guid.NewGuid().ToString("N");
     private bool shuttingDown;
     private readonly bool applicationLifetime;
+    private readonly bool runtimeTokenWhenEmpty;
 
     public CutworkMcpHost(EditorSession session, Func<bool> humanBusy,
-        Func<Action, CancellationToken, Task> dispatch, bool applicationLifetime = false)
+        Func<Action, CancellationToken, Task> dispatch, bool applicationLifetime = false,
+        bool runtimeTokenWhenEmpty = false)
     {
         this.session = session; this.applicationLifetime = applicationLifetime;
+        this.runtimeTokenWhenEmpty = runtimeTokenWhenEmpty;
         this.humanBusy = humanBusy;
         this.dispatch = dispatch;
         if (!applicationLifetime) session.DocumentReplacing += DocumentReplacing;
@@ -32,7 +35,7 @@ public sealed class CutworkMcpHost : IMcpHost, IDisposable
         {
             var document = session.Document;
             return new("flamoris.cutwork", "0.1.0", runtimeId,
-                document is null ? "" : session.DocumentToken,
+                document is null ? (runtimeTokenWhenEmpty ? runtimeId : "") : session.DocumentToken,
                 document?.Revision ?? 0,
                 Available: !shuttingDown && (applicationLifetime || document is not null),
                 HumanEditing: session.HasActiveTransaction || humanBusy()) { HasDocument = document is not null };
@@ -77,3 +80,4 @@ public sealed class CutworkMcpHost : IMcpHost, IDisposable
 
     }
 }
+

@@ -103,6 +103,7 @@ public sealed class ProjectCheckpointTests
     [TestMethod]
     public void WorkingFileFailureKeepsCheckpointAndExplicitResumeDoesNotAddVersion()
     {
+        if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Tests Windows file-share rename denial; POSIX rename permits an open reader.");
         using var f=new Fixture();f.Session.Execute(new RenameLayer(f.Session.Document!.Base.Id,"resume me"));var request=f.Request(true);
         CheckpointReceipt receipt;
         using(var locked=new FileStream(f.PathName,FileMode.Open,FileAccess.Read,FileShare.Read))receipt=f.Save(request);
@@ -114,6 +115,7 @@ public sealed class ProjectCheckpointTests
     [TestMethod]
     public void IndexPublicationFailureLeavesOrphanAndNextCheckpointSkipsItsNumber()
     {
+        if (!OperatingSystem.IsWindows()) Assert.Inconclusive("Tests Windows file-share rename denial; POSIX rename permits an open reader.");
         using var f=new Fixture();var first=f.Save(f.Request());var request=f.Request(parent:first.CheckpointId);
         var index=Path.Combine(f.PathName+".revisions","index.json");
         using(var locked=new FileStream(index,FileMode.Open,FileAccess.Read,FileShare.Read))
@@ -149,3 +151,4 @@ public sealed class ProjectCheckpointTests
         Code("save_target_changed",()=>f.Store.Context());
     }
 }
+

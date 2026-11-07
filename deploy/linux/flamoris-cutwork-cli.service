@@ -1,0 +1,26 @@
+[Unit]
+Description=FLAMORIS Cutwork headless LIME service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=flamoris-cutwork
+Group=flamoris-cutwork
+WorkingDirectory=/srv/flamoris/apps/flamoris-cutwork-cli
+EnvironmentFile=/etc/flamoris/cutwork-lime.env
+ExecStart=/srv/flamoris/apps/flamoris-cutwork-cli/bin/cutwork-cli serve --workspace /srv/flamoris/apps/flamoris-cutwork-cli/state --permission edit --hub ${HUB_ENDPOINT}
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=330
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/flamoris/apps/flamoris-cutwork-cli/state
+MemoryMax=2G
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target
