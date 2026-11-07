@@ -132,6 +132,12 @@ def extract_verified(archive, destination):
             if name.is_absolute() or ".." in name.parts or not (member.isdir() or member.isfile()):
                 raise ValueError("Unsafe bundle member")
         bundle.extractall(destination, filter="data")
+    # Python's data filter deliberately discards directory modes. The staging
+    # directory starts 0700; the dedicated service account must traverse it.
+    destination.chmod(0o755)
+    for directory in destination.rglob("*"):
+        if directory.is_dir():
+            directory.chmod(0o755)
     if not (destination / "cutwork-cli").is_file():
         raise ValueError("Executable missing")
 
@@ -151,6 +157,8 @@ def lime(args, user):
     if socket.gethostname().split(".")[0].lower() != "lime":
         raise ValueError("The lime phase must run on LIME")
     no_links(ROOT)
+    ROOT.mkdir(parents=True, exist_ok=True)
+    ROOT.chmod(0o755)
     docker = run(["docker", "inspect", "flamoris-cutwork-cli"], check=False)
     if docker.returncode == 0:
         raise ValueError("A Docker Cutwork installation exists; do not install a second host")
@@ -185,6 +193,7 @@ def lime(args, user):
         try:
             extract_verified(archive, staged)
             release.parent.mkdir(parents=True, exist_ok=True)
+            release.parent.chmod(0o755)
             staged.rename(release)
         finally:
             if staged.exists():
@@ -215,6 +224,7 @@ def lime(args, user):
     state.mkdir(exist_ok=True)
     os.chown(state, account.pw_uid, account.pw_gid)
     state.chmod(0o700)
+    run(["runuser", "-u", account.pw_name, "--", str(release / "cutwork-cli"), "--help"])
     link = ROOT / (".bin-" + secrets.token_hex(8))
     link.symlink_to(release)
     os.replace(link, binary)
@@ -265,7 +275,11 @@ print(json.dumps({'validated':True,'tools':len(d.tools)}))
 '''
 
 VERIFY = r'''
-import asyncio,inspect,json,os,sys,httpx
+import asyncio,inspect,json,os,sys
+try:
+ import httpx2 as httpx
+except ImportError:
+ import httpx
 from dotenv import load_dotenv
 from flamoris_mcp_hub.config import env_file
 from mcp import ClientSession

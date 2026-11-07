@@ -88,6 +88,23 @@ class SetupTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 SETUP.no_links(root / "link" / "runtime.env")
 
+    def test_verified_stage_is_traversable_by_the_dedicated_service_account(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            archive = root / "input.tar.gz"
+            with tarfile.open(archive, "w:gz") as bundle:
+                member = tarfile.TarInfo("cutwork-cli")
+                member.size = 4
+                member.mode = 0o755
+                bundle.addfile(member, io.BytesIO(b"test"))
+            destination = root / "stage"
+            destination.mkdir(mode=0o700)
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            with patch.object(SETUP, "ARCHIVE_SHA256", digest):
+                SETUP.extract_verified(archive, destination)
+            self.assertEqual(destination.stat().st_mode & 0o777, 0o755)
+            self.assertTrue((destination / "cutwork-cli").stat().st_mode & 0o111)
+
     def test_container_dotenv_uses_real_newlines_and_never_prints_credential(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "runtime.env"
@@ -145,7 +162,10 @@ class SetupTests(unittest.TestCase):
         self.assertFalse(json.loads(result.stdout)["changes"])
 
     def test_verifier_uses_official_http_client_without_disclosing_credentials(self):
-        import httpx
+        try:
+            import httpx2 as httpx
+        except ImportError:
+            import httpx
         import mcp.types
         registration = SETUP.descriptor(catalog())
         calls = []
